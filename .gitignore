@@ -1,0 +1,32 @@
+# Environment
+.env
+.env.local
+appsettings.Development.json
+
+# .NET
+**/bin/
+**/obj/
+*.user
+*.suo
+.vs/
+
+# Node
+node_modules/
+frontend/.next/
+frontend/dist/
+frontend/build/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
