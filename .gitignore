@@ -1,3 +1,9 @@
+# Claude Code
+CLAUDE.md
+
+# Docs folder (nội dung nội bộ, không push lên git)
+docs/docs/
+
 # Environment
 .env
 .env.local
@@ -26,6 +32,7 @@ venv/
 # IDE
 .idea/
 .vscode/
+.history/
 
 # OS
 .DS_Store
