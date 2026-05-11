@@ -1,0 +1,62 @@
+# ================================================================
+# PORMS — Docker Compose Override (Production)
+# ================================================================
+#
+# CÁCH DÙNG (từ thư mục infra/):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# File này override các giá trị trong docker-compose.yml cho môi trường prod:
+#   - Tắt volume mount source code (không hot-reload)
+#   - Dùng image đã build từ registry thay vì build local
+#   - Thêm Nginx reverse proxy
+#   - ASPNETCORE_ENVIRONMENT = Production
+# ================================================================
+
+name: porms
+
+services:
+
+  # ─── Override Backend cho Production ────────────────────────────
+  backend:
+    build:
+      target: production
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS:        http://+:5000
+    # Không expose port ra ngoài — Nginx sẽ proxy
+    ports: []
+    profiles:
+      - ""   # Luôn chạy trong prod (không cần --profile app)
+
+  # ─── Override Frontend cho Production ───────────────────────────
+  frontend:
+    build:
+      target: production
+    environment:
+      NODE_ENV: production
+    # Không expose port ra ngoài — Nginx sẽ proxy
+    ports: []
+    volumes: []   # Không mount source code trong prod
+    profiles:
+      - ""
+
+  # ─── Nginx Reverse Proxy ─────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: porms-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro          # Mount SSL certs nếu có
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      metabase:
+        condition: service_healthy
+    networks:
+      - porms-net
