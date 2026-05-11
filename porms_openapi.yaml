@@ -1,0 +1,5229 @@
+openapi: 3.0.3
+info:
+  title: PORMS API — Port Operation Risk Management System
+  description: |-
+    REST API for PORMS — hệ thống hỗ trợ quyết định và cảnh báo rủi ro vận hành cảng biển dựa trên dữ liệu thời tiết thời gian thực.
+
+    **Authentication:** Bearer JWT access token trong header `Authorization: Bearer <token>`.
+
+    **Roles:** `ADMIN` | `COMPANY_ADMIN` | `OPERATOR`
+
+    **Data isolation:** COMPANY_ADMIN và OPERATOR chỉ thấy data của `assigned_port_id`.
+
+    **Base URL (dev):** `http://localhost:5000`
+
+    **Base URL (prod):** `https://api.porms.vn`
+  version: 1.0.0
+  contact:
+    name: PORMS Team — CP_SEP490
+    email: minh.npa@student.fpt.edu.vn
+  license:
+    name: MIT
+servers:
+- url: http://localhost:5000
+  description: Local development
+- url: https://api.porms.vn
+  description: Production
+security:
+- bearerAuth: []
+tags:
+- name: Auth
+  description: EPIC 1 — Xác thực và phiên làm việc
+- name: Users
+  description: EPIC 2 — Quản lý người dùng
+- name: Weather Sources
+  description: EPIC 3/5 — Nguồn dữ liệu thời tiết
+- name: Ports
+  description: EPIC 3 — Quản lý cảng biển
+- name: Zones
+  description: EPIC 4 — Quản lý khu vực
+- name: Port Contacts
+  description: EPIC 3 — Danh bạ liên hệ cảng
+- name: Weather
+  description: EPIC 5 — Dữ liệu thời tiết
+- name: Risk
+  description: EPIC 6 — Risk Engine
+- name: SOP Rules
+  description: EPIC 7 — Quản lý SOP rules
+- name: SOP Executions
+  description: EPIC 7 — Lịch sử thực thi SOP
+- name: Operation Mode
+  description: EPIC 8 — Trạng thái vận hành
+- name: Task Logs
+  description: EPIC 10 — Task auto-generation
+- name: Alerts
+  description: EPIC 11 — Cảnh báo và thông báo
+- name: Operation Events
+  description: EPIC 12 — Audit trail
+- name: Simulation
+  description: EPIC 15 — Chế độ mô phỏng
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token (TTL 15 phút). Lấy từ POST /api/auth/login
+  parameters:
+    portIdQuery:
+      name: portId
+      in: query
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID của cảng
+    portIdPath:
+      name: portId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    idPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    fromQuery:
+      name: from
+      in: query
+      schema:
+        type: string
+        format: date-time
+      description: Từ thời điểm (ISO 8601, UTC)
+    toQuery:
+      name: to
+      in: query
+      schema:
+        type: string
+        format: date-time
+      description: Đến thời điểm (ISO 8601, UTC)
+    pageQuery:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    pageSizeQuery:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+  responses:
+    Unauthorized:
+      description: Token thiếu, hết hạn hoặc không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: UNAUTHORIZED
+            message: Token is missing or invalid
+    Forbidden:
+      description: Không đủ quyền hạn (role không phù hợp hoặc sai port)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: FORBIDDEN
+            message: Insufficient permissions for this resource
+    NotFound:
+      description: Resource không tồn tại
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: NOT_FOUND
+            message: Resource not found
+    ValidationError:
+      description: Dữ liệu đầu vào không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+    MethodNotAllowed:
+      description: HTTP method không được phép (dùng cho APPEND-ONLY resources)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: METHOD_NOT_ALLOWED
+            message: This resource is append-only
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+      - code
+      - message
+      properties:
+        code:
+          type: string
+          example: NOT_FOUND
+        message:
+          type: string
+          example: Resource not found
+        details:
+          type: string
+          nullable: true
+    ValidationErrorResponse:
+      type: object
+      required:
+      - code
+      - message
+      - errors
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Input validation failed
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: email
+              message:
+                type: string
+                example: Invalid email format
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: {}
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+    RiskLevel:
+      type: string
+      enum:
+      - LOW
+      - MEDIUM
+      - HIGH
+      - CRITICAL
+    OperationMode:
+      type: string
+      enum:
+      - NORMAL
+      - LIMITED
+      - STOP
+    ZoneType:
+      type: string
+      enum:
+      - DOCK
+      - YARD
+      - GATE
+      - WAREHOUSE
+    UserRole:
+      type: string
+      enum:
+      - ADMIN
+      - COMPANY_ADMIN
+      - OPERATOR
+    UserStatus:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+      - SUSPENDED
+    AlertSeverity:
+      type: string
+      enum:
+      - INFO
+      - WARNING
+      - CRITICAL
+    WeatherFactor:
+      type: string
+      enum:
+      - WIND
+      - RAIN
+      - VISIBILITY
+      - WAVE
+    SopActionType:
+      type: string
+      enum:
+      - STOP_LOADING
+      - LIMIT_VESSEL_ENTRY
+      - EVACUATE_EQUIPMENT
+      - CLOSE_GATE
+      - EMERGENCY_SHUTDOWN
+      - NOTIFY_AUTHORITY
+      - CUSTOM
+    FetchJobStatus:
+      type: string
+      enum:
+      - PENDING
+      - RUNNING
+      - SUCCESS
+      - FAILED
+      - SKIPPED
+    ExecutionStatus:
+      type: string
+      enum:
+      - TRIGGERED
+      - COMPLETED
+      - FAILED
+      - SKIPPED
+    ContactRole:
+      type: string
+      enum:
+      - PORT_MANAGER
+      - SAFETY_OFFICER
+      - OPERATIONS_LEAD
+      - AUTHORITY
+      - EMERGENCY
+    EventType:
+      type: string
+      enum:
+      - WEATHER_FETCHED
+      - RISK_ASSESSED
+      - RISK_LEVEL_CHANGED
+      - SOP_TRIGGERED
+      - SOP_EXECUTED
+      - MODE_CHANGED
+      - MODE_OVERRIDDEN
+      - TASK_CREATED
+      - ALERT_CREATED
+      - ALERT_READ
+      - THRESHOLD_UPDATED
+      - SOP_RULE_UPDATED
+      - SIMULATION_STARTED
+      - SIMULATION_ENDED
+      - USER_LOGIN
+      - USER_LOGOUT
+      - PASSWORD_RESET
+    LoginRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: operator@porms.vn
+        password:
+          type: string
+          format: password
+          example: Secure@2026!
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (TTL 15 phút)
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          example: 900
+          description: Seconds
+        user:
+          $ref: '#/components/schemas/UserProfile'
+    RefreshRequest:
+      type: object
+      description: Refresh token được đọc từ httpOnly cookie tự động. Body trống.
+      properties: {}
+    ForgotPasswordRequest:
+      type: object
+      required:
+      - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@porms.vn
+    ResetPasswordRequest:
+      type: object
+      required:
+      - token
+      - newPassword
+      - confirmPassword
+      properties:
+        token:
+          type: string
+          description: Raw token từ reset link
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+        confirmPassword:
+          type: string
+          format: password
+    ChangePasswordRequest:
+      type: object
+      required:
+      - currentPassword
+      - newPassword
+      - confirmPassword
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+        confirmPassword:
+          type: string
+          format: password
+    SessionInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        deviceInfo:
+          type: object
+          properties:
+            userAgent:
+              type: string
+            ipAddress:
+              type: string
+            platform:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+        isCurrent:
+          type: boolean
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        assignedPortId:
+          type: string
+          format: uuid
+          nullable: true
+        assignedPortName:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    CreateUserRequest:
+      type: object
+      required:
+      - email
+      - fullName
+      - role
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/UserRole'
+        assignedPortId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Bắt buộc cho COMPANY_ADMIN và OPERATOR. NULL cho ADMIN.
+        phoneNumber:
+          type: string
+          nullable: true
+        password:
+          type: string
+          format: password
+          minLength: 8
+    UpdateUserRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/UserRole'
+        assignedPortId:
+          type: string
+          format: uuid
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/UserStatus'
+    UpdateProfileRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+          maxLength: 255
+        phoneNumber:
+          type: string
+          nullable: true
+    AdminResetPasswordRequest:
+      type: object
+      required:
+      - newPassword
+      properties:
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+    WeatherSource:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceName:
+          type: string
+          example: OpenWeatherMap
+        sourceType:
+          type: string
+          enum:
+          - REST_JSON
+          - MANUAL_INPUT
+        apiBaseUrl:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        recommendedFetchIntervalMin:
+          type: integer
+          nullable: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    CreateWeatherSourceRequest:
+      type: object
+      required:
+      - sourceName
+      - sourceType
+      properties:
+        sourceName:
+          type: string
+        sourceType:
+          type: string
+          enum:
+          - REST_JSON
+          - MANUAL_INPUT
+        apiBaseUrl:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        recommendedFetchIntervalMin:
+          type: integer
+          nullable: true
+    Port:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Cảng Tiên Sa — Đà Nẵng
+        code:
+          type: string
+          example: DNTSA
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          format: double
+          example: 16.1051
+        longitude:
+          type: number
+          format: double
+          example: 108.2338
+        timezone:
+          type: string
+          example: Asia/Ho_Chi_Minh
+        currentMode:
+          $ref: '#/components/schemas/OperationMode'
+        currentRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        defaultWeatherSourceId:
+          type: string
+          format: uuid
+          nullable: true
+        owStationId:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        zoneCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PortStatus:
+      type: object
+      description: Snapshot real-time từ view v_port_current_state
+      properties:
+        portId:
+          type: string
+          format: uuid
+        portName:
+          type: string
+        portCode:
+          type: string
+        currentMode:
+          $ref: '#/components/schemas/OperationMode'
+        currentRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        unreadAlertCount:
+          type: integer
+        assessmentSummary:
+          type: string
+          nullable: true
+        lastAssessedAt:
+          type: string
+          format: date-time
+          nullable: true
+        weather:
+          $ref: '#/components/schemas/WeatherSnapshot'
+    CreatePortRequest:
+      type: object
+      required:
+      - name
+      - code
+      - latitude
+      - longitude
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        code:
+          type: string
+          maxLength: 20
+          pattern: ^[A-Z0-9]+$
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        timezone:
+          type: string
+          default: Asia/Ho_Chi_Minh
+        owStationId:
+          type: string
+          nullable: true
+        defaultWeatherSourceId:
+          type: string
+          format: uuid
+          nullable: true
+    UpdatePortRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        timezone:
+          type: string
+        owStationId:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+    Zone:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        zoneType:
+          $ref: '#/components/schemas/ZoneType'
+        description:
+          type: string
+          nullable: true
+        capacity:
+          type: integer
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        config:
+          type: object
+          description: 'JSONB: {warning_text, priority, enabled}'
+        currentRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        displayOrder:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    ZoneStatus:
+      type: object
+      properties:
+        zone:
+          $ref: '#/components/schemas/Zone'
+        activeRestrictions:
+          type: array
+          items:
+            type: object
+            properties:
+              actionType:
+                $ref: '#/components/schemas/SopActionType'
+              actionDescription:
+                type: string
+              severity:
+                $ref: '#/components/schemas/AlertSeverity'
+    CreateZoneRequest:
+      type: object
+      required:
+      - name
+      - zoneType
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        zoneType:
+          $ref: '#/components/schemas/ZoneType'
+        description:
+          type: string
+          nullable: true
+        capacity:
+          type: integer
+          nullable: true
+          minimum: 1
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        displayOrder:
+          type: integer
+          default: 0
+    UpdateZoneRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        capacity:
+          type: integer
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        displayOrder:
+          type: integer
+        isActive:
+          type: boolean
+        config:
+          type: object
+    ZoneThresholdOverride:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        zoneId:
+          type: string
+          format: uuid
+        factor:
+          $ref: '#/components/schemas/WeatherFactor'
+        riskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        minValue:
+          type: number
+        maxValue:
+          type: number
+          nullable: true
+        unit:
+          type: string
+        reason:
+          type: string
+        isActive:
+          type: boolean
+        updatedByUserId:
+          type: string
+          format: uuid
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+    CreateZoneThresholdOverrideRequest:
+      type: object
+      required:
+      - factor
+      - riskLevel
+      - minValue
+      - unit
+      - reason
+      properties:
+        factor:
+          $ref: '#/components/schemas/WeatherFactor'
+        riskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        minValue:
+          type: number
+        maxValue:
+          type: number
+          nullable: true
+        unit:
+          type: string
+        reason:
+          type: string
+          minLength: 20
+    PortContact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        contactRole:
+          $ref: '#/components/schemas/ContactRole'
+        fullName:
+          type: string
+        title:
+          type: string
+          nullable: true
+        phonePrimary:
+          type: string
+        phoneSecondary:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        receiveAlerts:
+          type: boolean
+        alertThreshold:
+          $ref: '#/components/schemas/RiskLevel'
+        isActive:
+          type: boolean
+    CreatePortContactRequest:
+      type: object
+      required:
+      - contactRole
+      - fullName
+      - phonePrimary
+      properties:
+        contactRole:
+          $ref: '#/components/schemas/ContactRole'
+        fullName:
+          type: string
+        title:
+          type: string
+          nullable: true
+        phonePrimary:
+          type: string
+        phoneSecondary:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        receiveAlerts:
+          type: boolean
+          default: false
+        alertThreshold:
+          $ref: '#/components/schemas/RiskLevel'
+    WeatherReading:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        windSpeedMs:
+          type: number
+          format: double
+        beaufortNumber:
+          type: integer
+          minimum: 0
+          maximum: 12
+        windDirectionDeg:
+          type: integer
+          nullable: true
+        windGustMs:
+          type: number
+          nullable: true
+        rainfall1hMm:
+          type: number
+          nullable: true
+        rainfall3hMm:
+          type: number
+          nullable: true
+        temperatureC:
+          type: number
+          nullable: true
+        humidityPct:
+          type: integer
+          nullable: true
+        visibilityKm:
+          type: number
+          nullable: true
+        pressureHpa:
+          type: number
+          nullable: true
+        owWeatherCode:
+          type: integer
+          nullable: true
+        owWeatherDesc:
+          type: string
+          nullable: true
+        owWeatherIcon:
+          type: string
+          nullable: true
+          example: 10d
+        observedAt:
+          type: string
+          format: date-time
+        recordedAt:
+          type: string
+          format: date-time
+        dataSource:
+          type: string
+          example: OPENWEATHER_API
+        isSimulation:
+          type: boolean
+    WeatherSnapshot:
+      type: object
+      description: Subset của WeatherReading cho dashboard
+      properties:
+        windSpeedMs:
+          type: number
+        beaufortNumber:
+          type: integer
+        rainfall1hMm:
+          type: number
+          nullable: true
+        temperatureC:
+          type: number
+          nullable: true
+        humidityPct:
+          type: integer
+          nullable: true
+        visibilityKm:
+          type: number
+          nullable: true
+        owWeatherDesc:
+          type: string
+          nullable: true
+        owWeatherIcon:
+          type: string
+          nullable: true
+        observedAt:
+          type: string
+          format: date-time
+    ManualWeatherInputRequest:
+      type: object
+      required:
+      - portId
+      - windSpeedMs
+      - observedAt
+      properties:
+        portId:
+          type: string
+          format: uuid
+        windSpeedMs:
+          type: number
+          minimum: 0
+        rainfall1hMm:
+          type: number
+          minimum: 0
+          default: 0
+        visibilityKm:
+          type: number
+          nullable: true
+        temperatureC:
+          type: number
+          nullable: true
+        humidityPct:
+          type: integer
+          nullable: true
+        observedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          nullable: true
+    FetchJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/FetchJobStatus'
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        responseTimeMs:
+          type: integer
+          nullable: true
+        httpStatusCode:
+          type: integer
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        createdReadingId:
+          type: string
+          format: uuid
+          nullable: true
+        prefectFlowRunId:
+          type: string
+          nullable: true
+    FetchHealth:
+      type: object
+      properties:
+        portId:
+          type: string
+          format: uuid
+        successRate24h:
+          type: number
+          format: double
+          description: '% thành công trong 24h'
+        lastSuccessfulFetchAt:
+          type: string
+          format: date-time
+          nullable: true
+        consecutiveFailures:
+          type: integer
+        totalFetches24h:
+          type: integer
+        recentJobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/FetchJob'
+    RiskThreshold:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        factor:
+          $ref: '#/components/schemas/WeatherFactor'
+        riskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        minValue:
+          type: number
+        maxValue:
+          type: number
+          nullable: true
+        unit:
+          type: string
+        description:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        updatedByUserId:
+          type: string
+          format: uuid
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+    UpdateRiskThresholdRequest:
+      type: object
+      required:
+      - minValue
+      properties:
+        minValue:
+          type: number
+        maxValue:
+          type: number
+          nullable: true
+        description:
+          type: string
+        isActive:
+          type: boolean
+    RiskThresholdPreviewRequest:
+      type: object
+      required:
+      - thresholdsDraft
+      - testValues
+      properties:
+        thresholdsDraft:
+          type: array
+          items:
+            type: object
+            properties:
+              factor:
+                $ref: '#/components/schemas/WeatherFactor'
+              riskLevel:
+                $ref: '#/components/schemas/RiskLevel'
+              minValue:
+                type: number
+              maxValue:
+                type: number
+                nullable: true
+        testValues:
+          type: object
+          properties:
+            windSpeedMs:
+              type: number
+            rainfall1hMm:
+              type: number
+            visibilityKm:
+              type: number
+    RiskAssessment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        weatherReadingId:
+          type: string
+          format: uuid
+        finalRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        previousRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+          nullable: true
+        levelChanged:
+          type: boolean
+        beaufortNumber:
+          type: integer
+        rainfall1hMm:
+          type: number
+          nullable: true
+        visibilityKm:
+          type: number
+          nullable: true
+        assessmentSummary:
+          type: string
+        evaluatedAt:
+          type: string
+          format: date-time
+        isSimulation:
+          type: boolean
+    RiskAssessmentDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        assessmentId:
+          type: string
+          format: uuid
+        factor:
+          $ref: '#/components/schemas/WeatherFactor'
+        measuredValue:
+          type: number
+        unit:
+          type: string
+        factorRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        thresholdMin:
+          type: number
+          nullable: true
+        thresholdMax:
+          type: number
+          nullable: true
+        usedZoneOverride:
+          type: boolean
+        zoneId:
+          type: string
+          format: uuid
+          nullable: true
+    BeaufortReference:
+      type: object
+      properties:
+        beaufort:
+          type: integer
+          minimum: 0
+          maximum: 12
+        descriptionVn:
+          type: string
+        minMs:
+          type: number
+        maxMs:
+          type: number
+          nullable: true
+        riskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+    SopRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ruleName:
+          type: string
+        triggerRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        appliesToZoneType:
+          $ref: '#/components/schemas/ZoneType'
+          nullable: true
+        actionType:
+          $ref: '#/components/schemas/SopActionType'
+        actionDescription:
+          type: string
+        targetOperationMode:
+          $ref: '#/components/schemas/OperationMode'
+          nullable: true
+        executionOrder:
+          type: integer
+        alertMessage:
+          type: string
+          nullable: true
+        alertSeverity:
+          $ref: '#/components/schemas/AlertSeverity'
+        requiresConfirmation:
+          type: boolean
+        isActive:
+          type: boolean
+        totalExecutions:
+          type: integer
+        completedCount:
+          type: integer
+        skippedCount:
+          type: integer
+        failedCount:
+          type: integer
+        lastTriggeredAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+    CreateSopRuleRequest:
+      type: object
+      required:
+      - ruleName
+      - triggerRiskLevel
+      - actionType
+      - actionDescription
+      properties:
+        ruleName:
+          type: string
+          maxLength: 255
+        triggerRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        appliesToZoneType:
+          $ref: '#/components/schemas/ZoneType'
+          nullable: true
+        actionType:
+          $ref: '#/components/schemas/SopActionType'
+        actionDescription:
+          type: string
+        targetOperationMode:
+          $ref: '#/components/schemas/OperationMode'
+          nullable: true
+        executionOrder:
+          type: integer
+          default: 100
+          minimum: 1
+        alertMessage:
+          type: string
+          nullable: true
+        alertSeverity:
+          $ref: '#/components/schemas/AlertSeverity'
+        requiresConfirmation:
+          type: boolean
+          default: false
+    UpdateSopRuleRequest:
+      type: object
+      required:
+      - changeReason
+      properties:
+        ruleName:
+          type: string
+        triggerRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        appliesToZoneType:
+          $ref: '#/components/schemas/ZoneType'
+          nullable: true
+        actionType:
+          $ref: '#/components/schemas/SopActionType'
+        actionDescription:
+          type: string
+        targetOperationMode:
+          $ref: '#/components/schemas/OperationMode'
+          nullable: true
+        executionOrder:
+          type: integer
+        alertMessage:
+          type: string
+          nullable: true
+        alertSeverity:
+          $ref: '#/components/schemas/AlertSeverity'
+        isActive:
+          type: boolean
+        changeReason:
+          type: string
+          minLength: 20
+          description: Bắt buộc khi cập nhật rule
+    SopExecution:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sopRuleId:
+          type: string
+          format: uuid
+        ruleName:
+          type: string
+        assessmentId:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        zoneId:
+          type: string
+          format: uuid
+          nullable: true
+        zoneName:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ExecutionStatus'
+        skipReason:
+          type: string
+          nullable: true
+        executionResult:
+          type: object
+          nullable: true
+        triggeredAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        isSimulation:
+          type: boolean
+    ActiveRecommendation:
+      type: object
+      properties:
+        ruleId:
+          type: string
+          format: uuid
+        ruleName:
+          type: string
+        actionType:
+          $ref: '#/components/schemas/SopActionType'
+        actionDescription:
+          type: string
+        zoneType:
+          $ref: '#/components/schemas/ZoneType'
+          nullable: true
+        alertSeverity:
+          $ref: '#/components/schemas/AlertSeverity'
+    ModeLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        previousMode:
+          $ref: '#/components/schemas/OperationMode'
+          nullable: true
+        newMode:
+          $ref: '#/components/schemas/OperationMode'
+        triggeredByRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+          nullable: true
+        triggeredByExecutionId:
+          type: string
+          format: uuid
+          nullable: true
+        overriddenByUserId:
+          type: string
+          format: uuid
+          nullable: true
+        overriddenByUserName:
+          type: string
+          nullable: true
+        overrideReason:
+          type: string
+          nullable: true
+        changeType:
+          type: string
+          enum:
+          - AUTOMATIC
+          - MANUAL
+        changedAt:
+          type: string
+          format: date-time
+        isSimulation:
+          type: boolean
+    CurrentModeResponse:
+      type: object
+      properties:
+        portId:
+          type: string
+          format: uuid
+        currentMode:
+          $ref: '#/components/schemas/OperationMode'
+        changedAt:
+          type: string
+          format: date-time
+        changeType:
+          type: string
+          enum:
+          - AUTOMATIC
+          - MANUAL
+        lastChangeReason:
+          type: string
+          nullable: true
+        durationMinutes:
+          type: integer
+          description: Số phút đã ở mode hiện tại
+    OverrideModeRequest:
+      type: object
+      required:
+      - newMode
+      - overrideReason
+      properties:
+        newMode:
+          $ref: '#/components/schemas/OperationMode'
+        overrideReason:
+          type: string
+          minLength: 20
+          description: Bắt buộc, tối thiểu 20 ký tự
+    TaskLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        zoneId:
+          type: string
+          format: uuid
+          nullable: true
+        zoneName:
+          type: string
+          nullable: true
+        sopExecutionId:
+          type: string
+          format: uuid
+        actionType:
+          $ref: '#/components/schemas/SopActionType'
+        actionDescription:
+          type: string
+        riskLevelAtCreation:
+          $ref: '#/components/schemas/RiskLevel'
+        createdAt:
+          type: string
+          format: date-time
+        isSimulation:
+          type: boolean
+    TaskLogStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        byActionType:
+          type: object
+          additionalProperties:
+            type: integer
+        byZone:
+          type: array
+          items:
+            type: object
+            properties:
+              zoneId:
+                type: string
+                format: uuid
+              zoneName:
+                type: string
+              count:
+                type: integer
+        byRiskLevel:
+          type: object
+          additionalProperties:
+            type: integer
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        portName:
+          type: string
+        alertType:
+          type: string
+          example: RISK_LEVEL_CHANGED
+        severity:
+          $ref: '#/components/schemas/AlertSeverity'
+        title:
+          type: string
+        message:
+          type: string
+        metadata:
+          type: object
+          nullable: true
+        relatedExecutionId:
+          type: string
+          format: uuid
+          nullable: true
+        relatedAssessmentId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        readByUserId:
+          type: string
+          format: uuid
+          nullable: true
+        isUnread:
+          type: boolean
+        isSimulation:
+          type: boolean
+    UnreadCountResponse:
+      type: object
+      properties:
+        portId:
+          type: string
+          format: uuid
+        unreadCount:
+          type: integer
+        criticalCount:
+          type: integer
+    OperationEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+          nullable: true
+        portName:
+          type: string
+          nullable: true
+        eventType:
+          $ref: '#/components/schemas/EventType'
+        actorUserId:
+          type: string
+          format: uuid
+          nullable: true
+        actorUserName:
+          type: string
+          nullable: true
+        payload:
+          type: object
+        summary:
+          type: string
+          nullable: true
+        occurredAt:
+          type: string
+          format: date-time
+        isSimulation:
+          type: boolean
+    EventStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        byEventType:
+          type: object
+          additionalProperties:
+            type: integer
+        automatedCount:
+          type: integer
+        manualCount:
+          type: integer
+    WeatherSnapshotInput:
+      type: object
+      required:
+      - windSpeedMs
+      - observedAt
+      properties:
+        windSpeedMs:
+          type: number
+          minimum: 0
+        rainfall1hMm:
+          type: number
+          minimum: 0
+          default: 0
+        visibilityKm:
+          type: number
+          nullable: true
+        temperatureC:
+          type: number
+          nullable: true
+        humidityPct:
+          type: integer
+          nullable: true
+        observedAt:
+          type: string
+          format: date-time
+    StartSimulationRequest:
+      type: object
+      required:
+      - portId
+      - scenarioName
+      - weatherSnapshots
+      properties:
+        portId:
+          type: string
+          format: uuid
+        scenarioName:
+          type: string
+          example: Bão Linda 10/2023 — Đà Nẵng
+        weatherSnapshots:
+          type: array
+          minItems: 5
+          items:
+            $ref: '#/components/schemas/WeatherSnapshotInput'
+          description: Mảng snapshots theo thứ tự thời gian (observed_at tăng dần)
+        speedMultiplier:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+          description: 10 = replay 15 phút data trong 90 giây
+    SimulationSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        startedByUserId:
+          type: string
+          format: uuid
+        scenarioName:
+          type: string
+        speedMultiplier:
+          type: integer
+        totalSnapshots:
+          type: integer
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - CANCELLED
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+    SimulationStatus:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/SimulationSession'
+        currentSnapshotIndex:
+          type: integer
+        progressPct:
+          type: number
+        estimatedRemainingSeconds:
+          type: integer
+        currentWeather:
+          $ref: '#/components/schemas/WeatherSnapshot'
+          nullable: true
+        currentRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+          nullable: true
+    SimulationResults:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        scenarioName:
+          type: string
+        totalRiskChanges:
+          type: integer
+        totalSopExecutions:
+          type: integer
+        totalAlertsGenerated:
+          type: integer
+        totalTasksCreated:
+          type: integer
+        snapshotsAtLow:
+          type: integer
+        snapshotsAtMedium:
+          type: integer
+        snapshotsAtHigh:
+          type: integer
+        snapshotsAtCritical:
+          type: integer
+        peakRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+          nullable: true
+        resultSummary:
+          type: string
+        calculatedAt:
+          type: string
+          format: date-time
+paths:
+  /api/auth/login:
+    post:
+      summary: Đăng nhập hệ thống
+      description: |-
+        Xác thực user bằng email và password.
+
+        - Trả `accessToken` trong response body (TTL 15 phút)
+        - Trả `refreshToken` qua httpOnly cookie (TTL 7 ngày)
+        - Khóa tài khoản 15 phút sau 5 lần sai liên tiếp
+
+        **Roles:** Public (không cần auth)
+      tags:
+      - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Sai email/password — lỗi generic không tiết lộ field nào sai
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: INVALID_CREDENTIALS
+                message: Email hoặc mật khẩu không đúng
+        '423':
+          description: Tài khoản bị khóa tạm thời
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: ACCOUNT_LOCKED
+                message: Tài khoản bị khóa 15 phút do đăng nhập sai nhiều lần
+  /api/auth/refresh:
+    post:
+      summary: Làm mới access token
+      description: |-
+        Phát access token mới từ refresh token hợp lệ trong httpOnly cookie.
+
+        Frontend tự động gọi khi nhận 401 từ API khác.
+
+        **Roles:** Public (dùng refresh token từ cookie)
+      tags:
+      - Auth
+      security: []
+      responses:
+        '200':
+          description: Token mới đã được phát
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Refresh token hết hạn, đã revoke hoặc không tồn tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/logout:
+    post:
+      summary: Đăng xuất thiết bị hiện tại
+      description: |-
+        Revoke refresh token của thiết bị hiện tại. Clear httpOnly cookie.
+
+        **Roles:** Tất cả roles đã đăng nhập
+      tags:
+      - Auth
+      responses:
+        '204':
+          description: Đăng xuất thành công
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/logout-all:
+    post:
+      summary: Đăng xuất tất cả thiết bị
+      description: |-
+        Revoke toàn bộ refresh tokens của user hiện tại.
+
+        **Roles:** Tất cả roles đã đăng nhập
+      tags:
+      - Auth
+      responses:
+        '204':
+          description: Đã revoke tất cả phiên đăng nhập
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/forgot-password:
+    post:
+      summary: Yêu cầu đặt lại mật khẩu
+      description: |-
+        Gửi email chứa reset link nếu email tồn tại.
+
+        Luôn trả 200 (generic message) để không tiết lộ email có tồn tại hay không.
+
+        Rate limit: 3 requests / 30 phút / email.
+
+        **Roles:** Public
+      tags:
+      - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: Response generic — không tiết lộ email có tồn tại không
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Nếu email tồn tại, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu.
+        '429':
+          description: Rate limit exceeded
+  /api/auth/reset-password:
+    post:
+      summary: Đặt lại mật khẩu với token
+      description: |-
+        Validate token từ email và đặt mật khẩu mới.
+
+        - Token one-time use, TTL 15 phút
+        - Sau reset: revoke tất cả refresh tokens
+
+        **Roles:** Public
+      tags:
+      - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Mật khẩu đã được đặt lại thành công
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '410':
+          description: Token hết hạn hoặc đã được sử dụng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: TOKEN_EXPIRED
+                message: Reset token đã hết hạn hoặc đã dùng
+  /api/auth/change-password:
+    put:
+      summary: Đổi mật khẩu (đã đăng nhập)
+      description: |-
+        Đổi mật khẩu sau khi xác minh mật khẩu hiện tại. Sau đổi: revoke tất cả refresh tokens.
+
+        **Roles:** Tất cả roles đã đăng nhập
+      tags:
+      - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Mật khẩu đã được đổi. Yêu cầu đăng nhập lại trên tất cả thiết bị.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Mật khẩu hiện tại không đúng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/sessions:
+    get:
+      summary: Xem phiên đăng nhập của bản thân
+      description: |-
+        Xem tất cả refresh tokens còn hiệu lực của user hiện tại.
+
+        **Roles:** Tất cả roles đã đăng nhập
+      tags:
+      - Auth
+      responses:
+        '200':
+          description: Danh sách phiên đăng nhập
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/sessions/{id}:
+    delete:
+      summary: Revoke phiên đăng nhập cụ thể
+      description: |-
+        Đăng xuất một thiết bị cụ thể. Chỉ revoke token của bản thân.
+
+        **Roles:** Tất cả roles đã đăng nhập
+      tags:
+      - Auth
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Phiên đã bị revoke
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/users:
+    get:
+      summary: Danh sách tất cả users
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Users
+      parameters:
+      - name: role
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ADMIN
+          - COMPANY_ADMIN
+          - OPERATOR
+        description: Filter theo role
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - SUSPENDED
+        description: Filter theo status
+      - name: assignedPortId
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Filter theo port UUID
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Tìm theo email hoặc full_name
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+        description: ''
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 20
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserProfile'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      summary: Tạo tài khoản người dùng mới
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User đã được tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Email đã tồn tại trong hệ thống
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: EMAIL_ALREADY_EXISTS
+                message: Email này đã được sử dụng
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/users/me:
+    get:
+      summary: Xem profile cá nhân
+      description: '**Roles:** Tất cả roles'
+      tags:
+      - Users
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      summary: Cập nhật profile cá nhân
+      description: |-
+        Chỉ cho phép sửa fullName và phoneNumber. Email và role không thay đổi được.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/users/{id}:
+    get:
+      summary: Xem chi tiết user
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Users
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Cập nhật thông tin user
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Users
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Vô hiệu hóa user (soft delete)
+      description: |-
+        Set deleted_at. User không thể đăng nhập nhưng data được giữ nguyên.
+
+        **Roles:** ADMIN only
+      tags:
+      - Users
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: User đã bị soft delete
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/users/{id}/reset-password:
+    post:
+      summary: Admin reset mật khẩu user
+      description: |-
+        Reset mật khẩu và revoke tất cả refresh tokens. Cũng unlock tài khoản nếu đang bị khóa.
+
+        **Roles:** ADMIN only
+      tags:
+      - Users
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminResetPasswordRequest'
+      responses:
+        '200':
+          description: Mật khẩu đã reset thành công
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/users/{id}/unlock:
+    post:
+      summary: Mở khóa tài khoản bị lock
+      description: |-
+        Reset failedLoginCount = 0 và lockedUntil = NULL.
+
+        **Roles:** ADMIN only
+      tags:
+      - Users
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Tài khoản đã được mở khóa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/users/{id}/sessions:
+    get:
+      summary: Xem phiên đăng nhập của user (Admin)
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Users
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+        description: active | revoked | expired
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/users/{id}/sessions/{sessionId}:
+    delete:
+      summary: Force revoke phiên đăng nhập cụ thể của user (Admin)
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Users
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Phiên đã bị force-revoke
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/weather-sources:
+    get:
+      summary: Danh sách weather sources
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Weather Sources
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WeatherSource'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      summary: Thêm weather source mới
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Weather Sources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWeatherSourceRequest'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeatherSource'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: sourceName đã tồn tại
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/weather-sources/{id}:
+    put:
+      summary: Cập nhật weather source
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Weather Sources
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWeatherSourceRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeatherSource'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports:
+    get:
+      summary: Danh sách cảng
+      description: |-
+        ADMIN thấy tất cả. COMPANY_ADMIN/OPERATOR chỉ thấy assigned port.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Ports
+      parameters:
+      - name: isActive
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: Filter theo trạng thái hoạt động
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Port'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Tạo cảng mới
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Ports
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePortRequest'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Port'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: port code đã tồn tại
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/ports/status:
+    get:
+      summary: Trạng thái real-time tất cả cảng
+      description: |-
+        Snapshot từ view v_port_current_state. COMPANY_ADMIN/OPERATOR chỉ thấy port mình.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Ports
+      responses:
+        '200':
+          description: Danh sách port status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PortStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/ports/{id}:
+    get:
+      summary: Chi tiết cảng
+      description: '**Roles:** ADMIN (bất kỳ), CA/OP (chỉ assigned port)'
+      tags:
+      - Ports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Port'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Cập nhật thông tin cảng
+      description: '**Roles:** ADMIN only (port code không thể thay đổi)'
+      tags:
+      - Ports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePortRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Port'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Vô hiệu hóa cảng (soft delete)
+      description: |-
+        Set isActive = FALSE. Dừng fetch jobs. Giữ lịch sử data.
+
+        **Roles:** ADMIN only
+      tags:
+      - Ports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Cảng đã bị vô hiệu hóa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{id}/status:
+    get:
+      summary: Snapshot real-time của một cảng
+      description: |-
+        Dùng cho dashboard polling mỗi 30 giây. Trả weather, risk, mode, alerts.
+
+        **Roles:** Tất cả roles (port isolation áp dụng)
+      tags:
+      - Ports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{id}/weather-source:
+    put:
+      summary: Đặt weather source mặc định cho cảng
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Ports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - weatherSourceId
+              properties:
+                weatherSourceId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Port'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{id}/fetch-jobs:
+    get:
+      summary: Lịch sử fetch jobs của cảng
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Ports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - RUNNING
+          - SUCCESS
+          - FAILED
+          - SKIPPED
+        description: Filter theo status
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Từ thời điểm (ISO 8601)
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Đến thời điểm (ISO 8601)
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FetchJob'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{id}/fetch-health:
+    get:
+      summary: Tình trạng sức khỏe fetch pipeline của cảng
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Ports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FetchHealth'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{id}/clone-zones:
+    post:
+      summary: Clone zones từ cảng nguồn
+      description: |-
+        Copy zone structure từ cảng khác. Tọa độ không được clone (phải nhập riêng).
+
+        **Roles:** ADMIN only
+      tags:
+      - Ports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - sourcePortId
+              properties:
+                sourcePortId:
+                  type: string
+                  format: uuid
+                  description: UUID của cảng nguồn cần clone zones
+      responses:
+        '201':
+          description: Zones đã được clone thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clonedCount:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{portId}/zones:
+    get:
+      summary: Danh sách zones của cảng
+      description: '**Roles:** Tất cả roles (port isolation áp dụng)'
+      tags:
+      - Zones
+      parameters:
+      - name: portId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: zoneType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - DOCK
+          - YARD
+          - GATE
+          - WAREHOUSE
+        description: Filter theo loại zone
+      - name: isActive
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: ''
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Zone'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Tạo zone mới
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Zones
+      parameters:
+      - name: portId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateZoneRequest'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/zones/{id}:
+    get:
+      summary: Chi tiết zone
+      description: '**Roles:** Tất cả roles'
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Cập nhật thông tin zone
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateZoneRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Vô hiệu hóa zone
+      description: |-
+        Soft delete: isActive = FALSE.
+
+        **Roles:** ADMIN only
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Zone đã bị vô hiệu hóa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/zones/{id}/status:
+    get:
+      summary: Trạng thái và restrictions hiện tại của zone
+      description: |-
+        Trả zone info kèm danh sách SOP restrictions đang active.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZoneStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/zones/{id}/restrictions:
+    get:
+      summary: Danh sách restrictions đang áp dụng cho zone
+      description: |-
+        Query SOP rules active theo (zone_type, current_risk_level).
+
+        **Roles:** Tất cả roles
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActiveRecommendation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/zones/{id}/risk-history:
+    get:
+      summary: Lịch sử risk level của zone
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      responses:
+        '200':
+          description: Risk history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    riskLevel:
+                      $ref: '#/components/schemas/RiskLevel'
+                    beaufortNumber:
+                      type: integer
+                    evaluatedAt:
+                      type: string
+                      format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/zones/{id}/emergency-actions:
+    get:
+      summary: Hành động khẩn cấp cho zone (chỉ khi risk >= HIGH)
+      description: '**Roles:** Tất cả roles'
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActiveRecommendation'
+        '204':
+          description: Không có emergency actions (risk < HIGH)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/zones/{id}/threshold-overrides:
+    get:
+      summary: Danh sách threshold overrides của zone
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ZoneThresholdOverride'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Tạo threshold override mới cho zone
+      description: |-
+        Ghi đè ngưỡng risk mặc định. Mỗi (zone, factor, riskLevel) chỉ có 1 override.
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateZoneThresholdOverrideRequest'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZoneThresholdOverride'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: (zone, factor, riskLevel) đã có override
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/zones/{id}/threshold-overrides/{overrideId}:
+    put:
+      summary: Cập nhật threshold override
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: overrideId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateZoneThresholdOverrideRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZoneThresholdOverride'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Xóa threshold override
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Zones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: overrideId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Override đã bị xóa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{portId}/zones/status:
+    get:
+      summary: Trạng thái tất cả zones trong cảng
+      description: |-
+        Dùng cho Zone Status Overview page.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Zones
+      parameters:
+      - name: portId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ZoneStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{portId}/contacts:
+    get:
+      summary: Danh bạ liên hệ của cảng
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Port Contacts
+      parameters:
+      - name: portId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PortContact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Thêm contact vào cảng
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Port Contacts
+      parameters:
+      - name: portId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePortContactRequest'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortContact'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{portId}/contacts/{id}:
+    put:
+      summary: Cập nhật contact
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Port Contacts
+      parameters:
+      - name: portId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePortContactRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortContact'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Vô hiệu hóa contact
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Port Contacts
+      parameters:
+      - name: portId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Contact đã bị vô hiệu hóa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/weather/latest:
+    get:
+      summary: Dữ liệu thời tiết mới nhất của cảng
+      description: |-
+        Trả weather_reading mới nhất (is_simulation = FALSE).
+
+        **Roles:** Tất cả roles (port isolation)
+      tags:
+      - Weather
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: UUID cảng
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeatherReading'
+        '204':
+          description: Chưa có reading nào cho port này
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/weather/history:
+    get:
+      summary: Lịch sử dữ liệu thời tiết
+      description: '**Roles:** Tất cả roles (port isolation)'
+      tags:
+      - Weather
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: UUID cảng
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: includeSimulation
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: ''
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WeatherReading'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/weather/manual-input:
+    post:
+      summary: Nhập thủ công dữ liệu thời tiết
+      description: |-
+        Dùng khi API không khả dụng. Tự động trigger Risk Engine sau khi nhập.
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - Weather
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualWeatherInputRequest'
+      responses:
+        '201':
+          description: Reading đã được tạo và Risk Engine đã trigger
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeatherReading'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/risk/current:
+    get:
+      summary: Risk assessment mới nhất của cảng
+      description: '**Roles:** Tất cả roles (port isolation)'
+      tags:
+      - Risk
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: UUID cảng
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskAssessment'
+        '204':
+          description: Chưa có assessment nào
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/risk/history:
+    get:
+      summary: Lịch sử risk assessments
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Risk
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: changedOnly
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: Chỉ trả records có level_changed = true
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RiskAssessment'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/risk/assessments/{id}/details:
+    get:
+      summary: Chi tiết factor breakdown của một assessment
+      description: |-
+        Trả 3 records (WIND, RAIN, VISIBILITY) cho assessment cụ thể.
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - Risk
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RiskAssessmentDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/risk/thresholds:
+    get:
+      summary: Danh sách risk thresholds hiện tại
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Risk
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RiskThreshold'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/risk/thresholds/{id}:
+    put:
+      summary: Cập nhật risk threshold
+      description: |-
+        Cache in-memory bị clear ngay. Hiệu lực trong ≤ 5 phút.
+
+        **Roles:** ADMIN only
+      tags:
+      - Risk
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRiskThresholdRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskThreshold'
+        '400':
+          description: 'Validation fail — VD: overlap ranges, minValue >= maxValue'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/risk/thresholds/preview:
+    post:
+      summary: Preview kết quả đánh giá với threshold dự kiến
+      description: |-
+        Không lưu, chỉ tính và trả kết quả.
+
+        **Roles:** ADMIN only
+      tags:
+      - Risk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiskThresholdPreviewRequest'
+      responses:
+        '200':
+          description: Kết quả preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  currentResult:
+                    $ref: '#/components/schemas/RiskAssessment'
+                  previewResult:
+                    $ref: '#/components/schemas/RiskAssessment'
+                  wouldChange:
+                    type: boolean
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/risk/beaufort-reference:
+    get:
+      summary: Bảng Beaufort scale tham chiếu
+      description: |-
+        Static data — 13 records (Beaufort 0–12) theo WMO 2023.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Risk
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BeaufortReference'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/sop-rules:
+    get:
+      summary: Danh sách SOP rules kèm thống kê
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - SOP Rules
+      parameters:
+      - name: portId
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Filter theo port (ADMIN xem tất cả nếu không có portId)
+      - name: triggerRiskLevel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+        description: ''
+      - name: isActive
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: ''
+      - name: zoneType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - DOCK
+          - YARD
+          - GATE
+          - WAREHOUSE
+        description: ''
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SopRule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      summary: Tạo SOP rule mới
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - SOP Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSopRuleRequest'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SopRule'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/sop-rules/active-recommendations:
+    get:
+      summary: Danh sách khuyến nghị hành động hiện tại
+      description: |-
+        Trả SOP rules active theo portId và riskLevel hiện tại.
+
+        **Roles:** Tất cả roles
+      tags:
+      - SOP Rules
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: riskLevel
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+        description: ''
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActiveRecommendation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/sop-rules/import:
+    post:
+      summary: Import SOP rules từ file JSON
+      description: '**Roles:** ADMIN only'
+      tags:
+      - SOP Rules
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File JSON chứa mảng SOP rules
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreateSopRuleRequest'
+      responses:
+        '200':
+          description: Import summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: integer
+                  skipped:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/sop-rules/export:
+    get:
+      summary: Export SOP rules ra file JSON
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - SOP Rules
+      parameters:
+      - name: portId
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Filter theo port
+      responses:
+        '200':
+          description: JSON file download
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SopRule'
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename=porms_sop_rules_DNTSA_2026-05-04.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/sop-rules/{id}:
+    get:
+      summary: Chi tiết SOP rule
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - SOP Rules
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SopRule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Cập nhật SOP rule
+      description: |-
+        Bắt buộc nhập changeReason (tối thiểu 20 ký tự).
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - SOP Rules
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSopRuleRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SopRule'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Vô hiệu hóa SOP rule
+      description: |-
+        Set isActive = FALSE. Không xóa (giữ lịch sử executions).
+
+        **Roles:** ADMIN only
+      tags:
+      - SOP Rules
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Rule đã bị vô hiệu hóa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/sop-rules/{id}/executions:
+    get:
+      summary: Lịch sử executions của SOP rule
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - SOP Rules
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SopExecution'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/sop-executions:
+    get:
+      summary: Lịch sử SOP executions
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - SOP Executions
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: sopRuleId
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Filter theo rule UUID
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - TRIGGERED
+          - COMPLETED
+          - FAILED
+          - SKIPPED
+        description: ''
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: includeSimulation
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: ''
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SopExecution'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/ports/{id}/mode/current:
+    get:
+      summary: Trạng thái mode hiện tại của cảng
+      description: '**Roles:** Tất cả roles'
+      tags:
+      - Operation Mode
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentModeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{id}/mode/history:
+    get:
+      summary: Lịch sử mode changes của cảng
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Operation Mode
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: changeType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - AUTOMATIC
+          - MANUAL
+        description: ''
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModeLog'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{id}/mode/override:
+    post:
+      summary: Override operation mode thủ công
+      description: |-
+        Cho phép bất kỳ transition. Bắt buộc nhập overrideReason ≥ 20 ký tự.
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - Operation Mode
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverrideModeRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentModeResponse'
+        '400':
+          description: overrideReason quá ngắn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/task-logs:
+    get:
+      summary: Lịch sử task logs
+      description: '**Roles:** Tất cả roles (port isolation)'
+      tags:
+      - Task Logs
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: zoneId
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Filter theo zone UUID
+      - name: actionType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - STOP_LOADING
+          - LIMIT_VESSEL_ENTRY
+          - EVACUATE_EQUIPMENT
+          - CLOSE_GATE
+          - EMERGENCY_SHUTDOWN
+          - NOTIFY_AUTHORITY
+          - CUSTOM
+        description: ''
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: includeSimulation
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: ''
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskLog'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/task-logs/stats:
+    get:
+      summary: Thống kê task logs
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Task Logs
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLogStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/task-logs/export:
+    get:
+      summary: Export task logs ra CSV
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Task Logs
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: zoneId
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ''
+      - name: actionType
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ''
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename=porms_tasks_DNTSA_2026-05-01_2026-05-04.csv
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/alerts:
+    get:
+      summary: Danh sách alerts
+      description: |-
+        Unread và CRITICAL lên đầu (dùng view v_alert_feed).
+
+        **Roles:** Tất cả roles (port isolation)
+      tags:
+      - Alerts
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: severity
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - INFO
+          - WARNING
+          - CRITICAL
+        description: ''
+      - name: alertType
+        in: query
+        required: false
+        schema:
+          type: string
+        description: 'VD: RISK_LEVEL_CHANGED, MODE_CHANGED'
+      - name: unreadOnly
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: ''
+      - name: includeSimulation
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: ''
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Tìm theo title
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      summary: DELETE không được phép (alerts là append-only)
+      description: Alerts không thể xóa — phương thức này luôn trả 405.
+      tags:
+      - Alerts
+      responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+  /api/alerts/unread-count:
+    get:
+      summary: Số lượng alert chưa đọc (dùng cho polling navbar)
+      description: |-
+        Lightweight endpoint — chỉ trả count. Gọi mỗi 30 giây.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Alerts
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCountResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/alerts/feed:
+    get:
+      summary: Alert feed cho notification dropdown (top 5)
+      description: |-
+        Unread + CRITICAL lên đầu.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Alerts
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 5
+        description: ''
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Alert'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/alerts/mark-all-read:
+    post:
+      summary: Đánh dấu tất cả alerts của port là đã đọc
+      description: '**Roles:** Tất cả roles (port isolation)'
+      tags:
+      - Alerts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - portId
+              properties:
+                portId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Số lượng alerts đã được đánh dấu đọc
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updatedCount:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/alerts/export:
+    get:
+      summary: Export alerts ra CSV
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Alerts
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: severity
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ''
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/alerts/{id}:
+    get:
+      summary: Chi tiết alert
+      description: '**Roles:** Tất cả roles (port isolation)'
+      tags:
+      - Alerts
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/alerts/{id}/read:
+    patch:
+      summary: Đánh dấu alert đã đọc
+      description: |-
+        Set readAt = NOW(), readByUserId = currentUser. Ghi ALERT_READ vào operation_events.
+
+        **Roles:** Tất cả roles (port isolation)
+      tags:
+      - Alerts
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/events:
+    get:
+      summary: Danh sách operation events (audit trail)
+      description: |-
+        APPEND-ONLY — không có POST/PUT/DELETE endpoint.
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - Operation Events
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: eventType
+        in: query
+        required: false
+        schema:
+          type: string
+        description: 'Filter theo event type (multi-value: ?eventType=RISK_LEVEL_CHANGED&eventType=SOP_EXECUTED)'
+      - name: actorType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - automated
+          - manual
+          - all
+        description: automated | manual | all
+      - name: actorUserId
+        in: query
+        required: false
+        schema:
+          type: string
+        description: UUID của user đã thực hiện
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Tìm trong summary text
+      - name: includeSimulation
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: ''
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OperationEvent'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      summary: DELETE không được phép (APPEND-ONLY resource)
+      description: Operation events không thể xóa bao giờ. Endpoint này luôn trả 405.
+      tags:
+      - Operation Events
+      responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+  /api/events/stats:
+    get:
+      summary: Thống kê operation events
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Operation Events
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/events/export:
+    get:
+      summary: Export operation events ra CSV
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Operation Events
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO 8601
+      - name: eventType
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ''
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/events/{id}:
+    get:
+      summary: Chi tiết event (kèm full payload JSONB)
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Operation Events
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/simulation/start:
+    post:
+      summary: Khởi động simulation mode
+      description: |-
+        Replay dataset thời tiết qua toàn bộ pipeline (Risk→SOP→Mode→Alert).
+
+        - Tất cả records tạo ra: `isSimulation = TRUE`
+        - Delay giữa snapshots = `15_phút / speedMultiplier` (giây)
+        - Chỉ 1 simulation active per port tại một thời điểm
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - Simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSimulationRequest'
+      responses:
+        '202':
+          description: Simulation đã bắt đầu (async). Dùng GET /api/simulation/status để theo dõi.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationSession'
+        '400':
+          description: 'Validation error — VD: speedMultiplier ngoài range, snapshots < 5'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '409':
+          description: Port đang có simulation khác đang chạy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: SIMULATION_ALREADY_RUNNING
+                message: Port đang có simulation đang chạy
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/simulation/stop:
+    post:
+      summary: Dừng simulation đang chạy
+      description: |-
+        Set status = CANCELLED. Background task dừng sau snapshot hiện tại.
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - Simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - sessionId
+              properties:
+                sessionId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationSession'
+        '400':
+          description: Session không ở trạng thái RUNNING
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/simulation/status:
+    get:
+      summary: Tiến trình simulation đang chạy
+      description: |-
+        Polling mỗi 3 giây để cập nhật progress bar.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Simulation
+      parameters:
+      - name: sessionId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/simulation/{sessionId}/results:
+    get:
+      summary: Kết quả tổng kết sau khi simulation hoàn thành
+      description: |-
+        Chỉ available khi session status = COMPLETED.
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - Simulation
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationResults'
+        '404':
+          description: Session không tồn tại hoặc chưa hoàn thành
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/simulation/sessions:
+    get:
+      summary: Lịch sử simulation sessions
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Simulation
+      parameters:
+      - name: portId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - CANCELLED
+        description: ''
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: ''
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SimulationSession'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'

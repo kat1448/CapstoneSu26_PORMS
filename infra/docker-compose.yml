@@ -1,0 +1,291 @@
+# ================================================================
+# PORMS — Docker Compose (Development)
+# ================================================================
+#
+# CÁCH DÙNG:
+#   cd infra/
+#
+#   Dev (chỉ infra — FE và BE chạy native):
+#     docker compose --env-file ../.env up -d
+#
+#   Full stack (bao gồm BE và FE đã build):
+#     docker compose --env-file ../.env --profile app up -d
+#
+#   NOTE: --env-file ../.env bắt buộc vì .env nằm ở root repo,
+#         không phải trong thư mục infra/
+#
+# PORTS:
+#   PostgreSQL   → localhost:5432
+#   Prefect UI   → localhost:4200
+#   Metabase     → localhost:3000
+#   Backend API  → localhost:5000  (profile: app)
+#   Frontend     → localhost:5173  (profile: app)
+#
+# YÊU CẦU:
+#   - Tạo ../.env từ ../.env.example và điền đầy đủ giá trị
+#   - Docker Desktop đang chạy
+# ================================================================
+
+name: porms
+
+# ─── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  porms-net:
+    driver: bridge
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  prefect_data:
+    driver: local
+  metabase_data:
+    driver: local
+
+# ─── Services ─────────────────────────────────────────────────────────────────
+services:
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # PostgreSQL 16 — Shared database cho tất cả services
+  # Tự động tạo schema + seed khi khởi động lần đầu
+  # ════════════════════════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:16-alpine
+    container_name: porms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       porms_db
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Passwords cho các dedicated users — đọc bởi init-db.sql
+      POSTGRES_ETL_PASSWORD:      ${POSTGRES_ETL_PASSWORD}
+      POSTGRES_API_PASSWORD:      ${POSTGRES_API_PASSWORD}
+      POSTGRES_METABASE_PASSWORD: ${POSTGRES_METABASE_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Init scripts chạy theo thứ tự alphabet khi container tạo lần đầu
+      - ./postgres/init-db.sql:/docker-entrypoint-initdb.d/00_init_db.sql
+      - ./postgres/init-passwords.sh:/docker-entrypoint-initdb.d/01_init_passwords.sh
+      - ../docs/database/schema.sql:/docker-entrypoint-initdb.d/02_schema.sql
+      - ./postgres/init-grants.sql:/docker-entrypoint-initdb.d/03_grants.sql
+      - ../scripts/seed_data.sql:/docker-entrypoint-initdb.d/04_seed_data.sql
+      - ../scripts/seed_sop_rules.sql:/docker-entrypoint-initdb.d/05_seed_sop_rules.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d porms_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - porms-net
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # Prefect Server — ETL Orchestration UI & API
+  # UI: http://localhost:4200
+  # Dùng database prefect_db riêng (tạo bởi init-db.sql) để tách biệt với porms_db
+  # ════════════════════════════════════════════════════════════════════════════
+  prefect-server:
+    image: prefecthq/prefect:2-python3.11
+    container_name: porms-prefect-server
+    restart: unless-stopped
+    command: prefect server start --host 0.0.0.0
+    environment:
+      PREFECT_UI_URL:                        http://localhost:4200
+      PREFECT_API_URL:                       http://localhost:4200/api
+      PREFECT_SERVER_API_HOST:               0.0.0.0
+      PREFECT_SERVER_API_PORT:               4200
+      # Prefect tự migrate DB khi khởi động
+      PREFECT_API_DATABASE_CONNECTION_URL:   >-
+        postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/prefect_db
+      PREFECT_API_DATABASE_MIGRATE_ON_START: "true"
+      # Tắt telemetry
+      PREFECT_TELEMETRY_ENABLED:             "false"
+    ports:
+      - "4200:4200"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - porms-net
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # Prefect Worker — Thực thi ETL flows
+  # Build từ etl/Dockerfile (Python 3.11 + requirements.txt)
+  #
+  # Flows:
+  #   - weather_collector   : fetch OpenWeather mỗi 15 phút/port
+  #   - weather_transformer : normalize m/s → Beaufort, m → km
+  #   - dw_loader           : load operational → analytics schema (mỗi giờ)
+  #   - historical_backfill : one-time backfill 30 ngày dữ liệu lịch sử
+  # ════════════════════════════════════════════════════════════════════════════
+  prefect-worker:
+    build:
+      context: ../etl
+      dockerfile: Dockerfile
+    container_name: porms-prefect-worker
+    restart: unless-stopped
+    # Đợi server sẵn sàng → tạo work pool (idempotent) → deploy flows → start worker
+    command: >
+      bash -c "
+        echo '[worker] Waiting 15s for Prefect server to initialize...' &&
+        sleep 15 &&
+        prefect work-pool create porms-pool --type process 2>/dev/null || true &&
+        echo '[worker] Deploying flows...' &&
+        python -m deployments.deploy_all 2>/dev/null || true &&
+        echo '[worker] Starting worker...' &&
+        prefect worker start --pool porms-pool --type process
+      "
+    environment:
+      # Prefect — trỏ vào container prefect-server (dùng tên service trong docker network)
+      PREFECT_API_URL:     http://prefect-server:4200/api
+
+      # PostgreSQL — dùng user riêng porms_etl (không dùng superuser)
+      POSTGRES_DSN:        postgresql://porms_etl:${POSTGRES_ETL_PASSWORD}@postgres:5432/porms_db
+      POSTGRES_HOST:       postgres
+      POSTGRES_PORT:       5432
+      POSTGRES_DB:         porms_db
+      POSTGRES_USER:       porms_etl
+      POSTGRES_PASSWORD:   ${POSTGRES_ETL_PASSWORD}
+
+      # OpenWeather API (free tier: 1,000 calls/ngày)
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
+      OW_BASE_URL:         https://api.openweathermap.org/data/2.5
+
+      # Trigger Risk Engine trên ASP.NET sau khi fetch xong
+      # Worker gọi: POST /api/internal/trigger-risk-engine
+      BACKEND_TRIGGER_URL: http://backend:5000/api/internal/trigger-risk-engine
+      INTERNAL_API_KEY:    ${INTERNAL_API_KEY}
+
+      LOG_LEVEL:           INFO
+      TZ:                  Asia/Ho_Chi_Minh
+    volumes:
+      # Mount source code ETL để không cần rebuild image khi sửa code
+      - ../etl:/app
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prefect-server:
+        condition: service_started
+    networks:
+      - porms-net
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # Metabase v0.50 — BI Dashboard (embedded vào React portal qua iframe)
+  # UI: http://localhost:3000
+  # Kết nối tới analytics schema trong porms_db (user read-only: porms_metabase)
+  # ════════════════════════════════════════════════════════════════════════════
+  metabase:
+    image: metabase/metabase:v0.50.17
+    container_name: porms-metabase
+    restart: unless-stopped
+    environment:
+      # Metabase lưu config nội bộ của nó vào porms_db
+      MB_DB_TYPE:              postgres
+      MB_DB_HOST:              postgres
+      MB_DB_PORT:              5432
+      MB_DB_DBNAME:            porms_db
+      MB_DB_USER:              porms_metabase
+      MB_DB_PASS:              ${POSTGRES_METABASE_PASSWORD}
+      # Secret key để signed embedding — phải khớp với key trong React frontend
+      MB_EMBEDDING_SECRET_KEY: ${METABASE_SECRET_KEY}
+      # Tắt telemetry
+      MB_SEND_EMAIL_ON_FIRST_LOGIN: "false"
+      MB_ANON_TRACKING_ENABLED:     "false"
+      JAVA_TIMEZONE:           Asia/Ho_Chi_Minh
+    ports:
+      - "3000:3000"
+    volumes:
+      - metabase_data:/metabase-data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - porms-net
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # Backend — ASP.NET Core 8 REST API
+  # Chỉ start khi dùng: docker compose --profile app up -d
+  # Dev thông thường: chạy native bằng "dotnet run --project PORMS.API"
+  # ════════════════════════════════════════════════════════════════════════════
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      # target: development dùng image đầy đủ (không stripped)
+      target: development
+    container_name: porms-backend
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS:        http://+:5000
+      # Connection string dùng user porms_api
+      ConnectionStrings__DefaultConnection: >-
+        Host=postgres;Port=5432;Database=porms_db;
+        Username=porms_api;Password=${POSTGRES_API_PASSWORD};
+        Include Error Detail=true
+      # JWT settings
+      Jwt__Secret:                ${JWT_SECRET}
+      Jwt__Issuer:                porms-api
+      Jwt__Audience:              porms-frontend
+      Jwt__AccessTokenTTLMinutes: 15
+      Jwt__RefreshTokenTTLDays:   7
+      # OpenWeather (dùng cho manual fetch endpoint)
+      OpenWeather__ApiKey:        ${OPENWEATHER_API_KEY}
+      OpenWeather__BaseUrl:       https://api.openweathermap.org/data/2.5
+      # Internal API key — Prefect worker dùng để gọi trigger endpoint
+      InternalApi__Key:           ${INTERNAL_API_KEY}
+      TZ:                         Asia/Ho_Chi_Minh
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    networks:
+      - porms-net
+    profiles:
+      - app
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # Frontend — React 18 + TypeScript + Vite
+  # Chỉ start khi dùng: docker compose --profile app up -d
+  # Dev thông thường: chạy native bằng "npm run dev"
+  # ════════════════════════════════════════════════════════════════════════════
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: porms-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL:  http://localhost:5000
+      VITE_METABASE_URL:  http://localhost:3000
+      NODE_ENV:           development
+    ports:
+      - "5173:5173"
+    volumes:
+      # Hot-reload: mount source code, exclude node_modules
+      - ../frontend:/app
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - porms-net
+    profiles:
+      - app
