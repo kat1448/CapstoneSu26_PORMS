@@ -12,11 +12,13 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
     {
     }
 
+    public DbSet<OperationEvent> OperationEvents => Set<OperationEvent>();
     public DbSet<Port> Ports => Set<Port>();
-    public DbSet<WeatherReading> WeatherReadings => Set<WeatherReading>();
     public DbSet<RiskAssessment> RiskAssessments => Set<RiskAssessment>();
     public DbSet<RiskThreshold> RiskThresholds => Set<RiskThreshold>();
-    public DbSet<OperationEvent> OperationEvents => Set<OperationEvent>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<WeatherReading> WeatherReadings => Set<WeatherReading>();
+    public DbSet<Zone> Zones => Set<Zone>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +27,9 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.HasPostgresEnum<WeatherFactor>("operational", "weather_factor_enum");
         modelBuilder.HasPostgresEnum<OperationEventType>("operational", "event_type_enum");
         modelBuilder.HasPostgresEnum<OperationMode>("operational", "operation_mode_enum");
+        modelBuilder.HasPostgresEnum<UserRole>("operational", "user_role_enum");
+        modelBuilder.HasPostgresEnum<UserStatus>("operational", "user_status_enum");
+        modelBuilder.HasPostgresEnum<ZoneType>("operational", "zone_type_enum");
 
         modelBuilder.Entity<Port>(entity =>
         {
@@ -125,6 +130,72 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(x => x.Summary).HasColumnName("summary");
             entity.Property(x => x.OccurredAt).HasColumnName("occurred_at");
             entity.Property(x => x.IsSimulation).HasColumnName("is_simulation");
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.ToTable("users");
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.Email).HasColumnName("email").HasMaxLength(255).IsRequired();
+            entity.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(255).IsRequired();
+            entity.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(255).IsRequired();
+            entity.Property(x => x.Role).HasColumnName("role");
+            entity.Property(x => x.Status).HasColumnName("status");
+            entity.Property(x => x.AssignedPortId).HasColumnName("assigned_port_id");
+            entity.Property(x => x.PhoneNumber).HasColumnName("phone_number").HasMaxLength(20);
+            entity.Property(x => x.RefreshTokenHash).HasColumnName("refresh_token_hash").HasMaxLength(255);
+            entity.Property(x => x.RefreshTokenExpiresAt).HasColumnName("refresh_token_expires_at");
+            entity.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
+            entity.Property(x => x.FailedLoginCount).HasColumnName("failed_login_count");
+            entity.Property(x => x.LockedUntil).HasColumnName("locked_until");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.CreatedByUserId).HasColumnName("created_by_user_id");
+
+            // Email phải unique toàn hệ thống — DB đã có UNIQUE constraint
+            entity.HasIndex(x => x.Email).IsUnique();
+
+            // FK tới Port — assigned_port_id NULL được phép (cho ADMIN).
+            // ON DELETE SET NULL ở DB → khi xóa Port, AssignedPortId của user thành NULL.
+            entity.HasOne<Port>()
+                  .WithMany()
+                  .HasForeignKey(x => x.AssignedPortId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            // Self-reference: User được tạo bởi User khác (audit trail).
+            entity.HasOne<User>()
+                  .WithMany()
+                  .HasForeignKey(x => x.CreatedByUserId)
+                  .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Zone>(entity =>
+        {
+            entity.ToTable("zones");
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.PortId).HasColumnName("port_id");
+            entity.Property(x => x.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(x => x.ZoneType).HasColumnName("zone_type");
+            entity.Property(x => x.Description).HasColumnName("description");
+            entity.Property(x => x.Capacity).HasColumnName("capacity");
+            entity.Property(x => x.Latitude).HasColumnName("latitude").HasPrecision(9, 6);
+            entity.Property(x => x.Longitude).HasColumnName("longitude").HasPrecision(9, 6);
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+            entity.Property(x => x.CurrentRiskLevel).HasColumnName("current_risk_level");
+            entity.Property(x => x.DisplayOrder).HasColumnName("display_order");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+
+            // FK tới Port — ON DELETE CASCADE: xóa Port thì xóa tất cả Zone của nó.
+            entity.HasOne<Port>()
+                  .WithMany()
+                  .HasForeignKey(x => x.PortId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
