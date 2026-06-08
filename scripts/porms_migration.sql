@@ -405,6 +405,7 @@ CREATE TABLE IF NOT EXISTS operational.weather_readings (
 
     -- Mô tả thời tiết từ API (ví dụ: "moderate rain", "strong breeze")
     ow_weather_desc     VARCHAR(100),
+    ow_weather_icon     VARCHAR(20),
 
     -- ── METADATA FETCH ────────────────────────────────────────
     -- Thời điểm quan trắc theo OpenWeather (có thể khác recorded_at)
@@ -423,12 +424,56 @@ CREATE TABLE IF NOT EXISTS operational.weather_readings (
     is_simulation       BOOLEAN         NOT NULL DEFAULT FALSE
 );
 
+ALTER TABLE operational.weather_readings
+    ADD COLUMN IF NOT EXISTS ow_weather_icon VARCHAR(20);
+
 COMMENT ON TABLE  operational.weather_readings               IS 'Dữ liệu thời tiết raw từ OpenWeather API — insert mỗi 15 phút/port';
 COMMENT ON COLUMN operational.weather_readings.beaufort_number IS 'Tính từ wind_speed_ms theo WMO: 0–5=LOW, 6–7=MEDIUM, 8–9=HIGH, 10–12=CRITICAL';
 COMMENT ON COLUMN operational.weather_readings.observed_at   IS 'Timestamp theo OpenWeather (dt field) — UTC';
 COMMENT ON COLUMN operational.weather_readings.recorded_at   IS 'Timestamp khi hệ thống insert — dùng để detect ETL lag';
 COMMENT ON COLUMN operational.weather_readings.raw_payload   IS 'JSON raw response để debug/re-process khi thuật toán thay đổi';
 COMMENT ON COLUMN operational.weather_readings.is_simulation  IS 'TRUE nếu từ simulation mode — loại khỏi analytics thật';
+
+
+-- ============================================================
+-- 3.5 TABLE: operational.weather_fetch_jobs
+-- Sprint 2 fetch monitoring for BackgroundService and Prefect runs
+-- ============================================================
+CREATE TABLE IF NOT EXISTS operational.weather_fetch_jobs (
+    id                  UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    port_id             UUID            NOT NULL
+                            REFERENCES operational.ports(id)
+                            ON DELETE CASCADE,
+
+    -- Nullable until operational.weather_sources is merged
+    source_id           UUID,
+
+    status              VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                            CONSTRAINT weather_fetch_job_status_valid
+                            CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'SKIPPED')),
+
+    started_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    completed_at        TIMESTAMPTZ,
+    response_time_ms    INTEGER
+                            CONSTRAINT weather_fetch_response_time_positive
+                            CHECK (response_time_ms IS NULL OR response_time_ms >= 0),
+    http_status_code    INTEGER,
+    error_message       TEXT,
+
+    created_reading_id  UUID
+                            REFERENCES operational.weather_readings(id)
+                            ON DELETE SET NULL,
+
+    prefect_flow_run_id VARCHAR(100)
+);
+
+COMMENT ON TABLE operational.weather_fetch_jobs IS
+    'Fetch monitoring for OpenWeather BackgroundService and Prefect runs';
+COMMENT ON COLUMN operational.weather_fetch_jobs.source_id IS
+    'Weather source UUID; nullable while weather_sources is absent from the current schema';
+COMMENT ON COLUMN operational.weather_fetch_jobs.created_reading_id IS
+    'Weather reading created by a successful fetch';
 
 
 -- ============================================================
@@ -534,6 +579,32 @@ COMMENT ON TABLE  operational.risk_assessments               IS 'Kết quả Ris
 COMMENT ON COLUMN operational.risk_assessments.final_risk_level IS 'Worst-case: MAX(wind_risk, rain_risk, visibility_risk)';
 COMMENT ON COLUMN operational.risk_assessments.level_changed  IS 'TRUE khi final_risk_level ≠ previous_risk_level → trigger SOP Engine';
 COMMENT ON COLUMN operational.risk_assessments.assessment_summary IS 'Giải thích bằng text để hiển thị trên UI dashboard';
+
+
+-- ============================================================
+-- 3.6.1 BẢNG: operational.risk_assessment_details
+-- Chi tiết đánh giá từng factor của mỗi RiskAssessment
+-- ============================================================
+CREATE TABLE IF NOT EXISTS operational.risk_assessment_details (
+    id                  UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    assessment_id       UUID            NOT NULL
+                            REFERENCES operational.risk_assessments(id)
+                            ON DELETE CASCADE,
+
+    factor              operational.weather_factor_enum NOT NULL,
+    raw_value           DECIMAL(10, 3)  NOT NULL,
+    beaufort_number     SMALLINT,
+    risk_level          operational.risk_level_enum NOT NULL,
+    unit                VARCHAR(20)     NOT NULL,
+    threshold_applied   TEXT            NOT NULL,
+
+    CONSTRAINT risk_assessment_details_unique_factor
+        UNIQUE (assessment_id, factor)
+);
+
+COMMENT ON TABLE operational.risk_assessment_details IS
+    'Chi tiết Risk Engine theo từng factor WIND/RAIN/VISIBILITY cho một assessment';
 
 
 -- ============================================================
@@ -1070,6 +1141,13 @@ CREATE INDEX IF NOT EXISTS idx_weather_port_time_range
     WHERE is_simulation = FALSE;
 -- Chart lịch sử 24h/7 ngày — loại simulation
 
+-- ── operational.weather_fetch_jobs ─────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_weather_fetch_jobs_port_started
+    ON operational.weather_fetch_jobs (port_id, started_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_weather_fetch_jobs_status_started
+    ON operational.weather_fetch_jobs (status, started_at DESC);
+
 -- ── operational.risk_assessments ───────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_risk_port_evaluated
     ON operational.risk_assessments (port_id, evaluated_at DESC);
@@ -1079,6 +1157,10 @@ CREATE INDEX IF NOT EXISTS idx_risk_level_changed
     ON operational.risk_assessments (port_id, level_changed, evaluated_at DESC)
     WHERE level_changed = TRUE;
 -- Alert generation: chỉ cần records khi level thay đổi
+
+CREATE INDEX IF NOT EXISTS idx_risk_assessment_details_assessment
+    ON operational.risk_assessment_details (assessment_id);
+-- Risk details endpoint: lấy 3 factor details theo assessment
 
 -- ── operational.sop_rules ──────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_sop_rules_lookup

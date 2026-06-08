@@ -36,36 +36,12 @@ public sealed class OpenWeatherService : IWeatherService
         var query = BuildCurrentWeatherQuery(port, apiKey);
         var stopwatch = Stopwatch.StartNew();
 
-        HttpResponseMessage response;
-        string responseBody;
-        try
-        {
-            response = await client.GetAsync(query, cancellationToken);
-            responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            stopwatch.Stop();
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (TaskCanceledException exception)
-        {
-            stopwatch.Stop();
-            throw new OpenWeatherException(
-                $"OpenWeather request timed out after {stopwatch.ElapsedMilliseconds}ms.",
-                null,
-                null,
-                exception);
-        }
-        catch (HttpRequestException exception)
-        {
-            stopwatch.Stop();
-            throw new OpenWeatherException(
-                "OpenWeather request failed before receiving a response.",
-                exception.StatusCode,
-                null,
-                exception);
-        }
+        var (response, responseBody) = await GetWithRetriesAsync(
+            client,
+            query,
+            port,
+            stopwatch,
+            cancellationToken);
 
         using (response)
         {
@@ -134,6 +110,81 @@ public sealed class OpenWeatherService : IWeatherService
             throw new OpenWeatherException("OpenWeather returned invalid JSON.", response.StatusCode, responseBody, exception);
         }
     }
+
+    private async Task<(HttpResponseMessage Response, string ResponseBody)> GetWithRetriesAsync(
+        HttpClient client,
+        string query,
+        Port port,
+        Stopwatch stopwatch,
+        CancellationToken cancellationToken)
+    {
+        const int maxRetries = 3;
+
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                var response = await client.GetAsync(query, cancellationToken);
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (IsRetryableServerError(response.StatusCode) && attempt < maxRetries)
+                {
+                    response.Dispose();
+                    await DelayBeforeRetryAsync(attempt, port, response.StatusCode, cancellationToken);
+                    continue;
+                }
+
+                stopwatch.Stop();
+                return (response, responseBody);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (TaskCanceledException exception)
+            {
+                stopwatch.Stop();
+                throw new OpenWeatherException(
+                    $"OpenWeather request timed out after {stopwatch.ElapsedMilliseconds}ms.",
+                    null,
+                    null,
+                    exception);
+            }
+            catch (HttpRequestException exception) when (attempt < maxRetries)
+            {
+                await DelayBeforeRetryAsync(attempt, port, exception.StatusCode, cancellationToken);
+            }
+            catch (HttpRequestException exception)
+            {
+                stopwatch.Stop();
+                throw new OpenWeatherException(
+                    "OpenWeather request failed before receiving a response.",
+                    exception.StatusCode,
+                    null,
+                    exception);
+            }
+        }
+    }
+
+    private async Task DelayBeforeRetryAsync(
+        int attempt,
+        Port port,
+        HttpStatusCode? statusCode,
+        CancellationToken cancellationToken)
+    {
+        var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+        _logger.LogWarning(
+            "Retrying OpenWeather for port {PortCode} ({PortId}) in {DelaySeconds}s after attempt {Attempt}. StatusCode={StatusCode}.",
+            port.Code,
+            port.Id,
+            delay.TotalSeconds,
+            attempt + 1,
+            statusCode);
+        await Task.Delay(delay, cancellationToken);
+    }
+
+    private static bool IsRetryableServerError(HttpStatusCode statusCode)
+        => (int)statusCode >= 500;
 
     public static int ConvertToBeaufort(decimal windSpeedMs)
     {
