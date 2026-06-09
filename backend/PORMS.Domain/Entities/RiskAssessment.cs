@@ -9,6 +9,7 @@ public class RiskAssessment
     public Port? Port { get; set; }
     public Guid WeatherReadingId { get; set; }
     public WeatherReading? WeatherReading { get; set; }
+    public ICollection<RiskAssessmentDetail> Details { get; set; } = new List<RiskAssessmentDetail>();
 
     public RiskLevel FinalRiskLevel { get; set; }
     public RiskLevel WindRiskLevel { get; set; }

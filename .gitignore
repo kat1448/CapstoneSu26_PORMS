@@ -3,6 +3,7 @@ CLAUDE.md
 
 # Docs folder (nội dung nội bộ, không push lên git)
 docs/docs/
+tmp_docx_extract/
 
 # Environment
 .env

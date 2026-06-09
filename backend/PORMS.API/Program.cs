@@ -1,8 +1,11 @@
+using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Npgsql;
+using Npgsql.NameTranslation;
 using PORMS.API.BackgroundServices;
 using PORMS.API.Configuration;
 using PORMS.API.Middleware;
@@ -14,7 +17,6 @@ using PORMS.Domain.Enums;
 using PORMS.Infrastructure.Data;
 using PORMS.Infrastructure.Events;
 using PORMS.Infrastructure.Weather;
-using System.Text;
 
 DotEnv.Load();
 
@@ -31,10 +33,14 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-dataSourceBuilder.MapEnum<RiskLevel>("operational.risk_level_enum");
-dataSourceBuilder.MapEnum<WeatherFactor>("operational.weather_factor_enum");
-dataSourceBuilder.MapEnum<OperationEventType>("operational.event_type_enum");
-dataSourceBuilder.MapEnum<OperationMode>("operational.operation_mode_enum");
+var enumNameTranslator = new NpgsqlNullNameTranslator();
+dataSourceBuilder.MapEnum<RiskLevel>("operational.risk_level_enum", enumNameTranslator);
+dataSourceBuilder.MapEnum<WeatherFactor>("operational.weather_factor_enum", enumNameTranslator);
+dataSourceBuilder.MapEnum<OperationEventType>("operational.event_type_enum", enumNameTranslator);
+dataSourceBuilder.MapEnum<OperationMode>("operational.operation_mode_enum", enumNameTranslator);
+dataSourceBuilder.MapEnum<UserRole>("operational.user_role_enum", enumNameTranslator);
+dataSourceBuilder.MapEnum<UserStatus>("operational.user_status_enum", enumNameTranslator);
+dataSourceBuilder.MapEnum<ZoneType>("operational.zone_type_enum", enumNameTranslator);
 var dataSource = dataSourceBuilder.Build();
 
 builder.Services.AddSingleton(dataSource);
@@ -47,6 +53,11 @@ builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =
 builder.Services.AddScoped<IApplicationDbContext>(provider =>
     provider.GetRequiredService<ApplicationDbContext>());
 
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IThresholdLoader, ThresholdLoader>();
+builder.Services.AddScoped<IRiskAssessmentRepository, RiskAssessmentRepository>();
+builder.Services.AddScoped<IRiskEvaluationService, RiskEvaluationService>();
+builder.Services.AddScoped<IRiskThresholdService, RiskThresholdService>();
 builder.Services.AddScoped<IRiskEngine, RiskEngine>();
 builder.Services.AddScoped<IWeatherService, OpenWeatherService>();
 builder.Services.AddScoped<IDomainEventPublisher, LoggingDomainEventPublisher>();
@@ -102,7 +113,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -110,7 +123,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "PORMS API",
         Version = "v1",
-        Description = "Port Operation Risk Management System — REST API."
+        Description = "Port Operation Risk Management System - REST API."
     });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -120,7 +133,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Nhập 'Bearer <token>' để gọi endpoints yêu cầu authentication."
+        Description = "Enter 'Bearer <token>' to call endpoints that require authentication."
     });
 
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
