@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/bin/sh
 # Set correct passwords for dedicated users from environment variables.
-# Runs as 01_init_passwords.sh — after 00_init_db.sql (users already exist).
+# Runs as 01_init_passwords.sh after 00_init_db.sql (users already exist).
 # Order is controlled by numeric prefix in docker-compose volume mounts, not filename sort.
 
 set -e

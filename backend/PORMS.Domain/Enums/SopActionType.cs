@@ -1,0 +1,12 @@
+namespace PORMS.Domain.Enums;
+
+public enum SopActionType
+{
+    STOP_LOADING,
+    LIMIT_VESSEL_ENTRY,
+    EVACUATE_EQUIPMENT,
+    CLOSE_GATE,
+    EMERGENCY_SHUTDOWN,
+    NOTIFY_AUTHORITY,
+    CUSTOM
+}
