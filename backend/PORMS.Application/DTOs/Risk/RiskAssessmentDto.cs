@@ -7,9 +7,14 @@ public sealed record RiskAssessmentDto(
     Guid PortId,
     Guid WeatherReadingId,
     RiskLevel FinalRiskLevel,
+    RiskLevel WindRiskLevel,
+    RiskLevel RainRiskLevel,
+    RiskLevel? VisibilityRiskLevel,
     RiskLevel? PreviousRiskLevel,
     bool LevelChanged,
-    string AssessmentSummary,
-    DateTimeOffset AssessedAt,
-    bool IsSimulation,
-    IReadOnlyList<RiskAssessmentDetailDto> Details);
+    int BeaufortNumber,
+    decimal? Rainfall1hMm,
+    decimal? VisibilityKm,
+    string? AssessmentSummary,
+    DateTimeOffset EvaluatedAt,
+    bool IsSimulation);

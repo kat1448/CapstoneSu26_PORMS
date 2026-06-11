@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using PORMS.Application.Services.Risk;
 using PORMS.Application.Services.Weather;
@@ -90,11 +91,27 @@ public sealed class WeatherUpdateWorker : BackgroundService
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var weatherService = scope.ServiceProvider.GetRequiredService<IWeatherService>();
         var riskEngine = scope.ServiceProvider.GetRequiredService<IRiskEngine>();
+        var stopwatch = Stopwatch.StartNew();
+        var fetchJob = new WeatherFetchJob
+        {
+            Id = Guid.NewGuid(),
+            PortId = port.Id,
+            Status = "PENDING",
+            StartedAt = DateTimeOffset.UtcNow
+        };
 
         try
         {
+            dbContext.WeatherFetchJobs.Add(fetchJob);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
             var reading = await weatherService.FetchCurrentWeatherAsync(port, cancellationToken);
             dbContext.WeatherReadings.Add(reading);
+            fetchJob.Status = "SUCCESS";
+            fetchJob.CompletedAt = DateTimeOffset.UtcNow;
+            fetchJob.ResponseTimeMs = GetElapsedMilliseconds(stopwatch);
+            fetchJob.HttpStatusCode = StatusCodes.Status200OK;
+            fetchJob.CreatedReadingId = reading.Id;
             dbContext.OperationEvents.Add(new OperationEvent
             {
                 Id = Guid.NewGuid(),
@@ -125,6 +142,13 @@ public sealed class WeatherUpdateWorker : BackgroundService
         }
         catch (OpenWeatherException exception)
         {
+            await MarkFetchJobFailedAsync(
+                dbContext,
+                fetchJob.Id,
+                exception.StatusCode.HasValue ? (int)exception.StatusCode.Value : null,
+                exception.Message,
+                stopwatch,
+                cancellationToken);
             _logger.LogWarning(
                 exception,
                 "OpenWeather fetch failed for port {PortCode} ({PortId}). StatusCode={StatusCode}. The worker will continue with the next port.",
@@ -135,6 +159,13 @@ public sealed class WeatherUpdateWorker : BackgroundService
         }
         catch (DbUpdateException exception)
         {
+            await MarkFetchJobFailedAsync(
+                dbContext,
+                fetchJob.Id,
+                null,
+                exception.GetBaseException().Message,
+                stopwatch,
+                cancellationToken);
             _logger.LogError(
                 exception,
                 "Database save failed while processing weather for port {PortCode} ({PortId}).",
@@ -144,6 +175,13 @@ public sealed class WeatherUpdateWorker : BackgroundService
         }
         catch (Exception exception)
         {
+            await MarkFetchJobFailedAsync(
+                dbContext,
+                fetchJob.Id,
+                null,
+                exception.Message,
+                stopwatch,
+                cancellationToken);
             _logger.LogError(
                 exception,
                 "Weather update failed for port {PortCode} ({PortId}). The worker will continue with the next port.",
@@ -152,4 +190,36 @@ public sealed class WeatherUpdateWorker : BackgroundService
             dbContext.ChangeTracker.Clear();
         }
     }
+
+    private static async Task MarkFetchJobFailedAsync(
+        ApplicationDbContext dbContext,
+        Guid fetchJobId,
+        int? httpStatusCode,
+        string errorMessage,
+        Stopwatch stopwatch,
+        CancellationToken cancellationToken)
+    {
+        dbContext.ChangeTracker.Clear();
+
+        var fetchJob = await dbContext.WeatherFetchJobs
+            .FirstOrDefaultAsync(x => x.Id == fetchJobId, cancellationToken);
+
+        if (fetchJob is null)
+        {
+            return;
+        }
+
+        fetchJob.Status = "FAILED";
+        fetchJob.CompletedAt = DateTimeOffset.UtcNow;
+        fetchJob.ResponseTimeMs = GetElapsedMilliseconds(stopwatch);
+        fetchJob.HttpStatusCode = httpStatusCode;
+        fetchJob.ErrorMessage = Truncate(errorMessage, 1000);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static int GetElapsedMilliseconds(Stopwatch stopwatch)
+        => (int)Math.Min(stopwatch.ElapsedMilliseconds, int.MaxValue);
+
+    private static string Truncate(string value, int maxLength)
+        => value.Length <= maxLength ? value : value[..maxLength];
 }

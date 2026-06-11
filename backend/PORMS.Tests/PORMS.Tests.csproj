@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\PORMS.Application\PORMS.Application.csproj" />
     <ProjectReference Include="..\PORMS.Infrastructure\PORMS.Infrastructure.csproj" />
   </ItemGroup>
 

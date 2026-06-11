@@ -66,7 +66,7 @@ services:
       # Init scripts chạy theo thứ tự alphabet khi container tạo lần đầu
       - ./postgres/init-db.sql:/docker-entrypoint-initdb.d/00_init_db.sql
       - ./postgres/init-passwords.sh:/docker-entrypoint-initdb.d/01_init_passwords.sh
-      - ../docs/database/schema.sql:/docker-entrypoint-initdb.d/02_schema.sql
+      - ../scripts/porms_migration.sql:/docker-entrypoint-initdb.d/02_schema.sql
       - ./postgres/init-grants.sql:/docker-entrypoint-initdb.d/03_grants.sql
       - ../scripts/seed_data.sql:/docker-entrypoint-initdb.d/04_seed_data.sql
       - ../scripts/seed_sop_rules.sql:/docker-entrypoint-initdb.d/05_seed_sop_rules.sql
