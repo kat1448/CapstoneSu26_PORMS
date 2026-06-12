@@ -175,6 +175,7 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<User>(entity =>
         {
             entity.ToTable("users");
+            entity.HasQueryFilter(u => u.DeletedAt == null);
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.Email).HasColumnName("email").HasMaxLength(255).IsRequired();

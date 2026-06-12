@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PORMS.Application.DTOs.Auth
+namespace PORMS.Application.DTOs.Auths
 {
     /// Response của POST /api/auth/login khi thành công.
     /// AccessToken: JWT, TTL 15 phút.
@@ -13,7 +13,7 @@ namespace PORMS.Application.DTOs.Auth
     public sealed class LoginResponse
     {
         public string AccessToken { get; set; } = string.Empty;
-        public string RefreshToken { get; set; } = string.Empty;
+        public string TokenType { get; set; } = "Bearer";
         public int ExpiresIn { get; set; }
         public AuthenticatedUserDto User { get; set; } = new();
     }
