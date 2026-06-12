@@ -11,7 +11,11 @@ using PORMS.API.Configuration;
 using PORMS.API.Middleware;
 using PORMS.Application.Common.Events;
 using PORMS.Application.Common.Interfaces;
+using PORMS.Application.Services.Alert;
+using PORMS.Application.Services.Mode;
 using PORMS.Application.Services.Risk;
+using PORMS.Application.Services.Sop;
+using PORMS.Application.Services.Tasks;
 using PORMS.Application.Services.Weather;
 using PORMS.Domain.Enums;
 using PORMS.Infrastructure.Data;
@@ -41,6 +45,8 @@ dataSourceBuilder.MapEnum<OperationMode>("operational.operation_mode_enum", enum
 dataSourceBuilder.MapEnum<UserRole>("operational.user_role_enum", enumNameTranslator);
 dataSourceBuilder.MapEnum<UserStatus>("operational.user_status_enum", enumNameTranslator);
 dataSourceBuilder.MapEnum<ZoneType>("operational.zone_type_enum", enumNameTranslator);
+dataSourceBuilder.MapEnum<SopActionType>("operational.sop_action_type_enum", enumNameTranslator);
+dataSourceBuilder.MapEnum<AlertSeverity>("operational.alert_severity_enum", enumNameTranslator);
 var dataSource = dataSourceBuilder.Build();
 
 builder.Services.AddSingleton(dataSource);
@@ -60,7 +66,11 @@ builder.Services.AddScoped<IRiskEvaluationService, RiskEvaluationService>();
 builder.Services.AddScoped<IRiskThresholdService, RiskThresholdService>();
 builder.Services.AddScoped<IRiskEngine, RiskEngine>();
 builder.Services.AddScoped<IWeatherService, OpenWeatherService>();
-builder.Services.AddScoped<IDomainEventPublisher, LoggingDomainEventPublisher>();
+builder.Services.AddScoped<IOperationModeService, OperationModeService>();
+builder.Services.AddScoped<IAlertService, AlertService>();
+builder.Services.AddScoped<ITaskGeneratorService, TaskGeneratorService>();
+builder.Services.AddScoped<ISopEngine, SopEngine>();
+builder.Services.AddScoped<IDomainEventPublisher, SopDomainEventPublisher>();
 
 builder.Services.AddHttpClient("OpenWeather", (serviceProvider, client) =>
 {

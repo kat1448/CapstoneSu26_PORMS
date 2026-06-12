@@ -140,6 +140,16 @@ public sealed class RiskEvaluationService : IRiskEvaluationService
             });
         }
 
+        if (!assessment.IsSimulation)
+        {
+            var port = await _dbContext.Ports.FirstOrDefaultAsync(x => x.Id == assessment.PortId, cancellationToken);
+            if (port is not null)
+            {
+                port.CurrentRiskLevel = assessment.FinalRiskLevel;
+                port.UpdatedAt = evaluatedAt;
+            }
+        }
+
         await _assessmentRepository.SaveAsync(assessment, details, cancellationToken);
 
         if (levelChanged)
