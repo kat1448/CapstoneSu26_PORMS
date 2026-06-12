@@ -1,0 +1,1484 @@
+openapi: 3.0.3
+info:
+  title: PORMS API — Auth, Users, Ports, Zones
+  description: |-
+    Hợp đồng API (Swagger contract) cho module BE-B: Authentication, User Management,
+    Port CRUD, Zone CRUD, Port Contacts.
+
+    Đây là file standalone, tự validate được trong Swagger Editor. Sau này được merge
+    vào `porms_openapi.yaml` (single source of truth cho FE).
+
+    **Authentication:** Bearer JWT access token trong header `Authorization: Bearer <token>` (TTL 15 phút).
+    **Refresh token:** lưu trong httpOnly cookie `porms_refresh` (TTL 7 ngày) — một phiên/ user (single-session).
+    **Roles:** `ADMIN` | `COMPANY_ADMIN` | `OPERATOR`
+    **Data isolation:** COMPANY_ADMIN và OPERATOR chỉ thấy data của `assigned_port_id`.
+
+    ## Quyết định thiết kế (sau handover, principle: code đã merge thắng draft docs)
+    - Refresh token: SINGLE session/user, qua httpOnly cookie. Endpoint quản lý nhiều
+      phiên (/auth/sessions, /users/{id}/sessions) ĐƯỢC HOÃN — schema chưa hỗ trợ.
+    - Bỏ forgot-password / reset-password (email flow): hệ thống nội bộ, không có SMTP.
+      Admin reset qua POST /api/users/{id}/reset-password.
+    - Error format: { code, message } (+ errors[] cho validation) — đồng bộ với master spec.
+    - Enums lưu dạng native PostgreSQL enum (khớp ApplicationDbContext đã merge).
+  version: 1.0.0
+  contact:
+    name: PORMS Team — CP_SEP490
+  license:
+    name: MIT
+servers:
+- url: http://localhost:5000
+  description: Local development
+- url: https://api.porms.vn
+  description: Production
+security:
+- bearerAuth: []
+tags:
+- name: Auth
+  description: EPIC 1 — Xác thực và phiên làm việc
+- name: Users
+  description: EPIC 2 — Quản lý người dùng
+- name: Ports
+  description: EPIC 3 — Quản lý cảng biển
+- name: Zones
+  description: EPIC 4 — Quản lý khu vực
+- name: Port Contacts
+  description: EPIC 3 — Danh bạ liên hệ cảng
+
+paths:
+  /api/auth/login:
+    post:
+      summary: Đăng nhập hệ thống
+      description: |-
+        Xác thực user bằng email và password.
+
+        - Trả `accessToken` trong response body (TTL 15 phút)
+        - Set refresh token qua httpOnly cookie `porms_refresh` (TTL 7 ngày)
+        - Khóa tài khoản 15 phút sau 5 lần sai liên tiếp
+
+        **Roles:** Public (không cần auth)
+      tags:
+      - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          headers:
+            Set-Cookie:
+              description: httpOnly cookie `porms_refresh` chứa refresh token raw.
+              schema:
+                type: string
+                example: porms_refresh=<token>; HttpOnly; Secure; SameSite=Strict; Max-Age=604800
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Sai email/password — lỗi generic không tiết lộ field nào sai
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: INVALID_CREDENTIALS
+                message: Email hoặc mật khẩu không đúng
+        '423':
+          description: Tài khoản bị khóa tạm thời
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: ACCOUNT_LOCKED
+                message: Tài khoản bị khóa 15 phút do đăng nhập sai nhiều lần
+  /api/auth/refresh:
+    post:
+      summary: Làm mới access token
+      description: |-
+        Phát access token mới từ refresh token trong httpOnly cookie `porms_refresh`.
+        Body trống. Frontend tự động gọi khi nhận 401 từ API khác.
+
+        **Roles:** Public (dùng refresh token từ cookie)
+      tags:
+      - Auth
+      security: []
+      responses:
+        '200':
+          description: Token mới đã được phát
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Refresh token hết hạn, đã revoke hoặc không tồn tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: REFRESH_TOKEN_INVALID
+                message: Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại
+  /api/auth/logout:
+    post:
+      summary: Đăng xuất
+      description: |-
+        Revoke refresh token hiện tại (clear `refresh_token_hash`). Clear httpOnly cookie.
+
+        **Roles:** Tất cả roles đã đăng nhập
+      tags:
+      - Auth
+      responses:
+        '204':
+          description: Đăng xuất thành công
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/change-password:
+    put:
+      summary: Đổi mật khẩu (đã đăng nhập)
+      description: |-
+        Đổi mật khẩu sau khi xác minh mật khẩu hiện tại. Sau đổi: revoke refresh token
+        hiện tại (buộc đăng nhập lại).
+
+        **Roles:** Tất cả roles đã đăng nhập
+      tags:
+      - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Mật khẩu đã được đổi. Yêu cầu đăng nhập lại.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Mật khẩu hiện tại không đúng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: INVALID_CURRENT_PASSWORD
+                message: Mật khẩu hiện tại không đúng
+
+  /api/users:
+    get:
+      summary: Danh sách tất cả users
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Users
+      parameters:
+      - name: role
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/UserRole'
+        description: Filter theo role
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/UserStatus'
+        description: Filter theo status
+      - name: assignedPortId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Filter theo port UUID
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Tìm theo email hoặc full_name
+      - $ref: '#/components/parameters/pageQuery'
+      - $ref: '#/components/parameters/pageSizeQuery'
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/PaginatedResponse'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      summary: Tạo tài khoản người dùng mới
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User đã được tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Email đã tồn tại trong hệ thống
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: EMAIL_ALREADY_EXISTS
+                message: Email này đã được sử dụng
+  /api/users/me:
+    get:
+      summary: Xem profile cá nhân
+      description: '**Roles:** Tất cả roles'
+      tags:
+      - Users
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      summary: Cập nhật profile cá nhân
+      description: |-
+        Chỉ cho phép sửa fullName và phoneNumber. Email và role không thay đổi được.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/users/{id}:
+    get:
+      summary: Xem chi tiết user
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Users
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Cập nhật thông tin user
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Users
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Vô hiệu hóa user (soft delete)
+      description: |-
+        Set deleted_at. User không thể đăng nhập nhưng data được giữ nguyên.
+        User không thể tự xóa chính mình.
+
+        **Roles:** ADMIN only
+      tags:
+      - Users
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      responses:
+        '204':
+          description: User đã bị soft delete
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/users/{id}/reset-password:
+    post:
+      summary: Admin reset mật khẩu user
+      description: |-
+        Reset mật khẩu và revoke refresh token. Cũng unlock tài khoản nếu đang bị khóa.
+
+        **Roles:** ADMIN only
+      tags:
+      - Users
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminResetPasswordRequest'
+      responses:
+        '200':
+          description: Mật khẩu đã reset thành công
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/users/{id}/unlock:
+    post:
+      summary: Mở khóa tài khoản bị lock
+      description: |-
+        Reset failedLoginCount = 0 và lockedUntil = NULL.
+
+        **Roles:** ADMIN only
+      tags:
+      - Users
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Tài khoản đã được mở khóa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/ports:
+    get:
+      summary: Danh sách cảng
+      description: |-
+        ADMIN thấy tất cả. COMPANY_ADMIN/OPERATOR chỉ thấy assigned port.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Ports
+      parameters:
+      - name: isActive
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: Filter theo trạng thái hoạt động
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Port'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Tạo cảng mới
+      description: '**Roles:** ADMIN only'
+      tags:
+      - Ports
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePortRequest'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Port'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: port code đã tồn tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: PORT_CODE_EXISTS
+                message: Mã cảng đã tồn tại
+  /api/ports/status:
+    get:
+      summary: Trạng thái real-time tất cả cảng
+      description: |-
+        Snapshot từ view v_port_current_state. COMPANY_ADMIN/OPERATOR chỉ thấy port mình.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Ports
+      responses:
+        '200':
+          description: Danh sách port status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PortStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/ports/{id}:
+    get:
+      summary: Chi tiết cảng
+      description: '**Roles:** ADMIN (bất kỳ), CA/OP (chỉ assigned port)'
+      tags:
+      - Ports
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Port'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Cập nhật thông tin cảng
+      description: '**Roles:** ADMIN only (port code không thể thay đổi)'
+      tags:
+      - Ports
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePortRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Port'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Vô hiệu hóa cảng (soft delete)
+      description: |-
+        Set isActive = FALSE. Dừng fetch jobs. Giữ lịch sử data.
+
+        **Roles:** ADMIN only
+      tags:
+      - Ports
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      responses:
+        '204':
+          description: Cảng đã bị vô hiệu hóa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{id}/status:
+    get:
+      summary: Snapshot real-time của một cảng
+      description: |-
+        Dùng cho dashboard polling mỗi 30 giây. Trả weather, risk, mode, alerts.
+
+        **Roles:** Tất cả roles (port isolation áp dụng)
+      tags:
+      - Ports
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/ports/{portId}/zones:
+    get:
+      summary: Danh sách zones của cảng
+      description: '**Roles:** Tất cả roles (port isolation áp dụng)'
+      tags:
+      - Zones
+      parameters:
+      - $ref: '#/components/parameters/portIdPath'
+      - name: zoneType
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/ZoneType'
+        description: Filter theo loại zone
+      - name: isActive
+        in: query
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Zone'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Tạo zone mới
+      description: |-
+        portId lấy từ URL, không nhận từ body (chống tạo zone cross-port).
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - Zones
+      parameters:
+      - $ref: '#/components/parameters/portIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateZoneRequest'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/zones/{id}:
+    get:
+      summary: Chi tiết zone
+      description: '**Roles:** Tất cả roles'
+      tags:
+      - Zones
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Cập nhật thông tin zone
+      description: |-
+        Không cho phép đổi portId hoặc zoneType (xóa và tạo lại nếu cần).
+
+        **Roles:** ADMIN, COMPANY_ADMIN
+      tags:
+      - Zones
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateZoneRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Vô hiệu hóa zone (soft delete)
+      description: |-
+        Soft delete: isActive = FALSE.
+
+        **Roles:** ADMIN only
+      tags:
+      - Zones
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      responses:
+        '204':
+          description: Zone đã bị vô hiệu hóa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/zones/{id}/status:
+    get:
+      summary: Trạng thái và restrictions hiện tại của zone
+      description: |-
+        Trả zone info kèm danh sách SOP restrictions đang active.
+
+        **Roles:** Tất cả roles
+      tags:
+      - Zones
+      parameters:
+      - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZoneStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/ports/{portId}/contacts:
+    get:
+      summary: Danh bạ liên hệ của cảng
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Port Contacts
+      parameters:
+      - $ref: '#/components/parameters/portIdPath'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PortContact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Thêm contact vào cảng
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Port Contacts
+      parameters:
+      - $ref: '#/components/parameters/portIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePortContactRequest'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortContact'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/ports/{portId}/contacts/{id}:
+    put:
+      summary: Cập nhật contact
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Port Contacts
+      parameters:
+      - $ref: '#/components/parameters/portIdPath'
+      - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePortContactRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortContact'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Vô hiệu hóa contact
+      description: '**Roles:** ADMIN, COMPANY_ADMIN'
+      tags:
+      - Port Contacts
+      parameters:
+      - $ref: '#/components/parameters/portIdPath'
+      - $ref: '#/components/parameters/idPath'
+      responses:
+        '204':
+          description: Contact đã bị vô hiệu hóa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token (TTL 15 phút). Lấy từ POST /api/auth/login
+
+  parameters:
+    idPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    portIdPath:
+      name: portId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    pageQuery:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    pageSizeQuery:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+
+  responses:
+    Unauthorized:
+      description: Token thiếu, hết hạn hoặc không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: UNAUTHORIZED
+            message: Token is missing or invalid
+    Forbidden:
+      description: Không đủ quyền hạn (role không phù hợp hoặc sai port)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: FORBIDDEN
+            message: Insufficient permissions for this resource
+    NotFound:
+      description: Resource không tồn tại
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: NOT_FOUND
+            message: Resource not found
+    ValidationError:
+      description: Dữ liệu đầu vào không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+
+  schemas:
+    # ---- Shared: errors & pagination ----
+    ErrorResponse:
+      type: object
+      required:
+      - code
+      - message
+      properties:
+        code:
+          type: string
+          example: NOT_FOUND
+        message:
+          type: string
+          example: Resource not found
+        details:
+          type: string
+          nullable: true
+    ValidationErrorResponse:
+      type: object
+      required:
+      - code
+      - message
+      - errors
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Input validation failed
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: email
+              message:
+                type: string
+                example: Invalid email format
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: {}
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+
+    # ---- Enums ----
+    RiskLevel:
+      type: string
+      enum:
+      - LOW
+      - MEDIUM
+      - HIGH
+      - CRITICAL
+    OperationMode:
+      type: string
+      enum:
+      - NORMAL
+      - LIMITED
+      - STOP
+    ZoneType:
+      type: string
+      enum:
+      - DOCK
+      - YARD
+      - GATE
+      - WAREHOUSE
+    UserRole:
+      type: string
+      enum:
+      - ADMIN
+      - COMPANY_ADMIN
+      - OPERATOR
+    UserStatus:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+      - SUSPENDED
+    AlertSeverity:
+      type: string
+      enum:
+      - INFO
+      - WARNING
+      - CRITICAL
+    SopActionType:
+      type: string
+      enum:
+      - STOP_LOADING
+      - LIMIT_VESSEL_ENTRY
+      - EVACUATE_EQUIPMENT
+      - CLOSE_GATE
+      - EMERGENCY_SHUTDOWN
+      - NOTIFY_AUTHORITY
+      - CUSTOM
+    ContactRole:
+      type: string
+      enum:
+      - PORT_MANAGER
+      - SAFETY_OFFICER
+      - OPERATIONS_LEAD
+      - AUTHORITY
+      - EMERGENCY
+
+    # ---- Auth ----
+    LoginRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: operator@porms.vn
+        password:
+          type: string
+          format: password
+          example: Secure@2026!
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (TTL 15 phút)
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          example: 900
+          description: Seconds
+        user:
+          $ref: '#/components/schemas/UserProfile'
+    ChangePasswordRequest:
+      type: object
+      required:
+      - currentPassword
+      - newPassword
+      - confirmPassword
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+        confirmPassword:
+          type: string
+          format: password
+
+    # ---- Users ----
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        assignedPortId:
+          type: string
+          format: uuid
+          nullable: true
+        assignedPortName:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    CreateUserRequest:
+      type: object
+      required:
+      - email
+      - fullName
+      - role
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/UserRole'
+        assignedPortId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Bắt buộc cho COMPANY_ADMIN và OPERATOR. NULL cho ADMIN.
+        phoneNumber:
+          type: string
+          nullable: true
+        password:
+          type: string
+          format: password
+          minLength: 8
+    UpdateUserRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/UserRole'
+        assignedPortId:
+          type: string
+          format: uuid
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/UserStatus'
+    UpdateProfileRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+          maxLength: 255
+        phoneNumber:
+          type: string
+          nullable: true
+    AdminResetPasswordRequest:
+      type: object
+      required:
+      - newPassword
+      properties:
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+
+    # ---- Ports ----
+    Port:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Cảng Tiên Sa — Đà Nẵng
+        code:
+          type: string
+          example: DNTSA
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          format: double
+          example: 16.1051
+        longitude:
+          type: number
+          format: double
+          example: 108.2338
+        timezone:
+          type: string
+          example: Asia/Ho_Chi_Minh
+        currentMode:
+          $ref: '#/components/schemas/OperationMode'
+        currentRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        defaultWeatherSourceId:
+          type: string
+          format: uuid
+          nullable: true
+        owStationId:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        zoneCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PortStatus:
+      type: object
+      description: Snapshot real-time từ view v_port_current_state
+      properties:
+        portId:
+          type: string
+          format: uuid
+        portName:
+          type: string
+        portCode:
+          type: string
+        currentMode:
+          $ref: '#/components/schemas/OperationMode'
+        currentRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        unreadAlertCount:
+          type: integer
+        assessmentSummary:
+          type: string
+          nullable: true
+        lastAssessedAt:
+          type: string
+          format: date-time
+          nullable: true
+    CreatePortRequest:
+      type: object
+      required:
+      - name
+      - code
+      - latitude
+      - longitude
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        code:
+          type: string
+          maxLength: 20
+          pattern: ^[A-Z0-9]+$
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        timezone:
+          type: string
+          default: Asia/Ho_Chi_Minh
+        owStationId:
+          type: string
+          nullable: true
+        defaultWeatherSourceId:
+          type: string
+          format: uuid
+          nullable: true
+    UpdatePortRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        timezone:
+          type: string
+        owStationId:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+
+    # ---- Zones ----
+    Zone:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        zoneType:
+          $ref: '#/components/schemas/ZoneType'
+        description:
+          type: string
+          nullable: true
+        capacity:
+          type: integer
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        config:
+          type: object
+          description: 'JSONB: {warning_text, priority, enabled}'
+        currentRiskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        displayOrder:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    ZoneStatus:
+      type: object
+      properties:
+        zone:
+          $ref: '#/components/schemas/Zone'
+        activeRestrictions:
+          type: array
+          items:
+            type: object
+            properties:
+              actionType:
+                $ref: '#/components/schemas/SopActionType'
+              actionDescription:
+                type: string
+              severity:
+                $ref: '#/components/schemas/AlertSeverity'
+    CreateZoneRequest:
+      type: object
+      required:
+      - name
+      - zoneType
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        zoneType:
+          $ref: '#/components/schemas/ZoneType'
+        description:
+          type: string
+          nullable: true
+        capacity:
+          type: integer
+          nullable: true
+          minimum: 1
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        displayOrder:
+          type: integer
+          default: 0
+    UpdateZoneRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        capacity:
+          type: integer
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        displayOrder:
+          type: integer
+        isActive:
+          type: boolean
+        config:
+          type: object
+
+    # ---- Port Contacts ----
+    PortContact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        portId:
+          type: string
+          format: uuid
+        contactRole:
+          $ref: '#/components/schemas/ContactRole'
+        fullName:
+          type: string
+        title:
+          type: string
+          nullable: true
+        phonePrimary:
+          type: string
+        phoneSecondary:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        receiveAlerts:
+          type: boolean
+        alertThreshold:
+          $ref: '#/components/schemas/RiskLevel'
+        isActive:
+          type: boolean
+    CreatePortContactRequest:
+      type: object
+      required:
+      - contactRole
+      - fullName
+      - phonePrimary
+      properties:
+        contactRole:
+          $ref: '#/components/schemas/ContactRole'
+        fullName:
+          type: string
+        title:
+          type: string
+          nullable: true
+        phonePrimary:
+          type: string
+        phoneSecondary:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        receiveAlerts:
+          type: boolean
+          default: false
+        alertThreshold:
+          $ref: '#/components/schemas/RiskLevel'
