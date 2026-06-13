@@ -10,12 +10,12 @@ namespace PORMS.API.Controllers;
 
 [ApiController]
 [Route("api/ports")]
-public sealed class PortController : ControllerBase
+public sealed class PortStatusController : ControllerBase
 {
     private static readonly TimeSpan WeatherStaleAfter = TimeSpan.FromMinutes(30);
     private readonly IApplicationDbContext _dbContext;
 
-    public PortController(IApplicationDbContext dbContext)
+    public PortStatusController(IApplicationDbContext dbContext)
     {
         _dbContext = dbContext;
     }
