@@ -24,13 +24,11 @@ namespace PORMS.API.Middleware
             {
                 await _next(context);
             }
-            catch (AuthExceptions ex)
+            catch (AppException ex)
             {
-                // Lỗi xác thực đã biết → status tương ứng, KHÔNG log như lỗi hệ thống.
-                var status = MapAuthStatus(ex);
-                _logger.LogInformation("Auth exception {Code} on {Method} {Path}: {Message}",
+                _logger.LogInformation("App exception {Code} on {Method} {Path}: {Message}",
                     ex.Code, context.Request.Method, context.Request.Path, ex.Message);
-                await WriteErrorAsync(context, status, ex.Code, ex.Message);
+                await WriteErrorAsync(context, (HttpStatusCode)ex.StatusCode, ex.Code, ex.Message);
             }
             catch (Exception ex)
             {

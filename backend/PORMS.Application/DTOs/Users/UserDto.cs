@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PORMS.Application.DTOs.User
+namespace PORMS.Application.DTOs.Users
 {
     /// Đại diện user trong tất cả response của API.
     /// KHÔNG bao gồm: PasswordHash, RefreshTokenHash, RefreshTokenExpiresAt
