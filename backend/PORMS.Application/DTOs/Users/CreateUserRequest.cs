@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PORMS.Application.DTOs.User
+namespace PORMS.Application.DTOs.Users
 {
     /// Body cho POST /api/users (ADMIN only).
     /// Tạo user mới với role và assigned_port_id chỉ định.
