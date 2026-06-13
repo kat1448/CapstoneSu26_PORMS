@@ -4,6 +4,7 @@ using PORMS.Application.Common.Interfaces;
 using PORMS.Application.DTOs.Risk;
 using PORMS.Application.Services.Risk;
 using PORMS.Domain.Entities;
+using PORMS.Domain.Enums;
 
 namespace PORMS.API.Controllers;
 
@@ -130,6 +131,11 @@ public sealed class RiskController : ControllerBase
         return Ok(thresholds.Select(ToDto).ToList());
     }
 
+    [HttpGet("beaufort-reference")]
+    [ProducesResponseType<IReadOnlyList<BeaufortReferenceDto>>(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<BeaufortReferenceDto>> GetBeaufortReference()
+        => Ok(BeaufortReference);
+
     [HttpPut("thresholds/{id:guid}")]
     [ProducesResponseType<RiskThresholdDto>(StatusCodes.Status200OK)]
     public async Task<ActionResult<RiskThresholdDto>> UpdateThresholdAsync(
@@ -205,4 +211,21 @@ public sealed class RiskController : ControllerBase
 
     private static int GetTotalPages(int total, int pageSize)
         => total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize);
+
+    private static readonly IReadOnlyList<BeaufortReferenceDto> BeaufortReference =
+    [
+        new(0, "Calm", 0.0m, 0.2m, RiskLevel.LOW),
+        new(1, "Light air", 0.3m, 1.5m, RiskLevel.LOW),
+        new(2, "Light breeze", 1.6m, 3.3m, RiskLevel.LOW),
+        new(3, "Gentle breeze", 3.4m, 5.4m, RiskLevel.LOW),
+        new(4, "Moderate breeze", 5.5m, 7.9m, RiskLevel.LOW),
+        new(5, "Fresh breeze", 8.0m, 10.7m, RiskLevel.LOW),
+        new(6, "Strong breeze", 10.8m, 13.8m, RiskLevel.MEDIUM),
+        new(7, "Near gale", 13.9m, 17.1m, RiskLevel.MEDIUM),
+        new(8, "Gale", 17.2m, 20.7m, RiskLevel.HIGH),
+        new(9, "Strong gale", 20.8m, 24.4m, RiskLevel.HIGH),
+        new(10, "Storm", 24.5m, 28.4m, RiskLevel.CRITICAL),
+        new(11, "Violent storm", 28.5m, 32.6m, RiskLevel.CRITICAL),
+        new(12, "Hurricane force", 32.7m, null, RiskLevel.CRITICAL)
+    ];
 }

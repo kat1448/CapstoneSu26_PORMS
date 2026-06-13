@@ -1,9 +1,11 @@
 using System.Text.Json;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PORMS.Application.Common.Interfaces;
 using PORMS.Application.DTOs.Weather;
 using PORMS.Application.Services.Risk;
+using PORMS.Application.Services.Weather;
 using PORMS.Domain.Entities;
 using PORMS.Domain.Enums;
 using PORMS.Infrastructure.Weather;
@@ -18,11 +20,16 @@ public sealed class WeatherController : ControllerBase
     private const int MaxPageSize = 100;
     private readonly IApplicationDbContext _dbContext;
     private readonly IRiskEngine _riskEngine;
+    private readonly IWeatherService _weatherService;
 
-    public WeatherController(IApplicationDbContext dbContext, IRiskEngine riskEngine)
+    public WeatherController(
+        IApplicationDbContext dbContext,
+        IRiskEngine riskEngine,
+        IWeatherService weatherService)
     {
         _dbContext = dbContext;
         _riskEngine = riskEngine;
+        _weatherService = weatherService;
     }
 
     [HttpGet("latest")]
@@ -173,6 +180,95 @@ public sealed class WeatherController : ControllerBase
         return Created($"/api/weather/latest?portId={reading.PortId}", ToDto(reading));
     }
 
+    [HttpPost("fetch-now")]
+    [ProducesResponseType<WeatherFetchNowResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<WeatherFetchNowResponse>(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<WeatherFetchNowResponse>> FetchNowAsync(
+        [FromQuery] Guid portId,
+        CancellationToken cancellationToken)
+    {
+        if (portId == Guid.Empty)
+        {
+            return BadRequest("Query parameter 'portId' is required.");
+        }
+
+        var port = await _dbContext.Ports
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == portId && x.IsActive, cancellationToken);
+
+        if (port is null)
+        {
+            return NotFound();
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        var fetchJob = new WeatherFetchJob
+        {
+            Id = Guid.NewGuid(),
+            PortId = port.Id,
+            Status = "PENDING",
+            StartedAt = DateTimeOffset.UtcNow
+        };
+
+        _dbContext.WeatherFetchJobs.Add(fetchJob);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            var reading = await _weatherService.FetchCurrentWeatherAsync(port, cancellationToken);
+            _dbContext.WeatherReadings.Add(reading);
+
+            fetchJob.Status = "SUCCESS";
+            fetchJob.CompletedAt = DateTimeOffset.UtcNow;
+            fetchJob.ResponseTimeMs = GetElapsedMilliseconds(stopwatch);
+            fetchJob.HttpStatusCode = StatusCodes.Status200OK;
+            fetchJob.CreatedReadingId = reading.Id;
+
+            _dbContext.OperationEvents.Add(new OperationEvent
+            {
+                Id = Guid.NewGuid(),
+                PortId = port.Id,
+                EventType = OperationEventType.WEATHER_FETCHED,
+                Payload = JsonSerializer.Serialize(new
+                {
+                    readingId = reading.Id,
+                    source = reading.DataSource,
+                    reading.WindSpeedMs,
+                    reading.BeaufortNumber,
+                    reading.Rainfall1hMm,
+                    reading.VisibilityKm,
+                    reading.ObservedAt
+                }),
+                Summary = $"Weather fetched on demand for {port.Code}: wind {reading.WindSpeedMs:0.0} m/s, Beaufort {reading.BeaufortNumber}.",
+                OccurredAt = DateTimeOffset.UtcNow,
+                IsSimulation = false
+            });
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _riskEngine.EvaluateRiskAsync(reading, cancellationToken);
+
+            return Created(
+                $"/api/weather/latest?portId={reading.PortId}",
+                new WeatherFetchNowResponse(ToFetchJobDto(fetchJob), ToDto(reading)));
+        }
+        catch (OpenWeatherException exception)
+        {
+            fetchJob.Status = "FAILED";
+            fetchJob.CompletedAt = DateTimeOffset.UtcNow;
+            fetchJob.ResponseTimeMs = GetElapsedMilliseconds(stopwatch);
+            fetchJob.HttpStatusCode = exception.StatusCode.HasValue
+                ? (int)exception.StatusCode.Value
+                : StatusCodes.Status502BadGateway;
+            fetchJob.ErrorMessage = Truncate(exception.Message, 1000);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                new WeatherFetchNowResponse(ToFetchJobDto(fetchJob), null));
+        }
+    }
+
     [HttpGet("fetch-jobs")]
     public async Task<IActionResult> GetFetchJobsAsync(
         [FromQuery] Guid portId,
@@ -264,6 +360,20 @@ public sealed class WeatherController : ControllerBase
             reading.DataSource,
             reading.IsSimulation);
 
+    private static FetchJobDto ToFetchJobDto(WeatherFetchJob fetchJob)
+        => new(
+            fetchJob.Id,
+            fetchJob.PortId,
+            fetchJob.SourceId,
+            fetchJob.Status,
+            fetchJob.StartedAt,
+            fetchJob.CompletedAt,
+            fetchJob.ResponseTimeMs,
+            fetchJob.HttpStatusCode,
+            fetchJob.ErrorMessage,
+            fetchJob.CreatedReadingId,
+            fetchJob.PrefectFlowRunId);
+
     private static int NormalizePage(int page) => page < 1 ? 1 : page;
 
     private static int NormalizePageSize(int pageSize)
@@ -271,4 +381,10 @@ public sealed class WeatherController : ControllerBase
 
     private static int GetTotalPages(int total, int pageSize)
         => total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize);
+
+    private static int GetElapsedMilliseconds(Stopwatch stopwatch)
+        => (int)Math.Min(stopwatch.ElapsedMilliseconds, int.MaxValue);
+
+    private static string Truncate(string value, int maxLength)
+        => value.Length <= maxLength ? value : value[..maxLength];
 }

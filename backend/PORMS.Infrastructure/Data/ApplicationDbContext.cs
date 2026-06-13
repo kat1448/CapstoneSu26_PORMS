@@ -13,11 +13,16 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
     {
     }
 
+    public DbSet<Alert> Alerts => Set<Alert>();
+    public DbSet<OperationModeLog> OperationModeLogs => Set<OperationModeLog>();
     public DbSet<OperationEvent> OperationEvents => Set<OperationEvent>();
     public DbSet<Port> Ports => Set<Port>();
     public DbSet<RiskAssessment> RiskAssessments => Set<RiskAssessment>();
     public DbSet<RiskAssessmentDetail> RiskAssessmentDetails => Set<RiskAssessmentDetail>();
     public DbSet<RiskThreshold> RiskThresholds => Set<RiskThreshold>();
+    public DbSet<SopExecution> SopExecutions => Set<SopExecution>();
+    public DbSet<SopRule> SopRules => Set<SopRule>();
+    public DbSet<TaskLog> TaskLogs => Set<TaskLog>();
     public DbSet<User> Users => Set<User>();
     public DbSet<WeatherReading> WeatherReadings => Set<WeatherReading>();
     public DbSet<WeatherFetchJob> WeatherFetchJobs => Set<WeatherFetchJob>();
@@ -34,6 +39,8 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.HasPostgresEnum<UserRole>("operational", "user_role_enum", enumNameTranslator);
         modelBuilder.HasPostgresEnum<UserStatus>("operational", "user_status_enum", enumNameTranslator);
         modelBuilder.HasPostgresEnum<ZoneType>("operational", "zone_type_enum", enumNameTranslator);
+        modelBuilder.HasPostgresEnum<SopActionType>("operational", "sop_action_type_enum", enumNameTranslator);
+        modelBuilder.HasPostgresEnum<AlertSeverity>("operational", "alert_severity_enum", enumNameTranslator);
 
         modelBuilder.Entity<Port>(entity =>
         {
@@ -170,6 +177,105 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(x => x.Summary).HasColumnName("summary");
             entity.Property(x => x.OccurredAt).HasColumnName("occurred_at");
             entity.Property(x => x.IsSimulation).HasColumnName("is_simulation");
+        });
+
+        modelBuilder.Entity<SopRule>(entity =>
+        {
+            entity.ToTable("sop_rules");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.RuleName).HasColumnName("rule_name").HasMaxLength(255).IsRequired();
+            entity.Property(x => x.TriggerRiskLevel).HasColumnName("trigger_risk_level");
+            entity.Property(x => x.AppliesToZoneType).HasColumnName("applies_to_zone_type");
+            entity.Property(x => x.ActionType).HasColumnName("action_type");
+            entity.Property(x => x.ActionDescription).HasColumnName("action_description").IsRequired();
+            entity.Property(x => x.TargetOperationMode).HasColumnName("target_operation_mode");
+            entity.Property(x => x.ExecutionOrder).HasColumnName("execution_order");
+            entity.Property(x => x.AlertMessage).HasColumnName("alert_message");
+            entity.Property(x => x.AlertSeverity).HasColumnName("alert_severity");
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(x => x.UpdatedByUserId).HasColumnName("updated_by_user_id");
+        });
+
+        modelBuilder.Entity<SopExecution>(entity =>
+        {
+            entity.ToTable("sop_executions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.RuleId).HasColumnName("rule_id");
+            entity.Property(x => x.RiskAssessmentId).HasColumnName("risk_assessment_id");
+            entity.Property(x => x.PortId).HasColumnName("port_id");
+            entity.Property(x => x.ZoneId).HasColumnName("zone_id");
+            entity.Property(x => x.ExecutedAt).HasColumnName("executed_at");
+            entity.Property(x => x.ExecutionResult).HasColumnName("execution_result").HasColumnType("jsonb");
+            entity.Property(x => x.SkipReason).HasColumnName("skip_reason");
+            entity.Property(x => x.DurationMs).HasColumnName("duration_ms");
+            entity.Property(x => x.IsSimulation).HasColumnName("is_simulation");
+            entity.HasOne(x => x.Rule).WithMany().HasForeignKey(x => x.RuleId);
+            entity.HasOne(x => x.RiskAssessment).WithMany().HasForeignKey(x => x.RiskAssessmentId);
+            entity.HasOne(x => x.Port).WithMany().HasForeignKey(x => x.PortId);
+            entity.HasOne(x => x.Zone).WithMany().HasForeignKey(x => x.ZoneId);
+        });
+
+        modelBuilder.Entity<OperationModeLog>(entity =>
+        {
+            entity.ToTable("operation_mode_log");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.PortId).HasColumnName("port_id");
+            entity.Property(x => x.PreviousMode).HasColumnName("previous_mode");
+            entity.Property(x => x.NewMode).HasColumnName("new_mode");
+            entity.Property(x => x.TriggeredByRiskLevel).HasColumnName("triggered_by_risk_level");
+            entity.Property(x => x.TriggeredBySopRuleId).HasColumnName("triggered_by_sop_rule_id");
+            entity.Property(x => x.OverriddenByUserId).HasColumnName("overridden_by_user_id");
+            entity.Property(x => x.OverrideReason).HasColumnName("override_reason");
+            entity.Property(x => x.ChangeType).HasColumnName("change_type").HasMaxLength(20);
+            entity.Property(x => x.ChangedAt).HasColumnName("changed_at");
+            entity.Property(x => x.IsSimulation).HasColumnName("is_simulation");
+            entity.HasOne(x => x.Port).WithMany().HasForeignKey(x => x.PortId);
+            entity.HasOne(x => x.TriggeredBySopRule).WithMany().HasForeignKey(x => x.TriggeredBySopRuleId);
+        });
+
+        modelBuilder.Entity<TaskLog>(entity =>
+        {
+            entity.ToTable("task_logs");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.PortId).HasColumnName("port_id");
+            entity.Property(x => x.ZoneId).HasColumnName("zone_id");
+            entity.Property(x => x.TriggeredByRuleId).HasColumnName("triggered_by_rule_id");
+            entity.Property(x => x.TriggeredByAssessmentId).HasColumnName("triggered_by_assessment_id");
+            entity.Property(x => x.ActionType).HasColumnName("action_type");
+            entity.Property(x => x.ActionDescription).HasColumnName("action_description");
+            entity.Property(x => x.RiskLevelAtCreation).HasColumnName("risk_level_at_creation");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.Property(x => x.IsSimulation).HasColumnName("is_simulation");
+            entity.HasOne(x => x.Port).WithMany().HasForeignKey(x => x.PortId);
+            entity.HasOne(x => x.Zone).WithMany().HasForeignKey(x => x.ZoneId);
+            entity.HasOne(x => x.TriggeredByRule).WithMany().HasForeignKey(x => x.TriggeredByRuleId);
+        });
+
+        modelBuilder.Entity<Alert>(entity =>
+        {
+            entity.ToTable("alerts");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.PortId).HasColumnName("port_id");
+            entity.Property(x => x.AlertType).HasColumnName("alert_type").HasMaxLength(50);
+            entity.Property(x => x.Severity).HasColumnName("severity");
+            entity.Property(x => x.Title).HasColumnName("title").HasMaxLength(255);
+            entity.Property(x => x.Message).HasColumnName("message");
+            entity.Property(x => x.Metadata).HasColumnName("metadata").HasColumnType("jsonb");
+            entity.Property(x => x.RelatedSopRuleId).HasColumnName("related_sop_rule_id");
+            entity.Property(x => x.RelatedAssessmentId).HasColumnName("related_assessment_id");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.Property(x => x.ReadAt).HasColumnName("read_at");
+            entity.Property(x => x.ReadByUserId).HasColumnName("read_by_user_id");
+            entity.Property(x => x.IsSimulation).HasColumnName("is_simulation");
+            entity.HasOne(x => x.Port).WithMany().HasForeignKey(x => x.PortId);
+            entity.HasOne(x => x.RelatedSopRule).WithMany().HasForeignKey(x => x.RelatedSopRuleId);
         });
 
         modelBuilder.Entity<User>(entity =>

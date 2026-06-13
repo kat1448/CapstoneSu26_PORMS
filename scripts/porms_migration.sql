@@ -670,7 +670,52 @@ COMMENT ON COLUMN operational.sop_rules.execution_order        IS 'Ascending: 1 
 
 
 -- ============================================================
--- 3.8 BẢNG: operational.operation_mode_log
+-- 3.8 BẢNG: operational.sop_executions
+-- Audit chi tiết từng SOP rule execution khi RiskChangedEvent xảy ra
+-- Một risk change có thể tạo nhiều executions theo rule × zone
+-- ============================================================
+CREATE TABLE IF NOT EXISTS operational.sop_executions (
+    id                  UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    rule_id             UUID            NOT NULL
+                            REFERENCES operational.sop_rules(id)
+                            ON DELETE RESTRICT,
+
+    risk_assessment_id  UUID
+                            REFERENCES operational.risk_assessments(id)
+                            ON DELETE SET NULL,
+
+    port_id             UUID            NOT NULL
+                            REFERENCES operational.ports(id)
+                            ON DELETE CASCADE,
+
+    zone_id             UUID
+                            REFERENCES operational.zones(id)
+                            ON DELETE SET NULL,
+
+    executed_at         TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+
+    execution_result    JSONB           NOT NULL DEFAULT '{}'::jsonb,
+
+    skip_reason         TEXT,
+
+    duration_ms         INTEGER         NOT NULL DEFAULT 0
+                            CONSTRAINT sop_executions_duration_nonnegative
+                            CHECK (duration_ms >= 0),
+
+    is_simulation       BOOLEAN         NOT NULL DEFAULT FALSE
+);
+
+COMMENT ON TABLE operational.sop_executions IS
+    'Audit chi tiết SOP Engine — mỗi record là một rule execution hoặc skip cho một port/zone';
+COMMENT ON COLUMN operational.sop_executions.execution_result IS
+    'JSON result gồm actionType, alertCreated, taskCreated, modeChanges, status';
+COMMENT ON COLUMN operational.sop_executions.skip_reason IS
+    'NULL nếu executed. Có giá trị nếu rule bị skip hoặc fail.';
+
+
+-- ============================================================
+-- 3.9 BẢNG: operational.operation_mode_log
 -- Lịch sử thay đổi operation mode của cảng
 -- State machine: NORMAL → LIMITED → STOP (không skip, không reverse tự động)
 -- ============================================================
@@ -1168,6 +1213,14 @@ CREATE INDEX IF NOT EXISTS idx_sop_rules_lookup
 -- SOP Engine lookup: "rules nào active, match risk level X và zone type Y"
 
 -- ── operational.operation_mode_log ─────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_sop_executions_port_time
+    ON operational.sop_executions (port_id, executed_at DESC);
+-- SOP execution history by port
+
+CREATE INDEX IF NOT EXISTS idx_sop_executions_assessment
+    ON operational.sop_executions (risk_assessment_id);
+-- Trace executions created by one risk assessment
+
 CREATE INDEX IF NOT EXISTS idx_mode_log_port_time
     ON operational.operation_mode_log (port_id, changed_at DESC);
 -- Current mode lookup, mode history
