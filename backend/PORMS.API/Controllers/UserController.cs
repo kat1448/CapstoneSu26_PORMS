@@ -55,7 +55,7 @@ namespace PORMS.API.Controllers
         {
             var actorUserId = GetCurrentUserId();
             var result = await _userService.CreateAsync(request, actorUserId);
-            return CreatedAtAction(nameof(GetByIdAsync), new { id = result.User.Id }, result);
+            return StatusCode(StatusCodes.Status201Created, result);
         }
 
         [HttpGet("me")]
