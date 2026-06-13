@@ -1,11 +1,11 @@
-﻿using PORMS.Application.DTOs.User;
+﻿using PORMS.Application.DTOs.Users;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PORMS.Application.Services.User
+namespace PORMS.Application.Services.Users
 {
     /// Quản lý vòng đời tài khoản người dùng (Admin perspective + self-profile).
     /// Mọi method thay đổi dữ liệu yêu cầu actorUserId để ghi audit log.

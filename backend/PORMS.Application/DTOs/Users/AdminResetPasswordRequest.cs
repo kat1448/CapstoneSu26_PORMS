@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PORMS.Application.DTOs.User
+namespace PORMS.Application.DTOs.Users
 {
     /// Body cho POST /api/users/{id}/reset-password (ADMIN only — US-012).
     /// Reset password user khác (vd: user bị khóa, quên password — internal helpdesk flow).

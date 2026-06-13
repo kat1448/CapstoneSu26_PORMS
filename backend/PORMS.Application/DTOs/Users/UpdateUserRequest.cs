@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PORMS.Application.DTOs.User
+namespace PORMS.Application.DTOs.Users
 {
     /// Body cho PUT /api/users/{id} (ADMIN only).
     /// Không cho phép sửa Email (immutable sau khi tạo).
