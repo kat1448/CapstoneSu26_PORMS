@@ -14,9 +14,11 @@ using PORMS.Application.Common.Interfaces;
 using PORMS.Application.Services.Alert;
 using PORMS.Application.Services.Mode;
 using PORMS.Application.Services.Risk;
+using PORMS.Application.Services.Simulation;
 using PORMS.Application.Services.Sop;
 using PORMS.Application.Services.Tasks;
 using PORMS.Application.Services.Weather;
+using PORMS.API.Services;
 using PORMS.Domain.Enums;
 using PORMS.Infrastructure.Data;
 using PORMS.Infrastructure.Events;
@@ -71,6 +73,7 @@ builder.Services.AddScoped<IAlertService, AlertService>();
 builder.Services.AddScoped<ITaskGeneratorService, TaskGeneratorService>();
 builder.Services.AddScoped<ISopEngine, SopEngine>();
 builder.Services.AddScoped<IDomainEventPublisher, SopDomainEventPublisher>();
+builder.Services.AddSingleton<ISimulationService, SimulationRuntimeService>();
 
 builder.Services.AddHttpClient("OpenWeather", (serviceProvider, client) =>
 {

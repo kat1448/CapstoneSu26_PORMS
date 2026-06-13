@@ -375,3 +375,149 @@ If you trigger LOW after HIGH, `currentRiskLevel` becomes `LOW`, but `currentMod
 This is intentional for safety: recovery creates an INFO alert and task, but the port should not automatically resume operation without manual review.
 
 If you trigger HIGH while the port is already `STOP`, `SOP_TRIGGERED` still creates alerts and tasks, but `modeChanges` can be `0` because there is no new mode transition to apply.
+
+## 8. Test Simulation Mode
+
+Simulation is for demo/training. It does not forecast the future. It replays weather snapshots through the real pipeline:
+
+```text
+WeatherReading -> RiskEngine -> SopEngine -> Alert/Task/Mode logs
+```
+
+Use this demo dataset:
+
+```text
+demo/storm_scenario_danang_oct2023.json
+```
+
+Swagger endpoint:
+
+```text
+POST /api/simulation/start
+```
+
+Body:
+
+```json
+{
+  "portId": "09674fa3-1136-490d-8a0f-a980f0065e05",
+  "scenarioName": "Quick simulation smoke test",
+  "speedMultiplier": 100,
+  "startedByUserId": null,
+  "weatherSnapshots": [
+    { "windSpeedMs": 3, "rainfall1hMm": 0, "visibilityKm": 12, "temperatureC": 29, "humidityPct": 75, "observedAt": "2026-06-12T00:00:00Z" },
+    { "windSpeedMs": 11, "rainfall1hMm": 12, "visibilityKm": 8, "temperatureC": 29, "humidityPct": 78, "observedAt": "2026-06-12T00:15:00Z" },
+    { "windSpeedMs": 19, "rainfall1hMm": 25, "visibilityKm": 4, "temperatureC": 28, "humidityPct": 84, "observedAt": "2026-06-12T00:30:00Z" },
+    { "windSpeedMs": 26, "rainfall1hMm": 55, "visibilityKm": 0.8, "temperatureC": 27, "humidityPct": 90, "observedAt": "2026-06-12T00:45:00Z" },
+    { "windSpeedMs": 8, "rainfall1hMm": 4, "visibilityKm": 11, "temperatureC": 29, "humidityPct": 76, "observedAt": "2026-06-12T01:00:00Z" }
+  ]
+}
+```
+
+Expected:
+
+```text
+201 Created
+response contains id
+status = RUNNING
+```
+
+Copy the returned `id`, then poll:
+
+```text
+GET /api/simulation/status?sessionId={id}
+```
+
+Expected while running:
+
+```text
+completedSnapshots increases
+percentComplete increases
+currentWeather shows the simulated snapshot
+```
+
+After it completes:
+
+```text
+GET /api/simulation/{id}/results
+```
+
+Expected:
+
+```text
+status = COMPLETED
+weatherReadings >= 5
+riskAssessments >= 5
+sopExecutions / alertsGenerated / tasksGenerated are created when risk changes match SOP rules
+peakRiskLevel should reach CRITICAL for the smoke test
+```
+
+To stop a running simulation:
+
+```text
+POST /api/simulation/stop
+```
+
+Body:
+
+```json
+{
+  "sessionId": "copy-session-id-here"
+}
+```
+
+Expected:
+
+```text
+200 OK
+status = CANCELLED
+```
+
+## 9. Test Port Decision Support
+
+This endpoint gives the operator-facing answer: whether weather-sensitive operations should continue, be restricted, or stop.
+
+Swagger endpoint:
+
+```text
+GET /api/ports/{portId}/decision-support
+```
+
+Use:
+
+```text
+portId = 09674fa3-1136-490d-8a0f-a980f0065e05
+```
+
+Expected fields:
+
+```text
+recommendationCode
+recommendationText
+canHandleContainers
+canAcceptVesselEntry
+decisionReasons
+latestWeather
+latestRisk
+isWeatherDataStale
+marineDataCoverage
+activeSopRecommendations
+```
+
+Example interpretation:
+
+```text
+OPERATE_NORMALLY       = weather-sensitive operations can continue under monitoring
+OPERATE_WITH_CAUTION   = operations can continue but operator should monitor conditions
+RESTRICT_OPERATIONS    = container handling/vessel entry should be restricted
+STOP_OPERATIONS        = do not handle containers or accept vessel entry until reviewed
+VERIFY_WEATHER_DATA    = weather data is stale or missing, verify conditions first
+```
+
+Note:
+
+```text
+If risk returns to LOW but currentMode is still STOP, decision-support still returns STOP_OPERATIONS.
+This is intentional: the system does not automatically resume real operations after a risky condition.
+Company Admin should review conditions and use manual mode override if appropriate.
+```

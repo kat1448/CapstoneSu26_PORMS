@@ -1,4 +1,5 @@
 using PORMS.Application.DTOs.Risk;
+using PORMS.Application.DTOs.Sop;
 using PORMS.Application.DTOs.Weather;
 using PORMS.Domain.Enums;
 
@@ -33,3 +34,26 @@ public sealed record WeatherFetchHealthDto(
     string? LastErrorMessage,
     bool IsHealthy,
     bool IsStale);
+
+public sealed record PortDecisionSupportDto(
+    Guid PortId,
+    string PortCode,
+    string PortName,
+    OperationMode CurrentMode,
+    RiskLevel CurrentRiskLevel,
+    string RecommendationCode,
+    string RecommendationText,
+    bool? CanHandleContainers,
+    bool? CanAcceptVesselEntry,
+    IReadOnlyList<string> DecisionReasons,
+    WeatherReadingDto? LatestWeather,
+    RiskAssessmentDto? LatestRisk,
+    bool IsWeatherDataStale,
+    MarineDataCoverageDto MarineDataCoverage,
+    IReadOnlyList<SopRecommendationDto> ActiveSopRecommendations);
+
+public sealed record MarineDataCoverageDto(
+    bool HasWaveData,
+    bool HasTideData,
+    bool HasCurrentData,
+    string Note);
