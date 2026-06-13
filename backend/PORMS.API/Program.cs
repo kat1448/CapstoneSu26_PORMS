@@ -10,6 +10,7 @@ using PORMS.API.Middleware;
 using PORMS.Application.Common.Events;
 using PORMS.Application.Common.Interfaces;
 using PORMS.Application.Services.Auths;
+using PORMS.Application.Services.Ports;
 using PORMS.Application.Services.Risk;
 using PORMS.Application.Services.Users;
 using PORMS.Application.Services.Weather;
@@ -68,6 +69,7 @@ builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IPortService, PortService>();
 
 builder.Services.AddHttpClient("OpenWeather", (serviceProvider, client) =>
 {
@@ -80,7 +82,7 @@ builder.Services.AddHttpClient("OpenWeather", (serviceProvider, client) =>
     client.Timeout = TimeSpan.FromSeconds(configuration.GetValue("OpenWeather:TimeoutSeconds", 10));
 });
 
-builder.Services.AddHostedService<WeatherUpdateWorker>();
+//builder.Services.AddHostedService<WeatherUpdateWorker>();
 
 builder.Services.AddCors(options =>
 {
