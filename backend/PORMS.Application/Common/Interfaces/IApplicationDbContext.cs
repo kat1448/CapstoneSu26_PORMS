@@ -14,6 +14,7 @@ public interface IApplicationDbContext
     DbSet<RiskThreshold> RiskThresholds { get; }
     DbSet<SopExecution> SopExecutions { get; }
     DbSet<SopRule> SopRules { get; }
+    DbSet<SimulationSession> SimulationSessions { get; }
     DbSet<TaskLog> TaskLogs { get; }
     DbSet<User> Users { get; }
     DbSet<WeatherReading> WeatherReadings { get; }

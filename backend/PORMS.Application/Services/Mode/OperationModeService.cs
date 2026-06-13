@@ -67,7 +67,9 @@ public sealed class OperationModeService : IOperationModeService
             return logs;
         }
 
-        if (port.CurrentMode == OperationMode.NORMAL)
+        var effectiveMode = port.CurrentMode;
+
+        if (effectiveMode == OperationMode.NORMAL)
         {
             logs.Add(await AddModeLogAsync(
                 port,
@@ -78,10 +80,12 @@ public sealed class OperationModeService : IOperationModeService
                 overrideReason: "SOP engine escalated mode before STOP.",
                 changeType: "AUTOMATIC",
                 isSimulation,
-                cancellationToken));
+                cancellationToken,
+                previousModeOverride: effectiveMode));
+            effectiveMode = OperationMode.LIMITED;
         }
 
-        if (port.CurrentMode == OperationMode.LIMITED)
+        if (effectiveMode == OperationMode.LIMITED)
         {
             logs.Add(await AddModeLogAsync(
                 port,
@@ -92,7 +96,8 @@ public sealed class OperationModeService : IOperationModeService
                 overrideReason: "SOP engine forced STOP for high-risk condition.",
                 changeType: "AUTOMATIC",
                 isSimulation,
-                cancellationToken));
+                cancellationToken,
+                previousModeOverride: effectiveMode));
         }
 
         return logs;
@@ -134,10 +139,11 @@ public sealed class OperationModeService : IOperationModeService
         string? overrideReason,
         string changeType,
         bool isSimulation,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        OperationMode? previousModeOverride = null)
     {
         var now = DateTimeOffset.UtcNow;
-        var previousMode = port.CurrentMode;
+        var previousMode = previousModeOverride ?? port.CurrentMode;
 
         if (!isSimulation)
         {

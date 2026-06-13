@@ -1,0 +1,28 @@
+{
+  "portId": "09674fa3-1136-490d-8a0f-a980f0065e05",
+  "scenarioName": "Da Nang port storm escalation demo",
+  "speedMultiplier": 100,
+  "startedByUserId": null,
+  "weatherSnapshots": [
+    { "windSpeedMs": 3.0, "rainfall1hMm": 0.0, "visibilityKm": 12.0, "temperatureC": 29.0, "humidityPct": 74, "observedAt": "2026-06-12T00:00:00Z" },
+    { "windSpeedMs": 6.2, "rainfall1hMm": 2.0, "visibilityKm": 10.5, "temperatureC": 29.0, "humidityPct": 76, "observedAt": "2026-06-12T00:15:00Z" },
+    { "windSpeedMs": 9.8, "rainfall1hMm": 6.0, "visibilityKm": 9.0, "temperatureC": 28.8, "humidityPct": 78, "observedAt": "2026-06-12T00:30:00Z" },
+    { "windSpeedMs": 11.2, "rainfall1hMm": 12.0, "visibilityKm": 8.0, "temperatureC": 28.5, "humidityPct": 80, "observedAt": "2026-06-12T00:45:00Z" },
+    { "windSpeedMs": 14.5, "rainfall1hMm": 18.0, "visibilityKm": 6.5, "temperatureC": 28.2, "humidityPct": 82, "observedAt": "2026-06-12T01:00:00Z" },
+    { "windSpeedMs": 18.0, "rainfall1hMm": 24.0, "visibilityKm": 5.5, "temperatureC": 28.0, "humidityPct": 84, "observedAt": "2026-06-12T01:15:00Z" },
+    { "windSpeedMs": 19.5, "rainfall1hMm": 30.0, "visibilityKm": 4.0, "temperatureC": 27.8, "humidityPct": 86, "observedAt": "2026-06-12T01:30:00Z" },
+    { "windSpeedMs": 21.0, "rainfall1hMm": 42.0, "visibilityKm": 3.0, "temperatureC": 27.5, "humidityPct": 88, "observedAt": "2026-06-12T01:45:00Z" },
+    { "windSpeedMs": 24.0, "rainfall1hMm": 48.0, "visibilityKm": 2.0, "temperatureC": 27.2, "humidityPct": 90, "observedAt": "2026-06-12T02:00:00Z" },
+    { "windSpeedMs": 25.5, "rainfall1hMm": 55.0, "visibilityKm": 0.9, "temperatureC": 27.0, "humidityPct": 91, "observedAt": "2026-06-12T02:15:00Z" },
+    { "windSpeedMs": 27.0, "rainfall1hMm": 60.0, "visibilityKm": 0.7, "temperatureC": 26.8, "humidityPct": 92, "observedAt": "2026-06-12T02:30:00Z" },
+    { "windSpeedMs": 29.0, "rainfall1hMm": 62.0, "visibilityKm": 0.6, "temperatureC": 26.5, "humidityPct": 93, "observedAt": "2026-06-12T02:45:00Z" },
+    { "windSpeedMs": 26.0, "rainfall1hMm": 50.0, "visibilityKm": 1.2, "temperatureC": 26.8, "humidityPct": 91, "observedAt": "2026-06-12T03:00:00Z" },
+    { "windSpeedMs": 23.0, "rainfall1hMm": 42.0, "visibilityKm": 2.5, "temperatureC": 27.0, "humidityPct": 89, "observedAt": "2026-06-12T03:15:00Z" },
+    { "windSpeedMs": 20.0, "rainfall1hMm": 30.0, "visibilityKm": 4.5, "temperatureC": 27.5, "humidityPct": 86, "observedAt": "2026-06-12T03:30:00Z" },
+    { "windSpeedMs": 17.0, "rainfall1hMm": 20.0, "visibilityKm": 6.5, "temperatureC": 28.0, "humidityPct": 82, "observedAt": "2026-06-12T03:45:00Z" },
+    { "windSpeedMs": 13.0, "rainfall1hMm": 12.0, "visibilityKm": 8.5, "temperatureC": 28.5, "humidityPct": 78, "observedAt": "2026-06-12T04:00:00Z" },
+    { "windSpeedMs": 9.0, "rainfall1hMm": 6.0, "visibilityKm": 10.0, "temperatureC": 29.0, "humidityPct": 75, "observedAt": "2026-06-12T04:15:00Z" },
+    { "windSpeedMs": 5.0, "rainfall1hMm": 1.0, "visibilityKm": 12.0, "temperatureC": 29.2, "humidityPct": 73, "observedAt": "2026-06-12T04:30:00Z" },
+    { "windSpeedMs": 3.5, "rainfall1hMm": 0.0, "visibilityKm": 14.0, "temperatureC": 29.5, "humidityPct": 72, "observedAt": "2026-06-12T04:45:00Z" }
+  ]
+}

@@ -20,6 +20,7 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<RiskAssessment> RiskAssessments => Set<RiskAssessment>();
     public DbSet<RiskAssessmentDetail> RiskAssessmentDetails => Set<RiskAssessmentDetail>();
     public DbSet<RiskThreshold> RiskThresholds => Set<RiskThreshold>();
+    public DbSet<SimulationSession> SimulationSessions => Set<SimulationSession>();
     public DbSet<SopExecution> SopExecutions => Set<SopExecution>();
     public DbSet<SopRule> SopRules => Set<SopRule>();
     public DbSet<TaskLog> TaskLogs => Set<TaskLog>();
@@ -217,6 +218,23 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasOne(x => x.RiskAssessment).WithMany().HasForeignKey(x => x.RiskAssessmentId);
             entity.HasOne(x => x.Port).WithMany().HasForeignKey(x => x.PortId);
             entity.HasOne(x => x.Zone).WithMany().HasForeignKey(x => x.ZoneId);
+        });
+
+        modelBuilder.Entity<SimulationSession>(entity =>
+        {
+            entity.ToTable("simulation_sessions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.PortId).HasColumnName("port_id");
+            entity.Property(x => x.StartedByUserId).HasColumnName("started_by_user_id");
+            entity.Property(x => x.ScenarioName).HasColumnName("scenario_name").HasMaxLength(255);
+            entity.Property(x => x.SpeedMultiplier).HasColumnName("speed_multiplier");
+            entity.Property(x => x.TotalSnapshots).HasColumnName("total_snapshots");
+            entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(20);
+            entity.Property(x => x.StartedAt).HasColumnName("started_at");
+            entity.Property(x => x.EndedAt).HasColumnName("ended_at");
+            entity.HasOne(x => x.Port).WithMany().HasForeignKey(x => x.PortId);
+            entity.HasOne(x => x.StartedByUser).WithMany().HasForeignKey(x => x.StartedByUserId);
         });
 
         modelBuilder.Entity<OperationModeLog>(entity =>

@@ -3,8 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using PORMS.Application.Common.Interfaces;
 using PORMS.Application.DTOs.Ports;
 using PORMS.Application.DTOs.Risk;
+using PORMS.Application.DTOs.Sop;
 using PORMS.Application.DTOs.Weather;
 using PORMS.Domain.Entities;
+using PORMS.Domain.Enums;
 
 namespace PORMS.API.Controllers;
 
@@ -95,6 +97,72 @@ public sealed class PortStatusController : ControllerBase
             isStale));
     }
 
+    [HttpGet("{id:guid}/decision-support")]
+    [ProducesResponseType<PortDecisionSupportDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<PortDecisionSupportDto>> GetDecisionSupportAsync(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var port = await _dbContext.Ports
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (port is null)
+        {
+            return NotFound();
+        }
+
+        var latestWeather = await _dbContext.WeatherReadings
+            .AsNoTracking()
+            .Where(x => x.PortId == id && !x.IsSimulation)
+            .OrderByDescending(x => x.ObservedAt)
+            .ThenByDescending(x => x.RecordedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var latestRisk = await _dbContext.RiskAssessments
+            .AsNoTracking()
+            .Where(x => x.PortId == id && !x.IsSimulation)
+            .OrderByDescending(x => x.EvaluatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var currentRisk = latestRisk?.FinalRiskLevel ?? port.CurrentRiskLevel;
+        var isStale = latestWeather is null ||
+            DateTimeOffset.UtcNow - latestWeather.ObservedAt > WeatherStaleAfter;
+
+        var activeSopRecommendations = await BuildRecommendationsAsync(
+            id,
+            currentRisk,
+            cancellationToken);
+        var decision = BuildDecision(
+            port.CurrentMode,
+            currentRisk,
+            isStale,
+            latestWeather,
+            latestRisk,
+            activeSopRecommendations);
+
+        return Ok(new PortDecisionSupportDto(
+            port.Id,
+            port.Code,
+            port.Name,
+            port.CurrentMode,
+            currentRisk,
+            decision.Code,
+            decision.Text,
+            decision.CanHandleContainers,
+            decision.CanAcceptVesselEntry,
+            decision.Reasons,
+            latestWeather is null ? null : ToWeatherDto(latestWeather),
+            latestRisk is null ? null : ToRiskDto(latestRisk),
+            isStale,
+            new MarineDataCoverageDto(
+                HasWaveData: false,
+                HasTideData: false,
+                HasCurrentData: false,
+                Note: "Current Sprint backend evaluates wind, rain, and visibility. Wave, tide, and sea-current data are planned marine extensions and are not part of the current decision score."),
+            activeSopRecommendations));
+    }
+
     private async Task<PortStatusDto> BuildStatusAsync(Guid portId, CancellationToken cancellationToken)
     {
         var port = await _dbContext.Ports
@@ -147,6 +215,141 @@ public sealed class PortStatusController : ControllerBase
             isStale);
     }
 
+    private async Task<IReadOnlyList<SopRecommendationDto>> BuildRecommendationsAsync(
+        Guid portId,
+        RiskLevel riskLevel,
+        CancellationToken cancellationToken)
+    {
+        var zones = await _dbContext.Zones
+            .AsNoTracking()
+            .Where(x => x.PortId == portId && x.IsActive)
+            .ToListAsync(cancellationToken);
+
+        var rules = await _dbContext.SopRules
+            .AsNoTracking()
+            .Where(x => x.IsActive && x.TriggerRiskLevel == riskLevel)
+            .OrderBy(x => x.ExecutionOrder)
+            .ThenBy(x => x.RuleName)
+            .ToListAsync(cancellationToken);
+
+        var recommendations = new List<SopRecommendationDto>();
+        foreach (var rule in rules)
+        {
+            var targets = rule.AppliesToZoneType is null
+                ? [null]
+                : zones.Where(x => x.ZoneType == rule.AppliesToZoneType).Cast<Zone?>().ToList();
+
+            foreach (var zone in targets)
+            {
+                recommendations.Add(new SopRecommendationDto(
+                    rule.Id,
+                    rule.RuleName,
+                    zone?.Id,
+                    zone?.Name,
+                    zone?.ZoneType,
+                    rule.TriggerRiskLevel,
+                    rule.ActionType,
+                    rule.ActionDescription,
+                    rule.TargetOperationMode,
+                    rule.ExecutionOrder,
+                    rule.AlertSeverity,
+                    rule.AlertMessage));
+            }
+        }
+
+        return recommendations;
+    }
+
+    private static PortDecision BuildDecision(
+        OperationMode currentMode,
+        RiskLevel currentRisk,
+        bool isStale,
+        WeatherReading? latestWeather,
+        RiskAssessment? latestRisk,
+        IReadOnlyCollection<SopRecommendationDto> recommendations)
+    {
+        var reasons = new List<string>();
+        if (latestWeather is null)
+        {
+            reasons.Add("No weather reading is available for this port.");
+        }
+        else
+        {
+            reasons.Add($"Wind {latestWeather.WindSpeedMs:0.0} m/s, Beaufort {latestWeather.BeaufortNumber}.");
+            reasons.Add($"Rainfall {latestWeather.Rainfall1hMm ?? 0:0.0} mm/h.");
+            reasons.Add(latestWeather.VisibilityKm.HasValue
+                ? $"Visibility {latestWeather.VisibilityKm.Value:0.0} km."
+                : "Visibility data is not available.");
+        }
+
+        if (latestRisk is not null)
+        {
+            reasons.Add($"Risk breakdown: wind={latestRisk.WindRiskLevel}, rain={latestRisk.RainRiskLevel}, visibility={latestRisk.VisibilityRiskLevel}.");
+        }
+
+        if (recommendations.Count > 0)
+        {
+            reasons.Add($"{recommendations.Count} active SOP recommendation(s) match the current risk level.");
+        }
+
+        if (currentMode == OperationMode.STOP)
+        {
+            reasons.Add("Current operation mode is STOP, so weather-sensitive operations remain stopped until manual review or override.");
+        }
+        else if (currentMode == OperationMode.LIMITED)
+        {
+            reasons.Add("Current operation mode is LIMITED, so operations must follow active restrictions even if some weather factors improve.");
+        }
+
+        if (isStale)
+        {
+            reasons.Add("Weather data is stale, so operators should verify conditions before making an operational decision.");
+            return new PortDecision(
+                "VERIFY_WEATHER_DATA",
+                "Verify latest weather conditions before deciding. Current data is stale or missing.",
+                null,
+                null,
+                reasons);
+        }
+
+        if (currentMode == OperationMode.STOP || currentRisk == RiskLevel.CRITICAL)
+        {
+            return new PortDecision(
+                "STOP_OPERATIONS",
+                "Stop weather-sensitive port operations. Do not handle containers or accept vessel entry until conditions are reviewed.",
+                false,
+                false,
+                reasons);
+        }
+
+        if (currentRisk == RiskLevel.HIGH || currentMode == OperationMode.LIMITED)
+        {
+            return new PortDecision(
+                "RESTRICT_OPERATIONS",
+                "Restrict container handling and vessel entry. Follow active SOP recommendations before continuing operations.",
+                false,
+                false,
+                reasons);
+        }
+
+        if (currentRisk == RiskLevel.MEDIUM)
+        {
+            return new PortDecision(
+                "OPERATE_WITH_CAUTION",
+                "Operations may continue with caution. Monitor wind, rain, and visibility and prepare to apply SOP restrictions.",
+                true,
+                true,
+                reasons);
+        }
+
+        return new PortDecision(
+            "OPERATE_NORMALLY",
+            "Weather-sensitive operations may continue under normal monitoring.",
+            true,
+            true,
+            reasons);
+    }
+
     private static WeatherReadingDto ToWeatherDto(WeatherReading reading)
         => new(
             reading.Id,
@@ -186,4 +389,11 @@ public sealed class PortStatusController : ControllerBase
             assessment.AssessmentSummary,
             assessment.EvaluatedAt,
             assessment.IsSimulation);
+
+    private sealed record PortDecision(
+        string Code,
+        string Text,
+        bool? CanHandleContainers,
+        bool? CanAcceptVesselEntry,
+        IReadOnlyList<string> Reasons);
 }
