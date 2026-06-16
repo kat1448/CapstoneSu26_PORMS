@@ -12,7 +12,7 @@ public sealed class DashboardRepository
         _connectionFactory = connectionFactory;
     }
 
-    public async Task<DashboardSummaryReadModel> GetSummaryAsync(CancellationToken cancellationToken)
+    public async Task<DashboardSummaryReadModel?> GetSummaryAsync(CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
 
@@ -37,7 +37,7 @@ public sealed class DashboardRepository
 
         if (!await reader.ReadAsync(cancellationToken))
         {
-            throw new InvalidOperationException("No port state is available.");
+            return null;
         }
 
         return new DashboardSummaryReadModel(
