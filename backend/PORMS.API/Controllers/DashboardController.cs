@@ -15,6 +15,11 @@ public sealed class DashboardController : ControllerBase
     {
         var summary = await repository.GetSummaryAsync(cancellationToken);
 
+        if (summary is null)
+        {
+            return NotFound(new { error = "No dashboard data available." });
+        }
+
         return Ok(new DashboardSummaryResponse
         {
             PortId = summary.PortId,
