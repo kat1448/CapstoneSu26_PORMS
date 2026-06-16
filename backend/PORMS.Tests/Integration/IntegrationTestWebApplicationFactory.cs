@@ -13,13 +13,15 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         builder.UseEnvironment("Testing");
         builder.ConfigureAppConfiguration((_, configurationBuilder) =>
         {
+            configurationBuilder.SetBasePath(AppContext.BaseDirectory);
+            configurationBuilder.AddJsonFile("appsettings.Testing.json", optional: false);
+
             var connectionString = Environment.GetEnvironmentVariable(
                 TestDatabaseConnectionEnvironmentVariable);
 
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                throw new InvalidOperationException(
-                    $"Missing required environment variable '{TestDatabaseConnectionEnvironmentVariable}'.");
+                return;
             }
 
             configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
