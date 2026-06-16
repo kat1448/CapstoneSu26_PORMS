@@ -1,14 +1,13 @@
 using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
 namespace PORMS.Tests.Integration;
 
-public class DashboardSummaryTests : IClassFixture<WebApplicationFactory<Program>>
+public class DashboardSummaryTests : IClassFixture<IntegrationTestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly IntegrationTestWebApplicationFactory _factory;
 
-    public DashboardSummaryTests(WebApplicationFactory<Program> factory)
+    public DashboardSummaryTests(IntegrationTestWebApplicationFactory factory)
     {
         _factory = factory;
     }
