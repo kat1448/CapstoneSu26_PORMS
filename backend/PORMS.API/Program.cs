@@ -10,14 +10,15 @@ using PORMS.API.Middleware;
 using PORMS.Application.Common.Events;
 using PORMS.Application.Common.Interfaces;
 using PORMS.Application.Services.Alert;
-using PORMS.Application.Services.Mode;
 using PORMS.Application.Services.Auths;
+using PORMS.Application.Services.Mode;
 using PORMS.Application.Services.Ports;
 using PORMS.Application.Services.Risk;
 using PORMS.Application.Services.Sop;
 using PORMS.Application.Services.Tasks;
 using PORMS.Application.Services.Users;
 using PORMS.Application.Services.Weather;
+using PORMS.Application.Services.Zone;
 using PORMS.Domain.Enums;
 using PORMS.Infrastructure.Data;
 using PORMS.Infrastructure.Events;
@@ -80,6 +81,7 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPortService, PortService>();
+builder.Services.AddScoped<IZoneService, ZoneService>();
 
 builder.Services.AddHttpClient("OpenWeather", (serviceProvider, client) =>
 {
@@ -92,7 +94,7 @@ builder.Services.AddHttpClient("OpenWeather", (serviceProvider, client) =>
     client.Timeout = TimeSpan.FromSeconds(configuration.GetValue("OpenWeather:TimeoutSeconds", 10));
 });
 
-//builder.Services.AddHostedService<WeatherUpdateWorker>();
+builder.Services.AddHostedService<WeatherUpdateWorker>();
 
 builder.Services.AddCors(options =>
 {
@@ -110,9 +112,6 @@ var jwtSecret = jwtSection["SecretKey"]
                 ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
                 ?? throw new InvalidOperationException(
                     "JWT secret key not configured. Set Jwt:SecretKey in appsettings.Development.json or JWT_SECRET_KEY env var.");
-
-//JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
-//JwtSecurityTokenHandler.DefaultOutboundClaimTypeMap.Clear();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
