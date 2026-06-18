@@ -15,6 +15,8 @@ direction.
 
 - Rebuild the shared sidebar to match the prototype's fixed 224px navy
   navigation.
+- Add the missing Tasks route and page represented in the prototype.
+- Filter navigation and protected routes by the current demo user's role.
 - Rebuild the shared topbar to match the prototype's 58px header.
 - Reorder and resize Dashboard sections to match the prototype.
 - Restore the Dashboard zone-status panel.
@@ -29,7 +31,7 @@ direction.
 ### Out of Scope
 
 - Backend API or database contract changes.
-- Authentication and role enforcement changes.
+- Backend authentication, JWT, or authorization-policy changes.
 - Redesigning non-Dashboard page content.
 - Replacing the current router or service layer.
 - Pixel-perfect conversion of modal and form screens outside Dashboard.
@@ -56,8 +58,53 @@ but use the prototype's layout and visual treatment.
 - Brand area, grouped navigation labels, icons, active state, and alert count
   follow the prototype.
 - Navigation labels use Vietnamese names from the prototype.
+- The navigation uses these four groups:
+  - `Vận hành`: Dashboard, Cảnh báo, Nhật ký nhiệm vụ, Nhật ký vận hành.
+  - `Quản lý`: Cảng & khu vực, Người dùng.
+  - `Cấu hình`: Ngưỡng rủi ro, Quy tắc SOP.
+  - `Công cụ & báo cáo`: Mô phỏng, Phân tích BI.
+- Each navigation item uses a compact line icon consistent with the prototype.
+- The Alerts item displays the current unread-alert count when it is nonzero.
+- The signed-in user's avatar, name, and Vietnamese role label appear in a
+  footer at the bottom of the sidebar.
+- Simulation Results remains reachable from the Simulation page but is not a
+  separate sidebar item.
 - On screens below 780px, the sidebar becomes an off-canvas panel controlled by
-  a menu button in the topbar.
+  a menu button in the topbar. A backdrop closes it when the user clicks outside
+  the panel.
+
+### Role-Based Navigation
+
+The demo roles use the same navigation matrix as the prototype:
+
+| Route | ADMIN | PORT_MANAGER | OPERATOR |
+|---|---:|---:|---:|
+| Dashboard | Yes | Yes | Yes |
+| Alerts | Yes | Yes | Yes |
+| Tasks | Yes | Yes | Yes |
+| Operation Log | Yes | Yes | No |
+| Ports & Zones | Yes | Yes | Yes |
+| Users | Yes | No | No |
+| Risk Configuration | Yes | Yes | No |
+| SOP Rules | Yes | Yes | No |
+| Simulation | Yes | Yes | No |
+| Analytics | Yes | Yes | No |
+
+Profile and Change Password remain available to every signed-in role through
+the account controls.
+
+Role filtering applies to both menu visibility and route access. A signed-in
+user who opens a disallowed route directly is redirected to `/dashboard`.
+
+### Tasks Route
+
+- Add `/tasks` with the Vietnamese page title `Nhật ký nhiệm vụ`.
+- The first implementation is a route-backed presentation page matching the
+  prototype's task-log visual language.
+- It uses deterministic frontend demo rows until a backend Tasks API is
+  available.
+- The page clearly remains within the existing mock-fallback/demo architecture;
+  this work does not add a backend task contract.
 
 ### Topbar
 
@@ -161,6 +208,10 @@ DashboardPage
 
 No backend changes are required for this design.
 
+Sidebar alert counts use the existing alert service and refresh when the shared
+shell refresh action is triggered. Role visibility derives only from the
+current `DemoUser.role`.
+
 ## Text Encoding
 
 All shell and Dashboard source files modified by this work must contain valid
@@ -182,7 +233,11 @@ This cleanup is limited to files touched by the shell and Dashboard alignment.
 - Sidebar, topbar, risk, mode, trend, zone, weather, and alert sections are
   visually present in the approved order.
 - Existing routes remain navigable.
+- The Tasks route renders and is visible to all three demo roles.
+- Each role sees only its permitted navigation items.
+- Direct access to a disallowed route redirects to Dashboard.
+- The sidebar user footer and unread-alert badge render correctly.
+- The mobile sidebar opens, closes, and dismisses through its backdrop.
 - Demo simulation still refreshes Dashboard risk, weather, and alerts.
 - Desktop and mobile layouts are inspected against `design.html`.
 - Touched shell and Dashboard files contain no visible mojibake.
-
