@@ -3,11 +3,37 @@ using PORMS.API.Middleware;
 using Microsoft.Extensions.Options;
 using PORMS.Infrastructure.Data;
 using PORMS.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using PORMS.API.Services;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<DatabaseOptions>(
     builder.Configuration.GetSection(DatabaseOptions.SectionName));
+builder.Services.Configure<CorsOptions>(
+    builder.Configuration.GetSection(CorsOptions.SectionName));
+builder.Services.Configure<JwtOptions>(
+    builder.Configuration.GetSection(JwtOptions.SectionName));
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+    {
+        var configuredOrigins = builder.Configuration
+            .GetSection($"{CorsOptions.SectionName}:AllowedOrigins")
+            .Get<string[]>();
+
+        var origins = configuredOrigins is { Length: > 0 }
+            ? configuredOrigins
+            : ["http://localhost:5173"];
+
+        policy
+            .WithOrigins(origins)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 builder.Services.AddSingleton(sp =>
 {
     var options = sp.GetRequiredService<IOptions<DatabaseOptions>>().Value;
@@ -27,6 +53,30 @@ builder.Services.AddScoped<DashboardRepository>();
 builder.Services.AddScoped<PortRepository>();
 builder.Services.AddScoped<AlertRepository>();
 builder.Services.AddScoped<OperationEventRepository>();
+builder.Services.AddScoped<SimulationRepository>();
+builder.Services.AddScoped<UserRepository>();
+builder.Services.AddScoped<WeatherRepository>();
+builder.Services.AddScoped<RiskRepository>();
+builder.Services.AddScoped<AuthService>();
+var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
+    ?? throw new InvalidOperationException("Missing JWT configuration.");
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -39,6 +89,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseCors("Frontend");
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapControllers();
 app.Run();

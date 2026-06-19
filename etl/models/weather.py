@@ -20,8 +20,8 @@ class WeatherReadingModel(BaseModel):
     visibility_km: Optional[float] = None
     pressure_hpa: Optional[float] = None
 
-    ow_weather_code: Optional[int] = None
-    ow_weather_desc: Optional[str] = None
+    weather_code: Optional[int] = None
+    weather_description: Optional[str] = None
 
     observed_at: datetime
     raw_payload: Optional[dict] = None
@@ -40,8 +40,8 @@ class WeatherReadingModel(BaseModel):
             "humidity_pct": self.humidity_pct,
             "visibility_km": self.visibility_km,
             "pressure_hpa": self.pressure_hpa,
-            "ow_weather_code": self.ow_weather_code,
-            "ow_weather_desc": self.ow_weather_desc,
+            "weather_code": self.weather_code,
+            "weather_description": self.weather_description,
             "observed_at": self.observed_at,
             "raw_payload": json.dumps(self.raw_payload) if self.raw_payload else None,
             "is_simulation": self.is_simulation,

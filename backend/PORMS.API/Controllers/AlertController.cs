@@ -31,7 +31,8 @@ public sealed class AlertController : ControllerBase
             ExpiresAt = alert.ExpiresAt,
             RecipientCount = alert.RecipientCount,
             ReadCount = alert.ReadCount,
-            AcknowledgedCount = alert.AcknowledgedCount
+            AcknowledgedCount = alert.AcknowledgedCount,
+            Read = alert.RecipientCount > 0 && alert.ReadCount >= alert.RecipientCount
         }).ToList());
     }
 }

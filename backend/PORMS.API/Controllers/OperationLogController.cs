@@ -29,7 +29,21 @@ public sealed class OperationLogController : ControllerBase
             EntityType = operationEvent.EntityType,
             EntityId = operationEvent.EntityId,
             Summary = operationEvent.Summary,
-            OccurredAt = operationEvent.OccurredAt
+            OccurredAt = operationEvent.OccurredAt,
+            Tone = GetTone(operationEvent.EventType)
         }).ToList());
+    }
+
+    private static string GetTone(string eventType)
+    {
+        return eventType switch
+        {
+            "MODE_CHANGED" => "danger",
+            "RISK_CHANGED" => "warning",
+            "SIMULATION_STEP" => "warning",
+            "SIMULATION_COMPLETED" => "success",
+            "USER_LOGIN" => "success",
+            _ => "info"
+        };
     }
 }

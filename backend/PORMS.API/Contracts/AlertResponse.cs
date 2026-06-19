@@ -17,4 +17,5 @@ public sealed class AlertResponse
     public long RecipientCount { get; set; }
     public long ReadCount { get; set; }
     public long AcknowledgedCount { get; set; }
+    public bool Read { get; set; }
 }
