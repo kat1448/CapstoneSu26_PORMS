@@ -10,4 +10,8 @@ public sealed class ZoneResponse
     public bool IsRestricted { get; set; }
     public string? RestrictionReason { get; set; }
     public bool IsActive { get; set; }
+    public string CapacityLabel { get; set; } = string.Empty;
+    public string StatusLabel { get; set; } = string.Empty;
+    public bool OverrideEnabled { get; set; }
+    public short DisplayOrder { get; set; }
 }

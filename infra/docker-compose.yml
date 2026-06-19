@@ -15,7 +15,7 @@
 #         không phải trong thư mục infra/
 #
 # PORTS:
-#   PostgreSQL   → localhost:5432
+#   PostgreSQL   → localhost:55432
 #   Prefect UI   → localhost:4200
 #   Metabase     → localhost:3000
 #   Backend API  → localhost:5000  (profile: app)
@@ -71,7 +71,7 @@ services:
       - ../scripts/seed_data.sql:/docker-entrypoint-initdb.d/04_seed_data.sql
       - ../scripts/seed_sop_rules.sql:/docker-entrypoint-initdb.d/05_seed_sop_rules.sql
     ports:
-      - "5432:5432"
+      - "55432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d porms_db"]
       interval: 10s
@@ -212,7 +212,7 @@ services:
       - porms-net
 
   # ════════════════════════════════════════════════════════════════════════════
-  # Backend — ASP.NET Core 8 REST API
+  # Backend — ASP.NET Core 10 REST API
   # Chỉ start khi dùng: docker compose --profile app up -d
   # Dev thông thường: chạy native bằng "dotnet run --project PORMS.API"
   # ════════════════════════════════════════════════════════════════════════════
@@ -274,6 +274,7 @@ services:
     restart: unless-stopped
     environment:
       VITE_API_BASE_URL:  http://localhost:5000
+      VITE_USE_MOCK_FALLBACK: "false"
       VITE_METABASE_URL:  http://localhost:3000
       NODE_ENV:           development
     ports:
