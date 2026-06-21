@@ -103,7 +103,13 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                 '{"source":"integration-test"}'::jsonb,
                 NOW() + INTERVAL '1 day'
             )
-            ON CONFLICT (id) DO NOTHING;
+            ON CONFLICT (id) DO UPDATE
+            SET port_id = EXCLUDED.port_id,
+                event_type = EXCLUDED.event_type,
+                entity_type = EXCLUDED.entity_type,
+                summary = EXCLUDED.summary,
+                payload = EXCLUDED.payload,
+                occurred_at = EXCLUDED.occurred_at;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
@@ -170,6 +176,95 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task ResetPrimaryPortStateAsync(CancellationToken cancellationToken = default)
+    {
+        var port = await GetPrimaryPortAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            UPDATE operational.ports
+            SET current_risk_level = 'LOW',
+                current_operation_mode = 'NORMAL'
+            WHERE id = @portId;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("portId", port.PortId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<SimulationSessionSnapshot> GetSimulationSessionSnapshotAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            SELECT s.id,
+                   s.port_id,
+                   s.status,
+                   s.progress_percent,
+                   s.current_snapshot_number,
+                   s.peak_risk_level,
+                   s.generated_alert_count,
+                   s.mode_change_count,
+                   p.current_risk_level,
+                   p.current_operation_mode,
+                   COALESCE((
+                       SELECT COUNT(*)
+                       FROM operational.weather_readings w
+                       WHERE w.simulation_session_id = s.id
+                   ), 0) AS weather_count,
+                   COALESCE((
+                       SELECT COUNT(*)
+                       FROM operational.risk_assessments r
+                       WHERE r.simulation_session_id = s.id
+                   ), 0) AS risk_count,
+                   COALESCE((
+                       SELECT COUNT(*)
+                       FROM operational.alerts a
+                       WHERE a.simulation_session_id = s.id
+                   ), 0) AS alert_count,
+                   COALESCE((
+                       SELECT COUNT(*)
+                       FROM operational.operation_mode_logs m
+                       WHERE m.simulation_session_id = s.id
+                   ), 0) AS mode_log_count,
+                   COALESCE((
+                       SELECT COUNT(*)
+                       FROM operational.operation_events e
+                       WHERE e.simulation_session_id = s.id
+                   ), 0) AS event_count
+            FROM operational.simulation_sessions s
+            JOIN operational.ports p ON p.id = s.port_id
+            WHERE s.id = @sessionId;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("sessionId", sessionId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException($"Simulation session {sessionId} was not found.");
+        }
+
+        return new SimulationSessionSnapshot(
+            reader.GetGuid(0),
+            reader.GetGuid(1),
+            reader.GetString(2),
+            reader.GetDecimal(3),
+            reader.GetInt32(4),
+            reader.GetString(5),
+            reader.GetInt32(6),
+            reader.GetInt32(7),
+            reader.GetString(8),
+            reader.GetString(9),
+            reader.GetInt64(10),
+            reader.GetInt64(11),
+            reader.GetInt64(12),
+            reader.GetInt64(13),
+            reader.GetInt64(14));
+    }
+
     private async Task<NpgsqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = new NpgsqlConnection(GetConnectionString());
@@ -177,3 +272,20 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         return connection;
     }
 }
+
+public sealed record SimulationSessionSnapshot(
+    Guid SessionId,
+    Guid PortId,
+    string Status,
+    decimal ProgressPercent,
+    int CurrentSnapshotNumber,
+    string PeakRiskLevel,
+    int GeneratedAlertCount,
+    int ModeChangeCount,
+    string CurrentRiskLevel,
+    string CurrentOperationMode,
+    long WeatherReadingCount,
+    long RiskAssessmentCount,
+    long AlertCount,
+    long ModeLogCount,
+    long OperationEventCount);

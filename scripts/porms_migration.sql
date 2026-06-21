@@ -1448,7 +1448,7 @@ VALUES
         'admin@porms.vn',
         'System Administrator',
         -- bcrypt hash placeholder — PHẢI chạy lại với hash thật trước khi deploy
-        '$2b$12$PLACEHOLDER_REPLACE_WITH_REAL_BCRYPT_HASH_BEFORE_DEPLOY',
+        '$2a$12$EiOVbgHA01dPxu209RTJUOsJ4I7jDrQiXeIEAGG.iXmqYpBl2vSmG',
         'ADMIN',
         'ACTIVE'
     )

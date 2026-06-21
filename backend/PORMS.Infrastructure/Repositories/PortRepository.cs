@@ -23,7 +23,8 @@ public sealed class PortRepository
                    current_risk_level,
                    current_operation_mode,
                    is_active,
-                   active_alert_count
+                   active_alert_count,
+                   last_weather_fetch_at
             FROM operational.v_port_current_state
             ORDER BY port_code;
             """;
@@ -41,7 +42,8 @@ public sealed class PortRepository
                 reader.GetString(3),
                 reader.GetString(4),
                 reader.GetBoolean(5),
-                reader.GetInt64(6)));
+                reader.GetInt64(6),
+                reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7)));
         }
 
         return results;
@@ -59,8 +61,17 @@ public sealed class PortRepository
                    current_risk_level,
                    is_restricted,
                    restriction_reason,
-                   is_active
-            FROM operational.zones
+                   is_active,
+                   capacity_value,
+                   capacity_unit,
+                   display_order,
+                   EXISTS (
+                       SELECT 1
+                       FROM operational.zone_threshold_overrides zto
+                       WHERE zto.zone_id = z.id
+                         AND zto.is_enabled = TRUE
+                   ) AS override_enabled
+            FROM operational.zones z
             WHERE port_id = @portId
               AND deleted_at IS NULL
             ORDER BY display_order, name;
@@ -82,7 +93,11 @@ public sealed class PortRepository
                 reader.GetString(4),
                 reader.GetBoolean(5),
                 reader.IsDBNull(6) ? null : reader.GetString(6),
-                reader.GetBoolean(7)));
+                reader.GetBoolean(7),
+                reader.IsDBNull(8) ? null : reader.GetDecimal(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9),
+                reader.GetInt16(10),
+                reader.GetBoolean(11)));
         }
 
         return results;
@@ -96,7 +111,8 @@ public sealed record PortSummaryReadModel(
     string CurrentRiskLevel,
     string CurrentOperationMode,
     bool IsActive,
-    long ActiveAlertCount);
+    long ActiveAlertCount,
+    DateTimeOffset? LastWeatherFetchAt);
 
 public sealed record ZoneReadModel(
     Guid ZoneId,
@@ -106,4 +122,8 @@ public sealed record ZoneReadModel(
     string CurrentRiskLevel,
     bool IsRestricted,
     string? RestrictionReason,
-    bool IsActive);
+    bool IsActive,
+    decimal? CapacityValue,
+    string? CapacityUnit,
+    short DisplayOrder,
+    bool OverrideEnabled);

@@ -102,8 +102,8 @@ def task_normalize_weather(raw_json: dict, port_id: str) -> WeatherReadingModel:
         humidity_pct=raw_json.get("main", {}).get("humidity"),
         visibility_km=visibility_km,
         pressure_hpa=raw_json.get("main", {}).get("pressure"),
-        ow_weather_code=weather_info.get("id"),
-        ow_weather_desc=weather_info.get("description"),
+        weather_code=weather_info.get("id"),
+        weather_description=weather_info.get("description"),
         observed_at=observed_at,
         raw_payload=raw_json,
         is_simulation=False,
@@ -124,14 +124,14 @@ def task_save_weather_reading(model: WeatherReadingModel) -> Optional[str]:
                 port_id, wind_speed_ms, beaufort_number, wind_direction_deg, wind_gust_ms,
                 rainfall_1h_mm, rainfall_3h_mm,
                 temperature_c, humidity_pct, visibility_km, pressure_hpa,
-                ow_weather_code, ow_weather_desc,
+                weather_code, weather_description,
                 observed_at, recorded_at, data_source, raw_payload, is_simulation
             ) VALUES (
                 CAST(:port_id AS uuid), :wind_speed_ms, :beaufort_number,
                 :wind_direction_deg, :wind_gust_ms,
                 :rainfall_1h_mm, :rainfall_3h_mm,
                 :temperature_c, :humidity_pct, :visibility_km, :pressure_hpa,
-                :ow_weather_code, :ow_weather_desc,
+                :weather_code, :weather_description,
                 :observed_at, NOW(), 'OPENWEATHER_API', CAST(:raw_payload AS jsonb), FALSE
             )
             ON CONFLICT DO NOTHING
