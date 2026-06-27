@@ -28,9 +28,11 @@ public sealed class ReadApiSmokeTests
 
         var ports = await response.Content.ReadFromJsonAsync<List<PortSummaryResponse>>();
         Assert.NotNull(ports);
-        var port = Assert.Single(ports!);
+        var port = Assert.Single(ports!.Where(item => item.PortCode == "DNTSA"));
         Assert.Equal("DNTSA", port.PortCode);
         Assert.NotEqual(Guid.Empty, port.PortId);
+        Assert.InRange(port.Latitude, -90m, 90m);
+        Assert.InRange(port.Longitude, -180m, 180m);
     }
 
     [Fact]

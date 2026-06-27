@@ -1,21 +1,35 @@
 import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { RiskLevel } from "../../types/dashboard";
-import type { PortZone } from "../../types/port";
+import type { OperationMode, RiskLevel } from "../../types/dashboard";
+import type { PortSummary, PortZone } from "../../types/port";
 import { Badge } from "../common/Badge";
 
 const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-const TIEN_SA_CENTER: [number, number] = [16.1228, 108.2144];
+const DEFAULT_CENTER: [number, number] = [16.1228, 108.2144];
 
 type GisMapCardProps = {
+  onSelectPort: (portId: string) => void;
   portName: string;
+  ports: PortSummary[];
+  selectedPortId: string;
   zones: PortZone[];
+};
+
+type MappablePort = PortSummary & {
+  latitude: number;
+  longitude: number;
 };
 
 type MappableZone = PortZone & {
   latitude: number;
   longitude: number;
+};
+
+type ZoneMapPoint = PortZone & {
+  displayLatitude: number;
+  displayLongitude: number;
+  usesPortCoordinates: boolean;
 };
 
 const riskColors: Record<RiskLevel, string> = {
@@ -32,7 +46,17 @@ const riskTones: Record<RiskLevel, "danger" | "info" | "success" | "warning"> = 
   MEDIUM: "info"
 };
 
-function hasCoordinates(zone: PortZone): zone is MappableZone {
+const modeLabels: Record<OperationMode, string> = {
+  LIMITED: "Hạn chế",
+  NORMAL: "Bình thường",
+  STOP: "Tạm dừng"
+};
+
+function hasPortCoordinates(port: PortSummary): port is MappablePort {
+  return typeof port.latitude === "number" && typeof port.longitude === "number";
+}
+
+function hasZoneCoordinates(zone: PortZone): zone is MappableZone {
   return typeof zone.latitude === "number" && typeof zone.longitude === "number";
 }
 
@@ -45,29 +69,94 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
-function createMarkerIcon(riskLevel: RiskLevel, index: number) {
+function createPortMarkerIcon(port: MappablePort, index: number, selectedPortId: string) {
+  const selectedClass = port.portId === selectedPortId ? " is-selected" : "";
   return L.divIcon({
     className: "",
-    html: `<div class="gis-marker" style="background:${riskColors[riskLevel]}">${index + 1}</div>`,
+    html: `<div class="gis-marker${selectedClass}" style="background:${riskColors[port.currentRiskLevel]}">${index + 1}</div>`,
     iconAnchor: [18, 18],
     iconSize: [36, 36]
   });
 }
 
-function popupContent(zone: MappableZone) {
-  const color = riskColors[zone.currentRiskLevel];
+function createZoneMarkerIcon(zone: MappableZone) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="gis-marker gis-marker-zone" style="background:${riskColors[zone.currentRiskLevel]}"></div>`,
+    iconAnchor: [9, 9],
+    iconSize: [18, 18]
+  });
+}
+
+function portPopupContent(port: MappablePort) {
+  const color = riskColors[port.currentRiskLevel];
   return [
-    `<div class="gis-popup-title">${escapeHtml(zone.zoneName)}</div>`,
-    `<div class="gis-popup-meta">${escapeHtml(zone.zoneType)} · Trạng thái: ${escapeHtml(zone.statusLabel)}</div>`,
-    `<div class="gis-popup-meta">Rủi ro: <strong style="color:${color}">${escapeHtml(zone.currentRiskLevel)}</strong></div>`,
-    `<div class="gis-popup-meta">${zone.latitude.toFixed(6)}, ${zone.longitude.toFixed(6)}</div>`
+    `<div class="gis-popup-title">${escapeHtml(port.portName)}</div>`,
+    `<div class="gis-popup-meta">${escapeHtml(port.portCode)} · ${escapeHtml(modeLabels[port.currentOperationMode])}</div>`,
+    `<div class="gis-popup-meta">Rủi ro: <strong style="color:${color}">${escapeHtml(port.currentRiskLevel)}</strong></div>`,
+    `<div class="gis-popup-meta">Cảnh báo: ${port.activeAlertCount}</div>`,
+    `<div class="gis-popup-meta">${port.latitude.toFixed(6)}, ${port.longitude.toFixed(6)}</div>`
   ].join("");
 }
 
-export function GisMapCard({ portName, zones }: GisMapCardProps) {
+function createZoneMapPoints(zones: PortZone[], selectedPort?: MappablePort): ZoneMapPoint[] {
+  const radius = 0.0012;
+  return zones.flatMap<ZoneMapPoint>((zone, index) => {
+    if (hasZoneCoordinates(zone)) {
+      return [{
+        ...zone,
+        displayLatitude: zone.latitude,
+        displayLongitude: zone.longitude,
+        usesPortCoordinates: false
+      }];
+    }
+
+    if (!selectedPort) {
+      return [];
+    }
+
+    const angle = (Math.PI * 2 * index) / Math.max(zones.length, 1);
+    return [{
+      ...zone,
+      displayLatitude: selectedPort.latitude + Math.sin(angle) * radius,
+      displayLongitude: selectedPort.longitude + Math.cos(angle) * radius,
+      usesPortCoordinates: true
+    }];
+  });
+}
+
+function zonePointPopupContent(zone: ZoneMapPoint) {
+  const color = riskColors[zone.currentRiskLevel];
+  const sourceLabel = zone.usesPortCoordinates ? "Theo toa do cang" : "Toa do khu vuc";
+  return [
+    `<div class="gis-popup-title">${escapeHtml(zone.zoneName)}</div>`,
+    `<div class="gis-popup-meta">${escapeHtml(zone.zoneType)} · ${escapeHtml(zone.statusLabel)}</div>`,
+    `<div class="gis-popup-meta">Rủi ro: <strong style="color:${color}">${escapeHtml(zone.currentRiskLevel)}</strong></div>`,
+    `<div class="gis-popup-meta">${escapeHtml(sourceLabel)}</div>`,
+    `<div class="gis-popup-meta">${zone.displayLatitude.toFixed(6)}, ${zone.displayLongitude.toFixed(6)}</div>`
+  ].join("");
+}
+
+function coordinateLabel(zone: PortZone) {
+  if (typeof zone.latitude !== "number" || typeof zone.longitude !== "number") {
+    return "Chưa có tọa độ";
+  }
+
+  return `${zone.latitude.toFixed(6)}, ${zone.longitude.toFixed(6)}`;
+}
+
+export function GisMapCard({ onSelectPort, portName, ports, selectedPortId, zones }: GisMapCardProps) {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const mappableZones = useMemo(() => zones.filter(hasCoordinates), [zones]);
+  const mappablePorts = useMemo(() => ports.filter(hasPortCoordinates), [ports]);
+  const selectedMappablePort = useMemo(
+    () => mappablePorts.find((port) => port.portId === selectedPortId),
+    [mappablePorts, selectedPortId]
+  );
+  const zoneMapPoints = useMemo(
+    () => createZoneMapPoints(zones, selectedMappablePort),
+    [selectedMappablePort, zones]
+  );
 
   useEffect(() => {
     const element = mapElementRef.current;
@@ -78,25 +167,43 @@ export function GisMapCard({ portName, zones }: GisMapCardProps) {
       mapRef.current = null;
     }
 
-    const center = mappableZones.length === 1
-      ? [mappableZones[0].latitude, mappableZones[0].longitude] as [number, number]
-      : TIEN_SA_CENTER;
-    const map = L.map(element).setView(center, 14);
+    const center = selectedMappablePort
+      ? [selectedMappablePort.latitude, selectedMappablePort.longitude] as [number, number]
+      : mappablePorts.length === 1
+        ? [mappablePorts[0].latitude, mappablePorts[0].longitude] as [number, number]
+        : DEFAULT_CENTER;
+    const map = L.map(element).setView(center, 13);
     mapRef.current = map;
 
     L.tileLayer(OSM_TILE_URL, {
       attribution: "© OpenStreetMap",
       maxZoom: 18,
-      minZoom: 11
+      minZoom: 8
     }).addTo(map);
 
-    const points = mappableZones.map((zone) => [zone.latitude, zone.longitude] as [number, number]);
-    mappableZones.forEach((zone, index) => {
-      L.marker([zone.latitude, zone.longitude], {
-        icon: createMarkerIcon(zone.currentRiskLevel, index)
+    const points = [
+      ...mappablePorts.map((port) => [port.latitude, port.longitude] as [number, number]),
+      ...zoneMapPoints.map((zone) => [zone.displayLatitude, zone.displayLongitude] as [number, number])
+    ];
+    mappablePorts.forEach((port, index) => {
+      const marker = L.marker([port.latitude, port.longitude], {
+        icon: createPortMarkerIcon(port, index, selectedPortId)
+      });
+      marker
+        .addTo(map)
+        .bindPopup(portPopupContent(port));
+      marker.on("click", () => onSelectPort(port.portId));
+    });
+    zoneMapPoints.forEach((zone) => {
+      L.marker([zone.displayLatitude, zone.displayLongitude], {
+        icon: createZoneMarkerIcon({
+          ...zone,
+          latitude: zone.displayLatitude,
+          longitude: zone.displayLongitude
+        })
       })
         .addTo(map)
-        .bindPopup(popupContent(zone));
+        .bindPopup(zonePointPopupContent(zone));
     });
 
     if (points.length > 1) {
@@ -111,26 +218,26 @@ export function GisMapCard({ portName, zones }: GisMapCardProps) {
         mapRef.current = null;
       }
     };
-  }, [mappableZones]);
+  }, [mappablePorts, onSelectPort, selectedMappablePort, selectedPortId, zoneMapPoints]);
 
   return (
     <article className="card card-pad gis-card">
       <div className="card-head">
         <div>
           <h3>Bản đồ GIS {portName}</h3>
-          <p>Vị trí khu vực và mức rủi ro hiện tại · © OpenStreetMap</p>
+          <p>Tọa độ cảng và khu vực theo cảng đang chọn · © OpenStreetMap</p>
         </div>
-        <Badge tone={mappableZones.length > 0 ? "info" : "muted"}>{mappableZones.length} điểm</Badge>
+        <Badge tone={mappablePorts.length > 0 ? "info" : "muted"}>{mappablePorts.length} cảng</Badge>
       </div>
 
       <div className="gis-map-shell">
         <div aria-label={`Bản đồ GIS ${portName}`} className="gis-map" ref={mapElementRef} role="application" />
-        {mappableZones.length === 0 ? (
-          <div className="gis-empty" role="status">Chưa có tọa độ GIS cho các khu vực.</div>
+        {mappablePorts.length === 0 ? (
+          <div className="gis-empty" role="status">Chưa có tọa độ GIS cho các cảng.</div>
         ) : null}
       </div>
 
-      <div className="gis-data-table" aria-label="Bảng dữ liệu điểm GIS">
+      <div className="gis-data-table" aria-label="Bảng dữ liệu khu vực theo cảng">
         <div className="gis-data-row gis-data-head">
           <span>Khu vực</span>
           <span>Loại</span>
@@ -138,13 +245,22 @@ export function GisMapCard({ portName, zones }: GisMapCardProps) {
           <span>Trạng thái</span>
           <span>Tọa độ</span>
         </div>
-        {mappableZones.map((zone) => (
+        {zones.length === 0 ? (
+          <div className="gis-data-row">
+            <strong>Chưa có khu vực</strong>
+            <span>-</span>
+            <span>-</span>
+            <span>-</span>
+            <span>-</span>
+          </div>
+        ) : null}
+        {zones.map((zone) => (
           <div className="gis-data-row" key={zone.zoneId}>
             <strong>{zone.zoneName}</strong>
             <span>{zone.zoneType}</span>
             <span><Badge tone={riskTones[zone.currentRiskLevel]}>{zone.currentRiskLevel}</Badge></span>
             <span>{zone.statusLabel}</span>
-            <span>{zone.latitude.toFixed(6)}, {zone.longitude.toFixed(6)}</span>
+            <span>{coordinateLabel(zone)}{typeof zone.latitude !== "number" || typeof zone.longitude !== "number" ? " · Theo toa do cang" : ""}</span>
           </div>
         ))}
       </div>
