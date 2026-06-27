@@ -13,10 +13,14 @@ export type PortSummary = {
 
 export type PortZone = {
   capacityLabel: string;
+  capacityUnit?: string | null;
+  capacityValue?: number | null;
   currentRiskLevel: RiskLevel;
   displayOrder: number;
   isActive: boolean;
   isRestricted: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
   overrideEnabled: boolean;
   portId: string;
   restrictionReason: string | null;

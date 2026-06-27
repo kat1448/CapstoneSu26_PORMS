@@ -25,5 +25,8 @@ describe("role navigation", () => {
     expect(isRouteAllowed("OPERATOR", "/operation-log")).toBe(false);
     expect(isRouteAllowed("PORT_MANAGER", "/users")).toBe(false);
     expect(isRouteAllowed("ADMIN", "/users")).toBe(true);
+    expect(isRouteAllowed("ADMIN", "/users/new")).toBe(true);
+    expect(isRouteAllowed("ADMIN", "/users/user-1/edit")).toBe(true);
+    expect(isRouteAllowed("PORT_MANAGER", "/users/new")).toBe(false);
   });
 });

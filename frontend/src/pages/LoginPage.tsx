@@ -73,7 +73,6 @@ export function LoginPage({ demoUsers, onLogin }: LoginPageProps) {
             <div className="password-wrap">
               <input
                 className="input"
-                defaultValue="Admin@123"
                 id="login-password"
                 onChange={(event) => setPassword(event.target.value)}
                 required

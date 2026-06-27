@@ -8,12 +8,14 @@ import { ChangePasswordPage } from "../pages/ChangePasswordPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { LogPage } from "../pages/LogPage";
 import { LoginPage } from "../pages/LoginPage";
+import { PortCreatePage } from "../pages/PortCreatePage";
 import { PortManagementPage } from "../pages/PortManagementPage";
 import { ProfilePage } from "../pages/ProfilePage";
 import { RiskConfigPage } from "../pages/RiskConfigPage";
 import { SimulationPage } from "../pages/SimulationPage";
 import { SimulationResultsPage } from "../pages/SimulationResultsPage";
 import { SopRulesPage } from "../pages/SopRulesPage";
+import { UserFormPage } from "../pages/UserFormPage";
 import { UsersPage } from "../pages/UsersPage";
 import { TasksPage } from "../pages/TasksPage";
 import { isRouteAllowed } from "../navigation/navigation";
@@ -69,7 +71,10 @@ export function buildRouter(context: RouterContext) {
         { path: "tasks", element: guarded("/tasks", <TasksPage />) },
         { path: "operation-log", element: guarded("/operation-log", <LogPage refreshKey={context.refreshKey} />) },
         { path: "ports", element: <PortManagementPage refreshKey={context.refreshKey} /> },
+        { path: "ports/new", element: <PortCreatePage /> },
         { path: "ports/:portId", element: <PortManagementPage refreshKey={context.refreshKey} detailMode /> },
+        { path: "users/new", element: guarded("/users/new", <UserFormPage mode="create" />) },
+        { path: "users/:userId/edit", element: guarded("/users/edit", <UserFormPage mode="edit" />) },
         { path: "users", element: guarded("/users", <UsersPage refreshKey={context.refreshKey} />) },
         { path: "risk-config", element: guarded("/risk-config", <RiskConfigPage />) },
         { path: "sop-rules", element: guarded("/sop-rules", <SopRulesPage />) },

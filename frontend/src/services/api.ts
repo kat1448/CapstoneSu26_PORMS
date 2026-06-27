@@ -21,6 +21,22 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
   return (await response.json()) as T;
 }
 
+export async function requestVoid(path: string, init?: RequestInit): Promise<void> {
+  const session = getStoredSession();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(session ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+      ...(init?.headers ?? {})
+    },
+    ...init
+  });
+
+  if (!response.ok) {
+    throw new Error(`API ${path} failed with ${response.status}`);
+  }
+}
+
 export async function withMockFallback<T>(request: () => Promise<T>, fallback: () => T | Promise<T>): Promise<T> {
   try {
     return await request();

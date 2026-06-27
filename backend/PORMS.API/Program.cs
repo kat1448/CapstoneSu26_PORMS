@@ -57,6 +57,7 @@ builder.Services.AddScoped<SimulationRepository>();
 builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<WeatherRepository>();
 builder.Services.AddScoped<RiskRepository>();
+builder.Services.AddScoped<SopRuleRepository>();
 builder.Services.AddScoped<AuthService>();
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("Missing JWT configuration.");

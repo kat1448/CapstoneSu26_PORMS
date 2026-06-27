@@ -11,3 +11,24 @@ public sealed class PortSummaryResponse
     public long ActiveAlertCount { get; set; }
     public string UpdatedAtLabel { get; set; } = string.Empty;
 }
+
+public sealed record CreatePortRequest(
+    string Code,
+    string Name,
+    string? Address,
+    decimal Latitude,
+    decimal Longitude,
+    string Timezone,
+    string WeatherSource,
+    string? WeatherStationId,
+    bool IsActive,
+    IReadOnlyList<CreateZoneRequest> Zones);
+
+public sealed record CreateZoneRequest(
+    string Name,
+    string ZoneType,
+    decimal? CapacityValue,
+    string? CapacityUnit,
+    decimal? Latitude,
+    decimal? Longitude,
+    short DisplayOrder);

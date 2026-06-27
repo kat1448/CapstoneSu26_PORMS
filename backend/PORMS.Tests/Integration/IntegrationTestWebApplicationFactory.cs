@@ -192,6 +192,228 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task SeedDashboardRiskIsolationAsync(CancellationToken cancellationToken = default)
+    {
+        var port = await GetPrimaryPortAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            DELETE FROM operational.risk_assessments
+                WHERE id IN (
+                    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'::uuid,
+                    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'::uuid
+                );
+                DELETE FROM operational.weather_readings
+                WHERE id IN (
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid,
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid
+                );
+                DELETE FROM operational.simulation_sessions
+                WHERE id = 'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid;
+                DELETE FROM operational.simulation_datasets
+                WHERE id = 'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid;
+
+            INSERT INTO operational.simulation_datasets (
+                    id,
+                    name,
+                    description,
+                    snapshot_count
+                )
+                VALUES (
+                    'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid,
+                    'Dashboard risk isolation',
+                    'Integration test dataset',
+                    1
+                );
+
+            INSERT INTO operational.simulation_sessions (
+                    id,
+                    dataset_id,
+                    port_id,
+                    started_by_user_id,
+                    status,
+                    progress_percent,
+                    current_snapshot_number,
+                    peak_risk_level,
+                    started_at
+                )
+                SELECT
+                    'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid,
+                    'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid,
+                    @portId,
+                    id,
+                    'COMPLETED',
+                    100,
+                    1,
+                    'CRITICAL',
+                    NOW()
+                FROM operational.users
+                ORDER BY created_at
+                LIMIT 1;
+
+            INSERT INTO operational.weather_readings (
+                    id,
+                    port_id,
+                    wind_speed_ms,
+                    beaufort_number,
+                    rainfall_1h_mm,
+                    temperature_c,
+                    humidity_pct,
+                    visibility_km,
+                    weather_description,
+                    observed_at,
+                    recorded_at,
+                    data_source,
+                    is_simulation
+                )
+                VALUES (
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid,
+                    @portId,
+                    2.5,
+                    2,
+                    0,
+                    27,
+                    70,
+                    10,
+                    'OpenWeather low risk',
+                    NOW() - INTERVAL '10 minutes',
+                    NOW() - INTERVAL '9 minutes',
+                    'OPENWEATHER_API',
+                    FALSE
+                );
+
+            INSERT INTO operational.risk_assessments (
+                    id,
+                    weather_reading_id,
+                    port_id,
+                    wind_risk_level,
+                    rain_risk_level,
+                    visibility_risk_level,
+                    final_risk_level,
+                    previous_risk_level,
+                    level_changed,
+                    dominant_factor,
+                    assessment_summary,
+                    evaluated_at,
+                    is_simulation
+                )
+                VALUES (
+                    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'::uuid,
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid,
+                    @portId,
+                    'LOW',
+                    'LOW',
+                    'LOW',
+                    'LOW',
+                    'LOW',
+                    FALSE,
+                    'WIND',
+                    'OpenWeather should drive dashboard risk.',
+                    NOW() - INTERVAL '8 minutes',
+                    FALSE
+                );
+
+            INSERT INTO operational.weather_readings (
+                    id,
+                    port_id,
+                    simulation_session_id,
+                    wind_speed_ms,
+                    beaufort_number,
+                    rainfall_1h_mm,
+                    temperature_c,
+                    humidity_pct,
+                    visibility_km,
+                    weather_description,
+                    observed_at,
+                    recorded_at,
+                    data_source,
+                    is_simulation
+                )
+                VALUES (
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid,
+                    @portId,
+                    'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid,
+                    27.4,
+                    10,
+                    60,
+                    27,
+                    90,
+                    0.8,
+                    'Simulation critical risk',
+                    NOW(),
+                    NOW(),
+                    'SIMULATION_DEMO',
+                    TRUE
+                );
+
+            INSERT INTO operational.risk_assessments (
+                    id,
+                    weather_reading_id,
+                    port_id,
+                    simulation_session_id,
+                    wind_risk_level,
+                    rain_risk_level,
+                    visibility_risk_level,
+                    final_risk_level,
+                    previous_risk_level,
+                    level_changed,
+                    dominant_factor,
+                    assessment_summary,
+                    evaluated_at,
+                    is_simulation
+                )
+                VALUES (
+                    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'::uuid,
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid,
+                    @portId,
+                    'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid,
+                    'CRITICAL',
+                    'CRITICAL',
+                    'CRITICAL',
+                    'CRITICAL',
+                    'LOW',
+                    TRUE,
+                    'WIND',
+                    'Simulation must not drive dashboard risk.',
+                    NOW(),
+                    TRUE
+                );
+
+            UPDATE operational.ports
+                SET current_risk_level = 'CRITICAL',
+                    current_operation_mode = 'STOP'
+                WHERE id = @portId;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("portId", port.PortId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task CleanupDashboardRiskIsolationAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            DELETE FROM operational.risk_assessments
+            WHERE id IN (
+                'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'::uuid,
+                'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'::uuid
+            );
+            DELETE FROM operational.weather_readings
+            WHERE id IN (
+                'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid,
+                'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid
+            );
+            DELETE FROM operational.simulation_sessions
+            WHERE id = 'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid;
+            DELETE FROM operational.simulation_datasets
+            WHERE id = 'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        await ResetPrimaryPortStateAsync(cancellationToken);
+    }
+
     public async Task<SimulationSessionSnapshot> GetSimulationSessionSnapshotAsync(
         Guid sessionId,
         CancellationToken cancellationToken = default)

@@ -15,10 +15,19 @@ export type DashboardSummary = {
 };
 
 export type WeatherSnapshot = {
+  beaufortNumber?: number | null;
+  dataSource?: string | null;
   humidityPct: number;
+  observedAt?: string | null;
+  pressureHpa?: number | null;
   rainfall1hMm: number;
+  recordedAt?: string | null;
   temperatureC: number;
   visibilityKm: number;
+  weatherCode?: number | null;
+  weatherDescription?: string | null;
+  windDirectionDeg?: number | null;
+  windGustMs?: number | null;
   windSpeedMs: number;
 };
 
