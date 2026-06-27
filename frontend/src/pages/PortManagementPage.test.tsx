@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PortManagementPage } from "./PortManagementPage";
-import { deletePortZone, getPortZones, getPorts, updatePortZone } from "../services/portService";
+import { deletePortZone, getPortZones, getPorts, updatePort, updatePortZone } from "../services/portService";
 import type { PortSummary, PortZone } from "../types/port";
 
 vi.mock("../services/portService", () => ({
@@ -11,6 +11,7 @@ vi.mock("../services/portService", () => ({
   deletePortZone: vi.fn(),
   getPortZones: vi.fn(),
   getPorts: vi.fn(),
+  updatePort: vi.fn(),
   updatePortZone: vi.fn()
 }));
 
@@ -19,6 +20,8 @@ const ports: PortSummary[] = [{
   currentOperationMode: "NORMAL",
   currentRiskLevel: "LOW",
   isActive: true,
+  latitude: 16.1228,
+  longitude: 108.2144,
   portCode: "DNTSA",
   portId: "port-dntsa",
   portName: "Cang Tien Sa",
@@ -110,6 +113,33 @@ describe("PortManagementPage", () => {
       zoneType: "YARD"
     });
     expect(getPortZones).toHaveBeenCalledTimes(2);
+  });
+
+  it("updates the selected port details and reloads the port list", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPorts).mockResolvedValue(ports);
+    vi.mocked(getPortZones).mockResolvedValue(zones);
+    vi.mocked(updatePort).mockResolvedValue({ ...ports[0], portName: "Cảng Tiên Sa mới" });
+
+    renderDetailPage();
+
+    await screen.findByText("Cang Tien Sa");
+    await user.clear(screen.getByLabelText("Tên cảng"));
+    await user.type(screen.getByLabelText("Tên cảng"), "Cảng Tiên Sa mới");
+    await user.click(screen.getByRole("button", { name: "Lưu thông tin cảng" }));
+
+    expect(updatePort).toHaveBeenCalledWith("port-dntsa", {
+      address: null,
+      code: "DNTSA",
+      isActive: true,
+      latitude: 16.1228,
+      longitude: 108.2144,
+      name: "Cảng Tiên Sa mới",
+      timezone: "Asia/Ho_Chi_Minh",
+      weatherSource: "OPENWEATHER",
+      weatherStationId: null
+    });
+    expect(getPorts).toHaveBeenCalledTimes(1);
   });
 
   it("deletes a zone after confirmation and reloads the zone table", async () => {

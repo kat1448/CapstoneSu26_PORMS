@@ -505,6 +505,15 @@
   width: 100%;
 }
 
+.simulation-map-marker-shell {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  width: max-content;
+}
+
 .simulation-map-marker {
   background: color-mix(in srgb, var(--risk-color) 22%, white);
   border: 2px solid var(--risk-color);
@@ -524,8 +533,24 @@
   width: 10px;
 }
 
-.simulation-map-marker.is-running::before,
-.simulation-map-marker.is-running::after {
+.simulation-map-marker-label {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(15, 39, 60, 0.12);
+  border-radius: 999px;
+  box-shadow: 0 8px 18px rgba(15, 39, 60, 0.12);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  max-width: 120px;
+  overflow: hidden;
+  padding: 3px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.simulation-map-marker-shell.is-running .simulation-map-marker::before,
+.simulation-map-marker-shell.is-running .simulation-map-marker::after {
   animation: simulation-map-pulse 1.8s infinite;
   border: 2px solid var(--risk-color);
   border-radius: 50%;
@@ -535,7 +560,7 @@
   position: absolute;
 }
 
-.simulation-map-marker.is-running::after {
+.simulation-map-marker-shell.is-running .simulation-map-marker::after {
   animation-delay: 0.6s;
 }
 

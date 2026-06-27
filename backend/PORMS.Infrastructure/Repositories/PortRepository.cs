@@ -54,6 +54,48 @@ public sealed class PortRepository
         return results;
     }
 
+    public async Task<PortSummaryReadModel?> GetPortAsync(Guid portId, CancellationToken cancellationToken)
+    {
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+
+        const string sql = """
+            SELECT state.port_id,
+                   state.port_code,
+                   state.port_name,
+                   port.latitude,
+                   port.longitude,
+                   state.current_risk_level,
+                   state.current_operation_mode,
+                   state.is_active,
+                   state.active_alert_count,
+                   state.last_weather_fetch_at
+            FROM operational.v_port_current_state state
+            JOIN operational.ports port ON port.id = state.port_id
+            WHERE state.port_id = @portId;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("portId", portId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new PortSummaryReadModel(
+            reader.GetGuid(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetDecimal(3),
+            reader.GetDecimal(4),
+            reader.GetString(5),
+            reader.GetString(6),
+            reader.GetBoolean(7),
+            reader.GetInt64(8),
+            reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9));
+    }
+
     public async Task<PortSummaryReadModel> CreatePortAsync(CreatePortReadModel input, CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
@@ -158,6 +200,87 @@ public sealed class PortRepository
 
         await transaction.CommitAsync(cancellationToken);
         return created;
+    }
+
+    public async Task<PortSummaryReadModel?> UpdatePortAsync(Guid portId, UpdatePortReadModel input, CancellationToken cancellationToken)
+    {
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+
+        const string sql = """
+            UPDATE operational.ports
+            SET code = @code,
+                name = @name,
+                address = @address,
+                latitude = @latitude,
+                longitude = @longitude,
+                timezone = @timezone,
+                weather_source = @weatherSource,
+                weather_station_id = @weatherStationId,
+                is_active = @isActive,
+                updated_at = NOW()
+            WHERE id = @portId;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("portId", portId);
+        command.Parameters.AddWithValue("code", input.Code.Trim().ToUpperInvariant());
+        command.Parameters.AddWithValue("name", input.Name.Trim());
+        command.Parameters.AddWithValue("address", string.IsNullOrWhiteSpace(input.Address) ? DBNull.Value : input.Address.Trim());
+        command.Parameters.AddWithValue("latitude", input.Latitude);
+        command.Parameters.AddWithValue("longitude", input.Longitude);
+        command.Parameters.AddWithValue("timezone", input.Timezone.Trim());
+        command.Parameters.AddWithValue("weatherSource", input.WeatherSource.Trim());
+        command.Parameters.AddWithValue("weatherStationId", string.IsNullOrWhiteSpace(input.WeatherStationId) ? DBNull.Value : input.WeatherStationId.Trim());
+        command.Parameters.AddWithValue("isActive", input.IsActive);
+
+        var rowsUpdated = await command.ExecuteNonQueryAsync(cancellationToken);
+        if (rowsUpdated == 0)
+        {
+            return null;
+        }
+
+        const string selectSql = """
+            SELECT port.id,
+                   port.code,
+                   port.name,
+                   port.latitude,
+                   port.longitude,
+                   port.current_risk_level,
+                   port.current_operation_mode,
+                   port.is_active,
+                   COALESCE(alerts.active_alert_count, 0) AS active_alert_count,
+                   port.last_weather_fetch_at
+            FROM operational.ports port
+            LEFT JOIN (
+                SELECT port_id,
+                       COUNT(*) AS active_alert_count
+                FROM operational.alerts
+                WHERE expires_at IS NULL OR expires_at > NOW()
+                GROUP BY port_id
+            ) alerts ON alerts.port_id = port.id
+            WHERE port.id = @portId
+              AND port.deleted_at IS NULL;
+            """;
+
+        await using var selectCommand = new NpgsqlCommand(selectSql, connection);
+        selectCommand.Parameters.AddWithValue("portId", portId);
+        await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new PortSummaryReadModel(
+            reader.GetGuid(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetDecimal(3),
+            reader.GetDecimal(4),
+            reader.GetString(5),
+            reader.GetString(6),
+            reader.GetBoolean(7),
+            reader.GetInt64(8),
+            reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9));
     }
 
     public async Task<IReadOnlyList<ZoneReadModel>> GetZonesAsync(Guid portId, CancellationToken cancellationToken)
@@ -343,6 +466,17 @@ public sealed record CreatePortReadModel(
     string? WeatherStationId,
     bool IsActive,
     IReadOnlyList<CreateZoneReadModel> Zones);
+
+public sealed record UpdatePortReadModel(
+    string Code,
+    string Name,
+    string? Address,
+    decimal Latitude,
+    decimal Longitude,
+    string Timezone,
+    string WeatherSource,
+    string? WeatherStationId,
+    bool IsActive);
 
 public sealed record CreateZoneReadModel(
     string Name,
