@@ -19,6 +19,16 @@ public sealed class PortController : ControllerBase
         return Ok(ports.Select(ToResponse).ToList());
     }
 
+    [HttpGet("{portId:guid}")]
+    public async Task<ActionResult<PortSummaryResponse>> GetPort(
+        Guid portId,
+        [FromServices] PortRepository repository,
+        CancellationToken cancellationToken)
+    {
+        var port = await repository.GetPortAsync(portId, cancellationToken);
+        return port is null ? NotFound() : Ok(ToResponse(port));
+    }
+
     [HttpPost]
     public async Task<ActionResult<PortSummaryResponse>> CreatePort(
         CreatePortRequest request,
@@ -53,6 +63,36 @@ public sealed class PortController : ControllerBase
             cancellationToken);
 
         return CreatedAtAction(nameof(GetPorts), new { portId = created.PortId }, ToResponse(created));
+    }
+
+    [HttpPut("{portId:guid}")]
+    public async Task<ActionResult<PortSummaryResponse>> UpdatePort(
+        Guid portId,
+        UpdatePortRequest request,
+        [FromServices] PortRepository repository,
+        CancellationToken cancellationToken)
+    {
+        var validationError = ValidateUpdatePort(request);
+        if (validationError is not null)
+        {
+            return BadRequest(new { message = validationError });
+        }
+
+        var updated = await repository.UpdatePortAsync(
+            portId,
+            new UpdatePortReadModel(
+                request.Code,
+                request.Name,
+                request.Address,
+                request.Latitude,
+                request.Longitude,
+                request.Timezone,
+                request.WeatherSource,
+                request.WeatherStationId,
+                request.IsActive),
+            cancellationToken);
+
+        return updated is null ? NotFound() : Ok(ToResponse(updated));
     }
 
     [HttpGet("{portId:guid}/zones")]
@@ -167,6 +207,26 @@ public sealed class PortController : ControllerBase
             {
                 return zoneError;
             }
+        }
+
+        return null;
+    }
+
+    private static string? ValidateUpdatePort(UpdatePortRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+        {
+            return "Mã cảng và tên cảng là bắt buộc.";
+        }
+
+        if (request.Latitude is < -90 or > 90 || request.Longitude is < -180 or > 180)
+        {
+            return "Tọa độ cảng không hợp lệ.";
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Timezone) || string.IsNullOrWhiteSpace(request.WeatherSource))
+        {
+            return "Timezone và nguồn thời tiết là bắt buộc.";
         }
 
         return null;

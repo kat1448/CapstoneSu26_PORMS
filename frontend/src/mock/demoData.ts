@@ -450,6 +450,28 @@ export function getPortZones(portId: string): PortZone[] {
   return clone(demoState.zonesByPortId[portId] ?? []);
 }
 
+export function updatePort(portId: string, input: DemoPortUpdateInput): PortSummary {
+  let updated: PortSummary | null = null;
+  demoState.ports = demoState.ports.map((port) => {
+    if (port.portId !== portId) {
+      return port;
+    }
+
+    updated = {
+      ...port,
+      isActive: input.isActive,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      portCode: input.code,
+      portName: input.name
+    };
+    return updated;
+  });
+
+  notify();
+  return clone(updated ?? demoState.ports.find((port) => port.portId === portId)!);
+}
+
 export function getSimulationSnapshot(): SimulationSnapshot {
   return clone(demoState.simulation);
 }
@@ -468,6 +490,18 @@ export type DemoUserCreateInput = {
 };
 
 export type DemoUserUpdateInput = Omit<DemoUserCreateInput, "password">;
+
+export type DemoPortUpdateInput = {
+  address?: string | null;
+  code: string;
+  isActive: boolean;
+  latitude: number;
+  longitude: number;
+  name: string;
+  timezone: string;
+  weatherSource: string;
+  weatherStationId?: string | null;
+};
 
 function portNameFromId(portId: string | null | undefined): string {
   if (!portId) {

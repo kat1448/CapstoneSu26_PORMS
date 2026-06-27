@@ -10,6 +10,7 @@ const DEFAULT_CENTER: [number, number] = [16.1228, 108.2144];
 
 type GisMapCardProps = {
   onSelectPort: (portId: string) => void;
+  onResetSelection: () => void;
   portName: string;
   ports: PortSummary[];
   selectedPortId: string;
@@ -100,6 +101,10 @@ function portPopupContent(port: MappablePort) {
 }
 
 function createZoneMapPoints(zones: PortZone[], selectedPort?: MappablePort): ZoneMapPoint[] {
+  if (!selectedPort) {
+    return [];
+  }
+
   const radius = 0.0012;
   return zones.flatMap<ZoneMapPoint>((zone, index) => {
     if (hasZoneCoordinates(zone)) {
@@ -109,10 +114,6 @@ function createZoneMapPoints(zones: PortZone[], selectedPort?: MappablePort): Zo
         displayLongitude: zone.longitude,
         usesPortCoordinates: false
       }];
-    }
-
-    if (!selectedPort) {
-      return [];
     }
 
     const angle = (Math.PI * 2 * index) / Math.max(zones.length, 1);
@@ -145,12 +146,16 @@ function coordinateLabel(zone: PortZone) {
   return `${zone.latitude.toFixed(6)}, ${zone.longitude.toFixed(6)}`;
 }
 
-export function GisMapCard({ onSelectPort, portName, ports, selectedPortId, zones }: GisMapCardProps) {
+export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, selectedPortId, zones }: GisMapCardProps) {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const mappablePorts = useMemo(() => ports.filter(hasPortCoordinates), [ports]);
   const selectedMappablePort = useMemo(
     () => mappablePorts.find((port) => port.portId === selectedPortId),
+    [mappablePorts, selectedPortId]
+  );
+  const visiblePorts = useMemo(
+    () => selectedPortId ? mappablePorts.filter((port) => port.portId === selectedPortId) : mappablePorts,
     [mappablePorts, selectedPortId]
   );
   const zoneMapPoints = useMemo(
@@ -176,16 +181,16 @@ export function GisMapCard({ onSelectPort, portName, ports, selectedPortId, zone
     mapRef.current = map;
 
     L.tileLayer(OSM_TILE_URL, {
-      attribution: "© OpenStreetMap",
+      attribution: "",
       maxZoom: 18,
       minZoom: 8
     }).addTo(map);
 
     const points = [
-      ...mappablePorts.map((port) => [port.latitude, port.longitude] as [number, number]),
+      ...visiblePorts.map((port) => [port.latitude, port.longitude] as [number, number]),
       ...zoneMapPoints.map((zone) => [zone.displayLatitude, zone.displayLongitude] as [number, number])
     ];
-    mappablePorts.forEach((port, index) => {
+    visiblePorts.forEach((port, index) => {
       const marker = L.marker([port.latitude, port.longitude], {
         icon: createPortMarkerIcon(port, index, selectedPortId)
       });
@@ -225,9 +230,19 @@ export function GisMapCard({ onSelectPort, portName, ports, selectedPortId, zone
       <div className="card-head">
         <div>
           <h3>Bản đồ GIS {portName}</h3>
-          <p>Tọa độ cảng và khu vực theo cảng đang chọn · © OpenStreetMap</p>
+          <p>Tọa độ cảng và khu vực theo cảng đang chọn</p>
         </div>
-        <Badge tone={mappablePorts.length > 0 ? "info" : "muted"}>{mappablePorts.length} cảng</Badge>
+        <div className="card-head-actions">
+          <button
+            type="button"
+            className="button button-secondary button-small"
+            onClick={onResetSelection}
+            disabled={!selectedPortId}
+          >
+            Hiển thị tất cả cảng
+          </button>
+          <Badge tone={mappablePorts.length > 0 ? "info" : "muted"}>{mappablePorts.length} cảng</Badge>
+        </div>
       </div>
 
       <div className="gis-map-shell">

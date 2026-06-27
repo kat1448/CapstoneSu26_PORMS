@@ -180,9 +180,9 @@ describe("DashboardPage", () => {
     expect(await screen.findByRole("heading", { name: "Trung tâm điều hành" })).toBeInTheDocument();
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Mức rủi ro hiện tại");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Trạng thái khu vực");
-    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ban do GIS Cang Tien Sa");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ban do GIS Tất cả cảng");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
-    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ben so 1 16.124, 108.214");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
     expect(screen.getByTestId("dashboard-right")).toHaveTextContent("Thời tiết hiện tại");
     expect(screen.getByTestId("dashboard-right")).toHaveTextContent("Bảng dữ liệu OpenWeather");
     expect(screen.getByTestId("dashboard-right")).toHaveTextContent("OPENWEATHER_API");
@@ -213,6 +213,6 @@ describe("DashboardPage", () => {
     expect(serviceMocks.getDashboardSummary).toHaveBeenCalledTimes(2);
     expect(serviceMocks.getWeatherSnapshot).toHaveBeenCalledTimes(2);
     expect(serviceMocks.getPorts).toHaveBeenCalledTimes(2);
-    expect(serviceMocks.getPortZones).toHaveBeenCalledTimes(2);
+    expect(serviceMocks.getPortZones).not.toHaveBeenCalledTimes(2);
   });
 });

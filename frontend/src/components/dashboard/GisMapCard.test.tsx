@@ -115,23 +115,23 @@ afterEach(() => {
 
 describe("GisMapCard", () => {
   it("renders OpenStreetMap markers for ports and the selected port zones", () => {
-    render(<GisMapCard onSelectPort={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zones} />);
+    render(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zones} />);
 
     expect(screen.getByRole("heading", { name: /GIS Cang Tien Sa/ })).toBeInTheDocument();
     expect(screen.getByText("Ben so 1")).toBeInTheDocument();
     expect(screen.getByText("16.124000, 108.214000")).toBeInTheDocument();
     expect(leafletState.tileLayers).toContain("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
-    expect(leafletState.markers).toHaveLength(4);
+    expect(leafletState.markers).toHaveLength(3);
     expect(leafletState.markers[0].coordinates).toEqual([16.124, 108.214]);
     expect(leafletState.markers[0].popup).toContain("Cang Tien Sa");
-    expect(leafletState.markers[2].coordinates).toEqual([16.124, 108.214]);
-    expect(leafletState.markers[2].popup).toContain("Ben so 1");
+    expect(leafletState.markers[2].coordinates).toEqual([16.123, 108.216]);
+    expect(leafletState.markers[2].popup).toContain("Bai container A");
   });
 
   it("selects a port when its map marker is clicked", () => {
     const onSelectPort = vi.fn();
 
-    render(<GisMapCard onSelectPort={onSelectPort} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zones} />);
+    render(<GisMapCard onSelectPort={onSelectPort} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="" zones={zones} />);
 
     leafletState.markers[1].click?.();
 
@@ -139,22 +139,21 @@ describe("GisMapCard", () => {
   });
 
   it("places zones around the selected port when zone coordinates are missing", () => {
-    render(<GisMapCard onSelectPort={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zonesWithoutCoordinates} />);
+    render(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zonesWithoutCoordinates} />);
 
-    expect(leafletState.markers).toHaveLength(4);
-    expect(leafletState.markers[2].coordinates[1]).not.toBe(108.214);
-    expect(leafletState.markers[2].popup).toContain("Ben so 1");
-    expect(leafletState.markers[2].popup).toContain("toa do cang");
+    expect(leafletState.markers).toHaveLength(3);
+    expect(leafletState.markers[1].coordinates[1]).not.toBe(108.214);
+    expect(leafletState.markers[1].popup).toContain("Ben so 1");
+    expect(leafletState.markers[1].popup).toContain("toa do cang");
     expect(screen.getAllByText(/Theo toa do cang/)).toHaveLength(2);
   });
 
-  it("still renders the OpenStreetMap canvas and zone markers when no port has coordinates", () => {
-    render(<GisMapCard onSelectPort={vi.fn()} portName="Cang Tien Sa" ports={[]} selectedPortId="port-1" zones={zones} />);
+  it("still renders the OpenStreetMap canvas when no port has coordinates", () => {
+    render(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={[]} selectedPortId="port-1" zones={zones} />);
 
     expect(screen.getByRole("status")).toHaveTextContent("GIS");
     expect(screen.getByRole("application", { name: /GIS Cang Tien Sa/ })).toBeInTheDocument();
     expect(leafletState.tileLayers).toContain("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
-    expect(leafletState.markers).toHaveLength(2);
-    expect(leafletState.markers[0].popup).toContain("Ben so 1");
+    expect(leafletState.markers).toHaveLength(0);
   });
 });

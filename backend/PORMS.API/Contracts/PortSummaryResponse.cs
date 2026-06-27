@@ -26,6 +26,17 @@ public sealed record CreatePortRequest(
     bool IsActive,
     IReadOnlyList<CreateZoneRequest> Zones);
 
+public sealed record UpdatePortRequest(
+    string Code,
+    string Name,
+    string? Address,
+    decimal Latitude,
+    decimal Longitude,
+    string Timezone,
+    string WeatherSource,
+    string? WeatherStationId,
+    bool IsActive);
+
 public sealed record CreateZoneRequest(
     string Name,
     string ZoneType,

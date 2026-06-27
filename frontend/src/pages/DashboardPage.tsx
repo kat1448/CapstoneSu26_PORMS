@@ -24,6 +24,7 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
   const [ports, setPorts] = useState<PortSummary[]>([]);
   const [selectedPortId, setSelectedPortId] = useState("");
   const selectedPortIdRef = useRef("");
+  const showAllPortsRef = useRef(true);
   const [zones, setZones] = useState<PortZone[]>([]);
 
   const loadDashboard = useCallback(async () => {
@@ -35,11 +36,18 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
       getPorts()
     ]);
     const availablePortIds = new Set(nextPorts.map((port) => port.portId));
-    const currentSelectedPortId = selectedPortIdRef.current;
-    const nextSelectedPortId = currentSelectedPortId && availablePortIds.has(currentSelectedPortId)
-      ? currentSelectedPortId
-      : nextSummary.portId;
-    const nextZones = await getPortZones(nextSelectedPortId);
+    let nextSelectedPortId = selectedPortIdRef.current && availablePortIds.has(selectedPortIdRef.current)
+      ? selectedPortIdRef.current
+      : "";
+    let nextZones: PortZone[] = [];
+
+    if (showAllPortsRef.current) {
+      nextSelectedPortId = "";
+      nextZones = [];
+    } else if (nextSelectedPortId) {
+      nextZones = await getPortZones(nextSelectedPortId);
+    }
+
     setSummary(nextSummary);
     setWeather(nextWeather);
     setTrend(nextTrend);
@@ -51,9 +59,17 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
   }, []);
 
   const handleSelectPort = useCallback(async (portId: string) => {
+    showAllPortsRef.current = false;
     selectedPortIdRef.current = portId;
     setSelectedPortId(portId);
     setZones(await getPortZones(portId));
+  }, []);
+
+  const handleResetSelection = useCallback(() => {
+    showAllPortsRef.current = true;
+    selectedPortIdRef.current = "";
+    setSelectedPortId("");
+    setZones([]);
   }, []);
 
   useEffect(() => { void loadDashboard(); }, [loadDashboard, refreshKey]);
@@ -68,7 +84,7 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
   }
 
   const selectedPort = ports.find((port) => port.portId === selectedPortId);
-  const mapPortName = selectedPort?.portName ?? summary.portName;
+  const mapPortName = selectedPort?.portName ?? (selectedPortId ? summary.portName : "Tất cả cảng");
   const zoneStatusPortId = selectedPortId || summary.portId;
 
   return (
@@ -87,9 +103,10 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
           </div>
           <GisMapCard
             onSelectPort={(portId) => { void handleSelectPort(portId); }}
+            onResetSelection={handleResetSelection}
             portName={mapPortName}
             ports={ports}
-            selectedPortId={zoneStatusPortId}
+            selectedPortId={selectedPortId}
             zones={zones}
           />
           <RiskTrendChart currentRiskLevel={summary.currentRiskLevel} points={trend} />
