@@ -1437,6 +1437,24 @@ CROSS JOIN (VALUES
 WHERE p.code = 'DNTSA'
 ON CONFLICT DO NOTHING;
 
+UPDATE operational.zones z
+SET latitude = coords.latitude,
+    longitude = coords.longitude
+FROM operational.ports p
+CROSS JOIN (
+    VALUES
+        (1, 16.124000, 108.214000),
+        (2, 16.124500, 108.214500),
+        (3, 16.123000, 108.216000),
+        (4, 16.122000, 108.217000),
+        (5, 16.125000, 108.213000),
+        (6, 16.121000, 108.215000)
+) AS coords(display_order, latitude, longitude)
+WHERE z.port_id = p.id
+  AND p.code = 'DNTSA'
+  AND z.display_order = coords.display_order
+  AND (z.latitude IS NULL OR z.longitude IS NULL);
+
 -- ── 7.6 Admin user mặc định ────────────────────────────────────────────────
 -- Password mặc định: Admin@2026! — BẮT BUỘC đổi trước khi deploy production
 -- Hash: bcrypt('Admin@2026!', 12) — tạo bằng lệnh:

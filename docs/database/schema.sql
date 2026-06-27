@@ -1153,7 +1153,7 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO operational.zones (
     port_id, name, zone_type, description,
-    capacity_value, capacity_unit, display_order
+    capacity_value, capacity_unit, display_order, latitude, longitude
 )
 SELECT
     p.id,
@@ -1162,17 +1162,19 @@ SELECT
     z.description,
     z.capacity_value,
     z.capacity_unit,
-    z.display_order
+    z.display_order,
+    z.latitude,
+    z.longitude
 FROM operational.ports p
 CROSS JOIN (
     VALUES
-        ('Bến số 1', 'DOCK', 'Cầu tàu container chính', 2, 'tàu', 1),
-        ('Bến số 2', 'DOCK', 'Cầu tàu hàng tổng hợp', 2, 'tàu', 2),
-        ('Bãi container A', 'YARD', 'Bãi container nhập', 1200, 'TEU', 3),
-        ('Bãi container B', 'YARD', 'Bãi container xuất', 980, 'TEU', 4),
-        ('Cổng chính', 'GATE', 'Cổng kiểm soát phương tiện', 8, 'làn', 5),
-        ('Kho tổng hợp', 'WAREHOUSE', 'Kho hàng tổng hợp', 5000, 'm2', 6)
-) AS z(name, zone_type, description, capacity_value, capacity_unit, display_order)
+        ('Bến số 1', 'DOCK', 'Cầu tàu container chính', 2, 'tàu', 1, 16.124000, 108.214000),
+        ('Bến số 2', 'DOCK', 'Cầu tàu hàng tổng hợp', 2, 'tàu', 2, 16.124500, 108.214500),
+        ('Bãi container A', 'YARD', 'Bãi container nhập', 1200, 'TEU', 3, 16.123000, 108.216000),
+        ('Bãi container B', 'YARD', 'Bãi container xuất', 980, 'TEU', 4, 16.122000, 108.217000),
+        ('Cổng chính', 'GATE', 'Cổng kiểm soát phương tiện', 8, 'làn', 5, 16.125000, 108.213000),
+        ('Kho tổng hợp', 'WAREHOUSE', 'Kho hàng tổng hợp', 5000, 'm2', 6, 16.121000, 108.215000)
+) AS z(name, zone_type, description, capacity_value, capacity_unit, display_order, latitude, longitude)
 WHERE p.code = 'DNTSA'
 ON CONFLICT DO NOTHING;
 
