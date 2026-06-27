@@ -331,6 +331,17 @@
   width: 36px;
 }
 
+.gis-marker.is-selected {
+  box-shadow: 0 0 0 4px rgba(23, 115, 255, 0.22), 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+.gis-marker-zone {
+  border-width: 2px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.74), 0 2px 8px rgba(0, 0, 0, 0.22);
+  height: 18px;
+  width: 18px;
+}
+
 .gis-popup-title {
   font-size: 12px;
   font-weight: 700;

@@ -37,7 +37,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
   const [snapshot, setSnapshot] = useState<SimulationSnapshot | null>(null);
   const [datasets, setDatasets] = useState<SimulationDatasetSummary[]>([]);
   const [baseMapPoints, setBaseMapPoints] = useState<SimulationMapPoint[]>([]);
-  const [selectedDatasetId, setSelectedDatasetId] = useState("");
+  const [selectedDatasetIds, setSelectedDatasetIds] = useState<string[]>([]);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
@@ -58,6 +58,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
     }]
   });
   const [running, setRunning] = useState(false);
+  const [runningDatasetIndex, setRunningDatasetIndex] = useState(0);
   const [savingDataset, setSavingDataset] = useState(false);
 
   useEffect(() => {
@@ -70,7 +71,11 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
       .then((items) => {
         if (!active) return;
         setDatasets(items);
-        setSelectedDatasetId((current) => current || items[0]?.datasetId || "");
+        setSelectedDatasetIds((current) => {
+          const available = new Set(items.map((item) => item.datasetId));
+          const kept = current.filter((id) => available.has(id));
+          return kept.length ? kept : items[0]?.datasetId ? [items[0].datasetId] : [];
+        });
       })
       .catch(() => {
         if (active) setDatasets([]);
@@ -145,7 +150,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
     try {
       const created = await createSimulationDataset(datasetForm);
       setDatasets((current) => [created, ...current.filter((item) => item.datasetId !== created.datasetId)]);
-      setSelectedDatasetId(created.datasetId);
+      setSelectedDatasetIds([created.datasetId]);
       setSaveMessage("Đã lưu dữ liệu mô phỏng");
       setCreateModalOpen(false);
     } catch (error) {
@@ -156,15 +161,31 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
   }
 
   async function handleRunDataset() {
-    if (!selectedDatasetId) return;
+    if (selectedDatasetIds.length === 0) return;
     setRunning(true);
+    setRunningDatasetIndex(0);
     try {
-      const run = await runSimulationDataset(selectedDatasetId);
-      setSnapshot(await getSimulationSnapshot());
-      setResult(await getSimulationResult(run.sessionId));
+      let latestRun = null as Awaited<ReturnType<typeof runSimulationDataset>> | null;
+      for (const [index, datasetId] of selectedDatasetIds.entries()) {
+        setRunningDatasetIndex(index + 1);
+        latestRun = await runSimulationDataset(datasetId);
+        setSnapshot(await getSimulationSnapshot());
+      }
+      if (latestRun) {
+        setResult(await getSimulationResult(latestRun.sessionId));
+      }
     } finally {
       setRunning(false);
+      setRunningDatasetIndex(0);
     }
+  }
+
+  function toggleDatasetSelection(datasetId: string) {
+    setSelectedDatasetIds((current) => (
+      current.includes(datasetId)
+        ? current.filter((id) => id !== datasetId)
+        : [...current, datasetId]
+    ));
   }
 
   const firstSnapshot = datasetForm.snapshots[0];
@@ -450,19 +471,31 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
             <h3>Thiết lập mô phỏng</h3>
             <p>Bộ dữ liệu replay phục vụ demo vận hành</p>
           </div>
-          <label className="field-label" htmlFor="simulation-dataset">Bộ dữ liệu</label>
-          <select
-            className="input select-input"
-            disabled={isRunning}
-            id="simulation-dataset"
-            onChange={(event) => setSelectedDatasetId(event.target.value)}
-            value={selectedDatasetId}
-          >
-            {datasets.length === 0 ? <option value="">Chưa có dữ liệu</option> : null}
+          <div className="field-label">Bộ dữ liệu</div>
+          <div className="simulation-dataset-checklist" aria-label="Bộ dữ liệu">
+            {datasets.length === 0 ? (
+              <div className="simulation-dataset-empty">Chưa có dữ liệu</div>
+            ) : null}
             {datasets.map((dataset) => (
-              <option key={dataset.datasetId} value={dataset.datasetId}>{dataset.name}</option>
+              <label className="simulation-dataset-option" key={dataset.datasetId}>
+                <input
+                  checked={selectedDatasetIds.includes(dataset.datasetId)}
+                  disabled={isRunning}
+                  onChange={() => toggleDatasetSelection(dataset.datasetId)}
+                  type="checkbox"
+                />
+                <span>
+                  <strong>{dataset.name}</strong>
+                  <small>{dataset.portCode} · {dataset.snapshotCount} mẫu</small>
+                </span>
+              </label>
             ))}
-          </select>
+          </div>
+          <p className="simulation-selection-hint">
+            {selectedDatasetIds.length > 0
+              ? `Đã chọn ${selectedDatasetIds.length} bộ dữ liệu${runningDatasetIndex ? ` · Đang chạy ${runningDatasetIndex}/${selectedDatasetIds.length}` : ""}`
+              : "Chưa chọn bộ dữ liệu mô phỏng"}
+          </p>
           <label className="field-label" htmlFor="simulation-speed">Tốc độ phát lại</label>
           <select className="input select-input" disabled={isRunning} id="simulation-speed">
             <option>1x - Thực tế</option>
@@ -485,7 +518,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
           </button>
           <button
             className="button button-secondary simulation-action"
-            disabled={running || !selectedDatasetId}
+            disabled={isRunning || selectedDatasetIds.length === 0}
             onClick={handleRunDataset}
             type="button"
           >

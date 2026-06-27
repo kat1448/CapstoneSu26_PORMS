@@ -6,6 +6,7 @@ import { DashboardPage } from "./DashboardPage";
 const serviceMocks = vi.hoisted(() => ({
   getAlerts: vi.fn(),
   getDashboardSummary: vi.fn(),
+  getPorts: vi.fn(),
   getPortZones: vi.fn(),
   getRiskTrend: vi.fn(),
   getWeatherSnapshot: vi.fn()
@@ -21,18 +22,31 @@ vi.mock("../services/alertService", () => ({
   getAlerts: serviceMocks.getAlerts
 }));
 vi.mock("../services/portService", () => ({
+  getPorts: serviceMocks.getPorts,
   getPortZones: serviceMocks.getPortZones
 }));
 vi.mock("../components/dashboard/GisMapCard", () => ({
   GisMapCard: ({
+    onSelectPort,
+    ports,
     portName,
+    selectedPortId,
     zones
   }: {
+    onSelectPort: (portId: string) => void;
+    ports: Array<{ latitude?: number | null; longitude?: number | null; portId: string; portName: string }>;
     portName: string;
+    selectedPortId: string;
     zones: Array<{ latitude?: number | null; longitude?: number | null; zoneName: string }>;
   }) => (
     <article>
       <h3>Ban do GIS {portName}</h3>
+      <div>Selected {selectedPortId}</div>
+      {ports.map((port) => (
+        <button key={port.portId} onClick={() => onSelectPort(port.portId)} type="button">
+          {port.portName} {port.latitude}, {port.longitude}
+        </button>
+      ))}
       {zones.map((zone) => (
         <div key={zone.zoneName}>
           {zone.zoneName} {zone.latitude}, {zone.longitude}
@@ -55,6 +69,32 @@ function mockDashboardServices() {
     visibilityKm: 4.2,
     windSpeedMs: 18.4
   });
+  serviceMocks.getPorts.mockResolvedValue([
+    {
+      activeAlertCount: 1,
+      currentOperationMode: "LIMITED",
+      currentRiskLevel: "HIGH",
+      isActive: true,
+      latitude: 16.124,
+      longitude: 108.214,
+      portCode: "DNTSA",
+      portId: "port-1",
+      portName: "Cang Tien Sa",
+      updatedAtLabel: "Vua cap nhat"
+    },
+    {
+      activeAlertCount: 0,
+      currentOperationMode: "NORMAL",
+      currentRiskLevel: "LOW",
+      isActive: true,
+      latitude: 16.165,
+      longitude: 108.1915,
+      portCode: "DNLH",
+      portId: "port-2",
+      portName: "Cang Lien Chieu",
+      updatedAtLabel: "5 phut truoc"
+    }
+  ]);
   serviceMocks.getRiskTrend.mockResolvedValue([
     { hourLabel: "00:00", riskScore: 1 },
     { hourLabel: "06:00", riskScore: 2 },
@@ -141,6 +181,7 @@ describe("DashboardPage", () => {
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Mức rủi ro hiện tại");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Trạng thái khu vực");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ban do GIS Cang Tien Sa");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ben so 1 16.124, 108.214");
     expect(screen.getByTestId("dashboard-right")).toHaveTextContent("Thời tiết hiện tại");
     expect(screen.getByTestId("dashboard-right")).toHaveTextContent("Bảng dữ liệu OpenWeather");
@@ -171,6 +212,7 @@ describe("DashboardPage", () => {
 
     expect(serviceMocks.getDashboardSummary).toHaveBeenCalledTimes(2);
     expect(serviceMocks.getWeatherSnapshot).toHaveBeenCalledTimes(2);
+    expect(serviceMocks.getPorts).toHaveBeenCalledTimes(2);
     expect(serviceMocks.getPortZones).toHaveBeenCalledTimes(2);
   });
 });

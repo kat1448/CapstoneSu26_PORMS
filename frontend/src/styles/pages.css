@@ -615,6 +615,70 @@
   background: #fff;
 }
 
+.select-input[multiple] {
+  min-height: 108px;
+  padding: 8px;
+}
+
+.select-input[multiple] option {
+  border-radius: 6px;
+  padding: 7px 8px;
+}
+
+.simulation-selection-hint {
+  line-height: 1.45;
+  margin-top: -6px !important;
+}
+
+.simulation-dataset-checklist {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  max-height: 190px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.simulation-dataset-option {
+  align-items: flex-start;
+  border-radius: 7px;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  padding: 8px;
+}
+
+.simulation-dataset-option:hover {
+  background: #f6f9fb;
+}
+
+.simulation-dataset-option input {
+  margin: 2px 0 0;
+}
+
+.simulation-dataset-option span,
+.simulation-dataset-option strong,
+.simulation-dataset-option small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.simulation-dataset-option strong {
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.simulation-dataset-option small,
+.simulation-dataset-empty {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .sim-dataset-card {
   background: #f6f9fb;
   border-radius: 8px;
