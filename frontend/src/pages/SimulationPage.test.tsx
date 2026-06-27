@@ -86,7 +86,8 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.mocked(getSimulationDatasets).mockResolvedValue([
-    { datasetId: "dataset-1", description: "Bao lon", name: "Bao Da Nang", portCode: "DNTSA", snapshotCount: 2 }
+    { datasetId: "dataset-1", description: "Bao lon", name: "Bao Da Nang", portCode: "DNTSA", snapshotCount: 2 },
+    { datasetId: "dataset-2", description: "Mua lon", name: "Mua cuc bo", portCode: "DNTSA", snapshotCount: 1 }
   ]);
   vi.mocked(getSimulationMapPoints).mockResolvedValue([
     { latitude: 16.116235, longitude: 108.230378, riskLevel: "LOW", zoneId: "zone-1", zoneName: "acc1" },
@@ -202,8 +203,40 @@ describe("SimulationPage", () => {
 
     expect(createSimulationDataset).toHaveBeenCalled();
     expect(await screen.findByText("Đã lưu dữ liệu mô phỏng")).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Kich ban moi" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Bộ dữ liệu")).toHaveValue("dataset-new");
+    expect(screen.getByRole("checkbox", { name: /Kich ban moi/ })).toBeChecked();
     expect(screen.getByRole("button", { name: "Chạy dữ liệu đã chọn" })).toBeInTheDocument();
+  });
+
+  it("runs every selected simulation dataset in sequence", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getSimulationSnapshot).mockResolvedValue({ ...snapshot, status: "IDLE", progressPercent: 0 });
+    vi.mocked(runSimulationDataset)
+      .mockResolvedValueOnce({
+        finalRiskLevel: "HIGH",
+        generatedTaskCount: 1,
+        sessionId: "session-1"
+      })
+      .mockResolvedValueOnce({
+        finalRiskLevel: "CRITICAL",
+        generatedTaskCount: 2,
+        sessionId: "session-2"
+      });
+
+    render(
+      <MemoryRouter>
+        <SimulationPage refreshKey={0} />
+      </MemoryRouter>
+    );
+
+    const firstDataset = await screen.findByRole("checkbox", { name: /Bao Da Nang/ });
+    const secondDataset = screen.getByRole("checkbox", { name: /Mua cuc bo/ });
+    expect(firstDataset).toBeChecked();
+
+    await user.click(secondDataset);
+    await user.click(screen.getByRole("button", { name: "Chạy dữ liệu đã chọn" }));
+
+    expect(runSimulationDataset).toHaveBeenNthCalledWith(1, "dataset-1");
+    expect(runSimulationDataset).toHaveBeenNthCalledWith(2, "dataset-2");
+    expect(getSimulationResult).toHaveBeenCalledWith("session-2");
   });
 });

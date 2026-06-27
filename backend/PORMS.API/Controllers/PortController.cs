@@ -113,6 +113,8 @@ public sealed class PortController : ControllerBase
             PortId = port.PortId,
             PortCode = port.PortCode,
             PortName = port.PortName,
+            Latitude = port.Latitude,
+            Longitude = port.Longitude,
             CurrentRiskLevel = port.CurrentRiskLevel,
             CurrentOperationMode = port.CurrentOperationMode,
             IsActive = port.IsActive,

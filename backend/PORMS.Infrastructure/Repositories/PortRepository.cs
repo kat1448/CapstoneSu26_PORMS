@@ -17,16 +17,19 @@ public sealed class PortRepository
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
 
         const string sql = """
-            SELECT port_id,
-                   port_code,
-                   port_name,
-                   current_risk_level,
-                   current_operation_mode,
-                   is_active,
-                   active_alert_count,
-                   last_weather_fetch_at
-            FROM operational.v_port_current_state
-            ORDER BY port_code;
+            SELECT state.port_id,
+                   state.port_code,
+                   state.port_name,
+                   port.latitude,
+                   port.longitude,
+                   state.current_risk_level,
+                   state.current_operation_mode,
+                   state.is_active,
+                   state.active_alert_count,
+                   state.last_weather_fetch_at
+            FROM operational.v_port_current_state state
+            JOIN operational.ports port ON port.id = state.port_id
+            ORDER BY state.port_code;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
@@ -39,11 +42,13 @@ public sealed class PortRepository
                 reader.GetGuid(0),
                 reader.GetString(1),
                 reader.GetString(2),
-                reader.GetString(3),
-                reader.GetString(4),
-                reader.GetBoolean(5),
-                reader.GetInt64(6),
-                reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7)));
+                reader.GetDecimal(3),
+                reader.GetDecimal(4),
+                reader.GetString(5),
+                reader.GetString(6),
+                reader.GetBoolean(7),
+                reader.GetInt64(8),
+                reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9)));
         }
 
         return results;
@@ -80,6 +85,8 @@ public sealed class PortRepository
             RETURNING id,
                       code,
                       name,
+                      latitude,
+                      longitude,
                       current_risk_level,
                       current_operation_mode,
                       is_active,
@@ -103,11 +110,13 @@ public sealed class PortRepository
             reader.GetGuid(0),
             reader.GetString(1),
             reader.GetString(2),
-            reader.GetString(3),
-            reader.GetString(4),
-            reader.GetBoolean(5),
+            reader.GetDecimal(3),
+            reader.GetDecimal(4),
+            reader.GetString(5),
+            reader.GetString(6),
+            reader.GetBoolean(7),
             0,
-            reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6));
+            reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8));
         await reader.DisposeAsync();
 
         const string insertZoneSql = """
@@ -315,6 +324,8 @@ public sealed record PortSummaryReadModel(
     Guid PortId,
     string PortCode,
     string PortName,
+    decimal Latitude,
+    decimal Longitude,
     string CurrentRiskLevel,
     string CurrentOperationMode,
     bool IsActive,

@@ -5,6 +5,8 @@ export type PortSummary = {
   currentOperationMode: OperationMode;
   currentRiskLevel: RiskLevel;
   isActive: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
   portCode: string;
   portId: string;
   portName: string;
