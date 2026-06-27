@@ -36,6 +36,22 @@ public sealed class ReadApiSmokeTests
     }
 
     [Fact]
+    public async Task PortById_ReturnSuccessAndContainSeededPort()
+    {
+        var client = _factory.CreateClient();
+        var port = await _factory.GetPrimaryPortAsync();
+
+        var response = await client.GetAsync($"/api/ports/{port.PortId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var detail = await response.Content.ReadFromJsonAsync<PortSummaryResponse>();
+        Assert.NotNull(detail);
+        Assert.Equal(port.PortId, detail!.PortId);
+        Assert.Equal(port.PortCode, detail.PortCode);
+    }
+
+    [Fact]
     public async Task PortZones_ReturnSuccessAndContainSeededZones()
     {
         var client = _factory.CreateClient();
@@ -50,6 +66,34 @@ public sealed class ReadApiSmokeTests
         Assert.NotEmpty(zones!);
         Assert.All(zones!, zone => Assert.Equal(port.PortId, zone.PortId));
         Assert.Contains(zones!, zone => zone.ZoneType is "DOCK" or "YARD" or "GATE" or "WAREHOUSE");
+    }
+
+    [Fact]
+    public async Task UpdatePort_ReturnsSuccessAndUpdatesPort()
+    {
+        var client = _factory.CreateClient();
+        var port = await _factory.GetPrimaryPortAsync();
+
+        var request = new UpdatePortRequest(
+            port.PortCode,
+            "Updated port name",
+            "Updated address",
+            16.1228m,
+            108.2144m,
+            "Asia/Ho_Chi_Minh",
+            "OPENWEATHER",
+            null,
+            true);
+
+        var response = await client.PutAsJsonAsync($"/api/ports/{port.PortId}", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var updated = await response.Content.ReadFromJsonAsync<PortSummaryResponse>();
+        Assert.NotNull(updated);
+        Assert.Equal(port.PortId, updated!.PortId);
+        Assert.Equal(port.PortCode, updated.PortCode);
+        Assert.Equal("Updated port name", updated.PortName);
     }
 
     [Fact]

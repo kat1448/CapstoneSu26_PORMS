@@ -18,13 +18,26 @@ const riskColors: Record<string, string> = {
   MEDIUM: "#e9a11b"
 };
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function createIcon(point: SimulationMapPoint, running: boolean) {
   const color = riskColors[point.riskLevel] ?? riskColors.LOW;
+  const label = escapeHtml(point.zoneName || "Điểm mô phỏng");
   return L.divIcon({
     className: "",
-    html: `<div class="simulation-map-marker ${running ? "is-running" : ""}" style="--risk-color:${color}"><span></span></div>`,
-    iconAnchor: [18, 18],
-    iconSize: [36, 36]
+    html: `<div class="simulation-map-marker-shell ${running ? "is-running" : ""}" style="--risk-color:${color}">
+      <div class="simulation-map-marker"><span></span></div>
+      <div class="simulation-map-marker-label">${label}</div>
+    </div>`,
+    iconAnchor: [60, 18],
+    iconSize: [120, 56]
   });
 }
 
@@ -54,7 +67,7 @@ export function SimulationMap({ points, running }: SimulationMapProps) {
     markerLayerRef.current = L.layerGroup().addTo(map);
 
     L.tileLayer(OSM_TILE_URL, {
-      attribution: "© OpenStreetMap",
+      attribution: "",
       maxZoom: 18,
       minZoom: 11
     }).addTo(map);

@@ -20,7 +20,7 @@ import type {
   SimulationResult,
   SimulationSnapshot
 } from "../types/simulation";
-import type { PortZone } from "../types/port";
+import type { PortSummary, PortZone } from "../types/port";
 
 type SimulationPageProps = {
   refreshKey: number;
@@ -37,6 +37,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
   const [snapshot, setSnapshot] = useState<SimulationSnapshot | null>(null);
   const [datasets, setDatasets] = useState<SimulationDatasetSummary[]>([]);
   const [baseMapPoints, setBaseMapPoints] = useState<SimulationMapPoint[]>([]);
+  const [portsForMap, setPortsForMap] = useState<PortSummary[]>([]);
   const [selectedDatasetIds, setSelectedDatasetIds] = useState<string[]>([]);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -64,6 +65,21 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
   useEffect(() => {
     void getSimulationSnapshot().then(setSnapshot);
   }, [demoVersion, refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    getPorts()
+      .then((ports) => {
+        if (active) setPortsForMap(ports);
+      })
+      .catch(() => {
+        if (active) setPortsForMap([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -189,7 +205,16 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
   }
 
   const firstSnapshot = datasetForm.snapshots[0];
-  const mapPoints = result?.mapPoints.length ? result.mapPoints : baseMapPoints;
+  const fallbackPoints = portsForMap
+    .filter((port) => Number.isFinite(port.latitude) && Number.isFinite(port.longitude))
+    .map((port) => ({
+      latitude: port.latitude ?? 0,
+      longitude: port.longitude ?? 0,
+      riskLevel: "LOW" as const,
+      zoneId: port.portId,
+      zoneName: port.portName
+    }));
+  const mapPoints = result?.mapPoints.length ? result.mapPoints : baseMapPoints.length ? baseMapPoints : fallbackPoints;
 
   return (
     <section className="page-grid simulation-page">

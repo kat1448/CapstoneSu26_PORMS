@@ -105,6 +105,8 @@ beforeEach(() => {
       currentOperationMode: "LIMITED",
       currentRiskLevel: "HIGH",
       isActive: true,
+      latitude: 16.12,
+      longitude: 108.22,
       portCode: "DNTSA",
       portId: "port-1",
       portName: "Cang Tien Sa",
@@ -149,6 +151,25 @@ describe("SimulationPage", () => {
     expect(screen.getByRole("heading", { name: "Thiết lập mô phỏng" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Luồng sự kiện mô phỏng" })).toBeInTheDocument();
     expect(screen.getAllByText("HIGH").length).toBeGreaterThan(0);
+  });
+
+  it("falls back to ports when simulation points are empty", async () => {
+    vi.mocked(getSimulationSnapshot).mockResolvedValue(snapshot);
+    vi.mocked(getSimulationMapPoints).mockResolvedValue([]);
+    vi.mocked(getSimulationResult).mockResolvedValue({
+      dangerousZones: [],
+      mapPoints: [],
+      sessionId: "session-1",
+      tasks: []
+    });
+
+    render(
+      <MemoryRouter>
+        <SimulationPage refreshKey={0} />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Cang Tien Sa")).toBeInTheDocument();
   });
 
   it("runs the demo from the settings panel", async () => {
