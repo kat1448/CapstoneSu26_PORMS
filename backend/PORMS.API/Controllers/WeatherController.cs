@@ -18,10 +18,19 @@ public sealed class WeatherController : ControllerBase
         return Ok(new WeatherSnapshotResponse
         {
             WindSpeedMs = weather.WindSpeedMs,
+            BeaufortNumber = weather.BeaufortNumber,
+            WindDirectionDeg = weather.WindDirectionDeg,
+            WindGustMs = weather.WindGustMs,
             Rainfall1hMm = weather.Rainfall1hMm,
             VisibilityKm = weather.VisibilityKm,
             TemperatureC = weather.TemperatureC,
-            HumidityPct = weather.HumidityPct
+            HumidityPct = weather.HumidityPct,
+            PressureHpa = weather.PressureHpa,
+            WeatherCode = weather.WeatherCode,
+            WeatherDescription = weather.WeatherDescription,
+            ObservedAt = weather.ObservedAt,
+            RecordedAt = weather.RecordedAt,
+            DataSource = weather.DataSource
         });
     }
 }

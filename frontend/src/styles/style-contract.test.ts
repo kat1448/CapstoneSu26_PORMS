@@ -16,4 +16,11 @@ describe("prototype style contract", () => {
     expect(css).toContain(".zone-grid");
     expect(css).toContain("@media (max-width: 780px)");
   });
+
+  it("keeps operation log timeline text inside its card", () => {
+    expect(css).toContain(".timeline-card {");
+    expect(css).toContain(".timeline-header strong");
+    expect(css).toContain("overflow-wrap: anywhere");
+    expect(css).toContain("min-width: 0");
+  });
 });

@@ -74,7 +74,11 @@ export function isRouteAllowed(role: DemoUserRole, pathname: string): boolean {
     return role !== "OPERATOR";
   }
 
-  const normalizedPath = pathname.startsWith("/ports/") ? "/ports" : pathname;
+  const normalizedPath = pathname.startsWith("/ports/")
+    ? "/ports"
+    : pathname.startsWith("/users/")
+      ? "/users"
+      : pathname;
   return navigationGroups
     .flatMap((group) => group.items)
     .some((item) => item.path === normalizedPath && item.roles.includes(role));

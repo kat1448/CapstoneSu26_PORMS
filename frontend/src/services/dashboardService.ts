@@ -1,6 +1,5 @@
 import {
   getDashboardSummary as getDashboardSummaryData,
-  getRiskTrend as getRiskTrendData,
   getWeatherSnapshot as getWeatherSnapshotData
 } from "../mock/demoData";
 import { requestJson, withMockFallback } from "./api";
@@ -21,8 +20,5 @@ export async function getWeatherSnapshot(): Promise<WeatherSnapshot> {
 }
 
 export async function getRiskTrend(): Promise<RiskTrendPoint[]> {
-  return withMockFallback(
-    () => requestJson<RiskTrendPoint[]>("/api/risk/trend"),
-    () => getRiskTrendData()
-  );
+  return requestJson<RiskTrendPoint[]>("/api/risk/trend");
 }

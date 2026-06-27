@@ -233,6 +233,40 @@
 .weather-metric { background: #f7f9fb; border-radius: 7px; padding: 10px; }
 .weather-metric span { color: var(--muted); display: block; font-size: 9px; }
 .weather-metric strong { display: block; font-size: 13px; margin-top: 4px; }
+
+.weather-data-card {
+  display: grid;
+  gap: 12px;
+}
+
+.weather-data-table {
+  border: 1px solid #e8eef4;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.weather-data-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(120px, 0.9fr) minmax(0, 1.1fr);
+  padding: 9px 10px;
+}
+
+.weather-data-row + .weather-data-row {
+  border-top: 1px solid #e8eef4;
+}
+
+.weather-data-row span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.weather-data-row strong {
+  color: var(--text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .zone-grid { display: grid; gap: 10px; grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 12px; }
 .zone-card { align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 8px; display: flex; gap: 10px; padding: 12px; }
 .zone-icon { background: #edf4fa; border-radius: 8px; color: var(--blue); display: grid; flex: none; height: 34px; place-items: center; width: 34px; }
@@ -240,6 +274,123 @@
 .zone-info strong, .zone-info small { display: block; }
 .zone-info strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zone-info small { color: var(--muted); font-size: 10px; }
+
+.gis-card {
+  display: grid;
+  gap: 12px;
+}
+
+.gis-map {
+  background: #f0f8fc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  height: 380px;
+  min-height: 380px;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.gis-map-shell {
+  min-height: 380px;
+  position: relative;
+}
+
+.gis-empty {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  color: var(--muted);
+  display: flex;
+  justify-content: center;
+  left: 50%;
+  max-width: calc(100% - 32px);
+  padding: 12px 16px;
+  position: absolute;
+  text-align: center;
+  top: 16px;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 410;
+}
+
+.gis-marker {
+  align-items: center;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  color: #fff;
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  height: 36px;
+  justify-content: center;
+  transition: background-color .3s ease;
+  width: 36px;
+}
+
+.gis-popup-title {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.gis-popup-meta {
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 4px;
+}
+
+.gis-data-table {
+  border: 1px solid #e8eef4;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.gis-data-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(150px, 1.2fr) 80px 96px minmax(100px, 1fr) minmax(160px, 1fr);
+  min-width: 760px;
+  padding: 10px 12px;
+}
+
+.gis-data-row + .gis-data-row {
+  border-top: 1px solid #e8eef4;
+}
+
+.gis-data-head {
+  background: #f7f9fb;
+  color: #506476;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.gis-data-row strong,
+.gis-data-row span {
+  font-size: 12px;
+}
+
+.leaflet-control {
+  border-radius: 7px !important;
+}
+
+.leaflet-control-zoom {
+  border: 1px solid var(--line) !important;
+}
+
+.leaflet-bar a {
+  background: #fff !important;
+  border-bottom: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+.leaflet-bar a:hover {
+  background: #f1f5f9 !important;
+}
 
 .metric-card {
   @apply border border-slate-100;
@@ -284,6 +435,111 @@
   fill: var(--muted);
   font-size: 10px;
   text-anchor: middle;
+}
+
+.risk-trend-empty {
+  align-items: center;
+  background: #f7fafc;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  height: 190px;
+  justify-content: center;
+}
+
+.risk-trend-svg {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.risk-trend-grid line {
+  stroke: #e8eef4;
+  stroke-width: 1;
+}
+
+.risk-trend-grid text,
+.risk-trend-hour {
+  fill: #6b7f91;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.risk-trend-grid text {
+  text-anchor: start;
+}
+
+.risk-trend-area {
+  fill: url("#riskTrendArea") !important;
+  stroke: none !important;
+}
+
+.risk-trend-line {
+  fill: none;
+  stroke: #245b8a;
+  stroke-width: 3;
+}
+
+.risk-trend-point {
+  outline: none;
+}
+
+.risk-trend-hover-line {
+  opacity: 0;
+  stroke: #64798a;
+  stroke-dasharray: 4 4;
+  stroke-width: 1;
+  transition: opacity 160ms ease;
+}
+
+.risk-trend-dot-halo {
+  fill: #fff;
+  opacity: 0;
+  stroke: #245b8a;
+  stroke-width: 2;
+  transition: opacity 160ms ease;
+}
+
+.risk-trend-dot {
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.risk-trend-tooltip {
+  opacity: 0;
+  overflow: visible;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.risk-trend-tooltip div {
+  background: #102a3a;
+  border-radius: 7px;
+  color: #fff;
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px;
+  text-align: center;
+}
+
+.risk-trend-tooltip strong {
+  font-size: 11px;
+}
+
+.risk-trend-tooltip span {
+  color: #d5e3ea;
+  font-size: 9px;
+}
+
+.risk-trend-point:hover .risk-trend-hover-line,
+.risk-trend-point:focus .risk-trend-hover-line,
+.risk-trend-point:hover .risk-trend-dot-halo,
+.risk-trend-point:focus .risk-trend-dot-halo,
+.risk-trend-point:hover .risk-trend-tooltip,
+.risk-trend-point:focus .risk-trend-tooltip {
+  opacity: 1;
 }
 
 .list-stack,
@@ -332,10 +588,42 @@
   color: var(--muted);
 }
 
+.timeline-card {
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+  padding: 16px;
+}
+
 .timeline-card .timeline-item,
 .side-card .timeline-item {
   border-left: 3px solid #dbe4ed;
+  min-width: 0;
   padding-left: 14px;
+}
+
+.timeline-card .timeline-header,
+.timeline-card .timeline-meta {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.timeline-header strong {
+  line-height: 1.4;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.timeline-meta span,
+.timeline-meta .badge {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.timeline-header small {
+  flex: none;
+  white-space: nowrap;
 }
 
 .tone-danger {
