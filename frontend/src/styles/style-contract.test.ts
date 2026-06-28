@@ -23,4 +23,9 @@ describe("prototype style contract", () => {
     expect(css).toContain("overflow-wrap: anywhere");
     expect(css).toContain("min-width: 0");
   });
+
+  it("keeps BI KPI card padding stronger than the shared card reset", () => {
+    expect(css).toContain(".bi-kpi-grid > .card.bi-kpi-card.bi-card-pad");
+    expect(css).toContain("padding: 32px 32px 32px 32px");
+  });
 });

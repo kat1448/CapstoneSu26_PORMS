@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSimulationDataset,
+  deleteSimulationDataset,
+  getSimulationDataset,
   getSimulationDatasets,
   getSimulationMapPoints,
   getSimulationResult,
-  runSimulationDataset
+  runSimulationDataset,
+  updateSimulationDataset
 } from "./simulationService";
 import type { CreateSimulationDatasetInput } from "../types/simulation";
 
@@ -81,6 +84,66 @@ describe("simulationService", () => {
       }),
       method: "POST"
     }));
+  });
+
+  it("updates and deletes simulation datasets through the real API", async () => {
+    const input: CreateSimulationDatasetInput = {
+      description: "Kich ban da sua",
+      name: "Bao test updated",
+      portCode: "DNTSA",
+      snapshots: [{
+        beaufortNumber: 7,
+        rainfall1hMm: 18,
+        snapshotNumber: 1,
+        visibilityKm: 6,
+        windSpeedMs: 15,
+        zoneId: ""
+      }]
+    };
+    const dataset = { datasetId: "dataset-1", description: input.description, name: input.name, portCode: "DNTSA", snapshotCount: 1 };
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(dataset), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(updateSimulationDataset("dataset-1", input)).resolves.toEqual(dataset);
+    await expect(deleteSimulationDataset("dataset-1")).resolves.toBeUndefined();
+
+    expect(fetch).toHaveBeenNthCalledWith(1, "http://localhost:5000/api/simulation/datasets/dataset-1", expect.objectContaining({
+      body: JSON.stringify({
+        ...input,
+        snapshots: [{ ...input.snapshots[0], zoneId: null }]
+      }),
+      method: "PUT"
+    }));
+    expect(fetch).toHaveBeenNthCalledWith(2, "http://localhost:5000/api/simulation/datasets/dataset-1", expect.objectContaining({
+      method: "DELETE"
+    }));
+  });
+
+  it("loads a simulation dataset detail for editing", async () => {
+    const detail = {
+      datasetId: "dataset-1",
+      description: "Kich ban",
+      name: "Bao test",
+      portCode: "DNTSA",
+      snapshotCount: 1,
+      snapshots: [{
+        beaufortNumber: 8,
+        rainfall1hMm: 28,
+        snapshotNumber: 1,
+        visibilityKm: 4,
+        windSpeedMs: 18,
+        zoneId: "zone-1"
+      }]
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }));
+
+    await expect(getSimulationDataset("dataset-1")).resolves.toEqual(detail);
+
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:5000/api/simulation/datasets/dataset-1",
+      expect.any(Object)
+    );
   });
 
   it("loads simulation result with dangerous zones and generated tasks", async () => {

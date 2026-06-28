@@ -102,6 +102,66 @@ public sealed class SimulationRepository
         return results;
     }
 
+    public async Task<SimulationDatasetDetailReadModel?> GetDatasetAsync(Guid datasetId, CancellationToken cancellationToken)
+    {
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        const string sql = """
+            SELECT id,
+                   name,
+                   description,
+                   COALESCE(metadata ->> 'portCode', 'DNTSA') AS port_code,
+                   snapshot_count,
+                   COALESCE(metadata ->> 'source', '') AS source
+            FROM operational.simulation_datasets
+            WHERE id = @datasetId
+              AND is_active = TRUE;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("datasetId", datasetId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return null;
+        }
+
+        var summary = new SimulationDatasetSummaryReadModel(
+            reader.GetGuid(0),
+            reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.GetString(3),
+            reader.GetInt32(4));
+        var isBackendDemo = string.Equals(reader.GetString(5), "backend-demo", StringComparison.OrdinalIgnoreCase);
+
+        await reader.DisposeAsync();
+        var snapshots = await GetDatasetSnapshotsAsync(connection, transaction, datasetId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var detailSnapshots = snapshots.Count > 0
+            ? snapshots.Select(item => new SimulationDatasetSnapshotReadModel(
+            item.SnapshotNumber,
+            item.WindSpeedMs,
+            item.BeaufortNumber,
+            item.Rainfall1hMm,
+            item.VisibilityKm,
+            item.ZoneId)).ToList()
+            : isBackendDemo
+                ? DemoSteps.Select(item => new SimulationDatasetSnapshotReadModel(
+                    item.StepNumber,
+                    item.WindSpeedMs,
+                    item.BeaufortNumber,
+                    item.Rainfall1hMm,
+                    item.VisibilityKm,
+                    null)).ToList()
+                : [];
+
+        return new SimulationDatasetDetailReadModel(summary.DatasetId, summary.Name, summary.Description, summary.PortCode, summary.SnapshotCount, detailSnapshots);
+    }
+
     public async Task<IReadOnlyList<SimulationMapPointReadModel>> GetMapPointsAsync(CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
@@ -191,49 +251,86 @@ public sealed class SimulationRepository
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        const string snapshotSql = """
-            INSERT INTO operational.simulation_snapshots (
-                dataset_id,
-                snapshot_number,
-                source_observed_at,
-                wind_speed_ms,
-                beaufort_number,
-                rainfall_1h_mm,
-                visibility_km,
-                raw_payload
-            )
-            VALUES (
-                @datasetId,
-                @snapshotNumber,
-                @sourceObservedAt,
-                @windSpeedMs,
-                @beaufortNumber,
-                @rainfall1hMm,
-                @visibilityKm,
-                @rawPayload
-            );
-            """;
-
-        foreach (var snapshot in orderedSnapshots)
-        {
-            await using var command = new NpgsqlCommand(snapshotSql, connection, transaction);
-            command.Parameters.AddWithValue("datasetId", datasetId);
-            command.Parameters.AddWithValue("snapshotNumber", snapshot.SnapshotNumber);
-            command.Parameters.AddWithValue("sourceObservedAt", now.AddMinutes(snapshot.SnapshotNumber * 5));
-            command.Parameters.AddWithValue("windSpeedMs", snapshot.WindSpeedMs);
-            command.Parameters.AddWithValue("beaufortNumber", snapshot.BeaufortNumber);
-            command.Parameters.AddWithValue("rainfall1hMm", snapshot.Rainfall1hMm);
-            command.Parameters.AddWithValue("visibilityKm", snapshot.VisibilityKm.HasValue ? snapshot.VisibilityKm.Value : DBNull.Value);
-            command.Parameters.Add("rawPayload", NpgsqlDbType.Jsonb).Value = JsonSerializer.Serialize(new
-            {
-                zoneId = snapshot.ZoneId,
-                source = "manual-entry"
-            });
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        }
+        await WriteDatasetSnapshotsAsync(connection, transaction, datasetId, orderedSnapshots, now, cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
         return new SimulationDatasetSummaryReadModel(datasetId, input.Name.Trim(), input.Description, port.PortCode, orderedSnapshots.Count);
+    }
+
+    public async Task<SimulationDatasetSummaryReadModel?> UpdateDatasetAsync(
+        Guid datasetId,
+        CreateSimulationDatasetReadModel input,
+        CancellationToken cancellationToken)
+    {
+        var requestedPortCode = input.PortCode.Trim().ToUpperInvariant();
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var port = await GetPortAsync(connection, transaction, requestedPortCode, cancellationToken)
+            ?? throw new InvalidOperationException($"Port {requestedPortCode} was not found.");
+        var orderedSnapshots = input.Snapshots.OrderBy(item => item.SnapshotNumber).ToList();
+        var now = DateTimeOffset.UtcNow;
+
+        const string datasetSql = """
+            UPDATE operational.simulation_datasets
+            SET name = @name,
+                description = @description,
+                snapshot_count = @snapshotCount,
+                starts_at = @startsAt,
+                ends_at = @endsAt,
+                metadata = @metadata,
+                updated_at = NOW()
+            WHERE id = @id
+              AND is_active = TRUE;
+            """;
+
+        await using (var command = new NpgsqlCommand(datasetSql, connection, transaction))
+        {
+            command.Parameters.AddWithValue("id", datasetId);
+            command.Parameters.AddWithValue("name", input.Name.Trim());
+            command.Parameters.AddWithValue("description", string.IsNullOrWhiteSpace(input.Description) ? DBNull.Value : input.Description.Trim());
+            command.Parameters.AddWithValue("snapshotCount", orderedSnapshots.Count);
+            command.Parameters.AddWithValue("startsAt", now);
+            command.Parameters.AddWithValue("endsAt", now.AddMinutes(Math.Max(orderedSnapshots.Count, 1) * 5));
+            command.Parameters.Add("metadata", NpgsqlDbType.Jsonb).Value = JsonSerializer.Serialize(new
+            {
+                portCode = port.PortCode,
+                source = "manual-entry"
+            });
+
+            if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return null;
+            }
+        }
+
+        await using (var command = new NpgsqlCommand("DELETE FROM operational.simulation_snapshots WHERE dataset_id = @datasetId;", connection, transaction))
+        {
+            command.Parameters.AddWithValue("datasetId", datasetId);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await WriteDatasetSnapshotsAsync(connection, transaction, datasetId, orderedSnapshots, now, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return new SimulationDatasetSummaryReadModel(datasetId, input.Name.Trim(), input.Description, port.PortCode, orderedSnapshots.Count);
+    }
+
+    public async Task<bool> DeleteDatasetAsync(Guid datasetId, CancellationToken cancellationToken)
+    {
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+        const string sql = """
+            UPDATE operational.simulation_datasets
+            SET is_active = FALSE,
+                updated_at = NOW()
+            WHERE id = @datasetId
+              AND is_active = TRUE;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("datasetId", datasetId);
+        return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
     }
 
     public async Task<SimulationRunResult?> RunDatasetAsync(Guid datasetId, CancellationToken cancellationToken)
@@ -302,7 +399,7 @@ public sealed class SimulationRepository
 
             if (risk.FinalRiskLevel is "HIGH" or "CRITICAL")
             {
-                await InsertAlertAsync(connection, transaction, Guid.NewGuid(), port.PortId, riskAssessmentId, sessionId, new SimulationStep(snapshot.SnapshotNumber, risk.WindRiskLevel, risk.RainRiskLevel, risk.VisibilityRiskLevel, risk.FinalRiskLevel, risk.DominantFactor, operationMode, snapshot.WindSpeedMs, snapshot.BeaufortNumber, snapshot.Rainfall1hMm, snapshot.VisibilityKm ?? 0, risk.Summary), observedAt, cancellationToken);
+                await InsertAlertAsync(connection, transaction, Guid.NewGuid(), port.PortId, zone?.ZoneId, riskAssessmentId, sessionId, port.PortCode, zone?.ZoneName ?? port.PortCode, new SimulationStep(snapshot.SnapshotNumber, risk.WindRiskLevel, risk.RainRiskLevel, risk.VisibilityRiskLevel, risk.FinalRiskLevel, risk.DominantFactor, operationMode, snapshot.WindSpeedMs, snapshot.BeaufortNumber, snapshot.Rainfall1hMm, snapshot.VisibilityKm ?? 0, risk.Summary), observedAt, cancellationToken);
                 generatedAlertCount++;
                 generatedTaskCount += await InsertSimulationTasksAsync(connection, transaction, port.PortId, zone, sessionId, riskAssessmentId, risk.FinalRiskLevel, cancellationToken);
             }
@@ -375,16 +472,25 @@ public sealed class SimulationRepository
 
         var dangerousZones = new List<SimulationDangerousZoneReadModel>();
         const string dangerousSql = """
-            SELECT DISTINCT ON (z.id)
-                   z.id,
-                   z.name,
-                   r.final_risk_level::text,
-                   r.assessment_summary
-            FROM operational.risk_assessments r
-            JOIN operational.zones z ON z.id = r.zone_id
-            WHERE r.simulation_session_id = @sessionId
-              AND r.final_risk_level IN ('HIGH', 'CRITICAL')
-            ORDER BY z.id, r.evaluated_at DESC;
+            WITH latest_zone_risk AS (
+                SELECT DISTINCT ON (z.id)
+                       z.id,
+                       z.name,
+                       r.final_risk_level,
+                       r.assessment_summary,
+                       r.evaluated_at
+                FROM operational.risk_assessments r
+                JOIN operational.zones z ON z.id = r.zone_id
+                WHERE r.simulation_session_id = @sessionId
+                ORDER BY z.id, r.evaluated_at DESC
+            )
+            SELECT id,
+                   name,
+                   final_risk_level::text,
+                   assessment_summary
+            FROM latest_zone_risk
+            WHERE final_risk_level IN ('HIGH', 'CRITICAL')
+            ORDER BY evaluated_at DESC;
             """;
         await using (var command = new NpgsqlCommand(dangerousSql, connection))
         {
@@ -398,13 +504,24 @@ public sealed class SimulationRepository
 
         var tasks = new List<SimulationGeneratedTaskReadModel>();
         const string taskSql = """
+            WITH latest_zone_risk AS (
+                SELECT DISTINCT ON (z.id)
+                       z.id,
+                       r.final_risk_level
+                FROM operational.risk_assessments r
+                JOIN operational.zones z ON z.id = r.zone_id
+                WHERE r.simulation_session_id = @sessionId
+                ORDER BY z.id, r.evaluated_at DESC
+            )
             SELECT t.task_code,
                    t.title,
                    t.priority::text,
                    z.name
             FROM operational.tasks t
             LEFT JOIN operational.zones z ON z.id = t.zone_id
+            JOIN latest_zone_risk latest ON latest.id = t.zone_id
             WHERE t.simulation_session_id = @sessionId
+              AND latest.final_risk_level IN ('HIGH', 'CRITICAL')
             ORDER BY t.created_at DESC;
             """;
         await using (var command = new NpgsqlCommand(taskSql, connection))
@@ -526,8 +643,11 @@ public sealed class SimulationRepository
                     transaction,
                     Guid.NewGuid(),
                     port.PortId,
+                    null,
                     riskAssessmentId,
                     sessionId,
+                    port.PortCode,
+                    port.PortCode,
                     step,
                     observedAt,
                     cancellationToken);
@@ -805,6 +925,56 @@ public sealed class SimulationRepository
         }
 
         return results;
+    }
+
+    private static async Task WriteDatasetSnapshotsAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid datasetId,
+        IReadOnlyList<CreateSimulationSnapshotReadModel> orderedSnapshots,
+        DateTimeOffset startsAt,
+        CancellationToken cancellationToken)
+    {
+        const string snapshotSql = """
+            INSERT INTO operational.simulation_snapshots (
+                dataset_id,
+                snapshot_number,
+                source_observed_at,
+                wind_speed_ms,
+                beaufort_number,
+                rainfall_1h_mm,
+                visibility_km,
+                raw_payload
+            )
+            VALUES (
+                @datasetId,
+                @snapshotNumber,
+                @sourceObservedAt,
+                @windSpeedMs,
+                @beaufortNumber,
+                @rainfall1hMm,
+                @visibilityKm,
+                @rawPayload
+            );
+            """;
+
+        foreach (var snapshot in orderedSnapshots)
+        {
+            await using var command = new NpgsqlCommand(snapshotSql, connection, transaction);
+            command.Parameters.AddWithValue("datasetId", datasetId);
+            command.Parameters.AddWithValue("snapshotNumber", snapshot.SnapshotNumber);
+            command.Parameters.AddWithValue("sourceObservedAt", startsAt.AddMinutes(snapshot.SnapshotNumber * 5));
+            command.Parameters.AddWithValue("windSpeedMs", snapshot.WindSpeedMs);
+            command.Parameters.AddWithValue("beaufortNumber", snapshot.BeaufortNumber);
+            command.Parameters.AddWithValue("rainfall1hMm", snapshot.Rainfall1hMm);
+            command.Parameters.AddWithValue("visibilityKm", snapshot.VisibilityKm.HasValue ? snapshot.VisibilityKm.Value : DBNull.Value);
+            command.Parameters.Add("rawPayload", NpgsqlDbType.Jsonb).Value = JsonSerializer.Serialize(new
+            {
+                zoneId = snapshot.ZoneId,
+                source = "manual-entry"
+            });
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 
     private static async Task<ZoneContext?> GetFirstZoneAsync(
@@ -1355,16 +1525,28 @@ public sealed class SimulationRepository
         NpgsqlTransaction transaction,
         Guid alertId,
         Guid portId,
+        Guid? zoneId,
         Guid riskAssessmentId,
         Guid sessionId,
+        string portCode,
+        string targetName,
         SimulationStep step,
-        DateTimeOffset createdAt,
+        DateTimeOffset simulatedObservedAt,
         CancellationToken cancellationToken)
     {
+        var createdAt = DateTimeOffset.UtcNow;
+        var operationModeLabel = step.OperationMode switch
+        {
+            "STOP" => "Dừng khai thác",
+            "LIMITED" => "Hạn chế khai thác",
+            _ => "Vận hành bình thường"
+        };
+
         const string sql = """
             INSERT INTO operational.alerts (
                 id,
                 port_id,
+                zone_id,
                 risk_assessment_id,
                 alert_type,
                 severity,
@@ -1379,6 +1561,7 @@ public sealed class SimulationRepository
             VALUES (
                 @id,
                 @portId,
+                @zoneId,
                 @riskAssessmentId,
                 'SIMULATION',
                 CAST(@severity AS operational.alert_severity_enum),
@@ -1395,20 +1578,37 @@ public sealed class SimulationRepository
         await using var command = new NpgsqlCommand(sql, connection, transaction);
         command.Parameters.AddWithValue("id", alertId);
         command.Parameters.AddWithValue("portId", portId);
+        command.Parameters.AddWithValue("zoneId", zoneId.HasValue ? zoneId.Value : DBNull.Value);
         command.Parameters.AddWithValue("riskAssessmentId", riskAssessmentId);
         command.Parameters.AddWithValue("severity", step.FinalRiskLevel);
-        command.Parameters.AddWithValue("title", $"Simulation {step.FinalRiskLevel.ToLowerInvariant()} risk alert");
-        command.Parameters.AddWithValue("message", $"Port conditions reached {step.FinalRiskLevel} during demo simulation.");
+        command.Parameters.AddWithValue("title", $"Cảnh báo mô phỏng {step.FinalRiskLevel} tại {targetName}");
+        command.Parameters.AddWithValue("message", $"{targetName} ({portCode}) đạt mức {step.FinalRiskLevel}: {LocalizeSimulationSummary(step.WeatherDescription)}. Chế độ đề xuất: {operationModeLabel}.");
         command.Parameters.Add("context", NpgsqlDbType.Jsonb).Value = JsonSerializer.Serialize(new
         {
             step = step.StepNumber,
             riskLevel = step.FinalRiskLevel,
-            operationMode = step.OperationMode
+            operationMode = step.OperationMode,
+            portCode,
+            zoneId,
+            targetName,
+            simulatedObservedAt
         });
         command.Parameters.AddWithValue("expiresAt", createdAt.AddHours(2));
         command.Parameters.AddWithValue("sessionId", sessionId);
-        command.Parameters.AddWithValue("createdAt", createdAt.AddMinutes(3));
+        command.Parameters.AddWithValue("createdAt", createdAt);
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static string LocalizeSimulationSummary(string summary)
+    {
+        return summary switch
+        {
+            "Stable harbor conditions" => "Điều kiện cảng ổn định",
+            "Increasing wind and moderate rain" => "Gió tăng và mưa vừa",
+            "Unsafe cargo handling conditions" => "Điều kiện làm hàng không an toàn",
+            "Operations must stop immediately" => "Phải dừng khai thác ngay lập tức",
+            _ => summary
+        };
     }
 
     private static async Task InsertOperationEventAsync(
@@ -1575,6 +1775,22 @@ public sealed record SimulationDatasetSummaryReadModel(
     string? Description,
     string PortCode,
     int SnapshotCount);
+
+public sealed record SimulationDatasetDetailReadModel(
+    Guid DatasetId,
+    string Name,
+    string? Description,
+    string PortCode,
+    int SnapshotCount,
+    IReadOnlyList<SimulationDatasetSnapshotReadModel> Snapshots);
+
+public sealed record SimulationDatasetSnapshotReadModel(
+    int SnapshotNumber,
+    decimal WindSpeedMs,
+    short BeaufortNumber,
+    decimal Rainfall1hMm,
+    decimal? VisibilityKm,
+    Guid? ZoneId);
 
 public sealed record CreateSimulationDatasetReadModel(
     string Name,

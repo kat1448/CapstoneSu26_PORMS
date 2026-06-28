@@ -29,6 +29,10 @@ export type SimulationDatasetSummary = {
   snapshotCount: number;
 };
 
+export type SimulationDatasetDetail = SimulationDatasetSummary & {
+  snapshots: CreateSimulationSnapshotInput[];
+};
+
 export type CreateSimulationSnapshotInput = {
   beaufortNumber: number;
   rainfall1hMm: number;
