@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { OperationMode, RiskLevel } from "../../types/dashboard";
@@ -149,6 +149,9 @@ function coordinateLabel(zone: PortZone) {
 export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, selectedPortId, zones }: GisMapCardProps) {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const expandedMapElementRef = useRef<HTMLDivElement>(null);
+  const expandedMapRef = useRef<L.Map | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
   const mappablePorts = useMemo(() => ports.filter(hasPortCoordinates), [ports]);
   const selectedMappablePort = useMemo(
     () => mappablePorts.find((port) => port.portId === selectedPortId),
@@ -163,22 +166,13 @@ export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, se
     [selectedMappablePort, zones]
   );
 
-  useEffect(() => {
-    const element = mapElementRef.current;
-    if (!element) return undefined;
-
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
-
+  function mountMap(element: HTMLDivElement) {
     const center = selectedMappablePort
       ? [selectedMappablePort.latitude, selectedMappablePort.longitude] as [number, number]
       : mappablePorts.length === 1
         ? [mappablePorts[0].latitude, mappablePorts[0].longitude] as [number, number]
         : DEFAULT_CENTER;
     const map = L.map(element).setView(center, 13);
-    mapRef.current = map;
 
     L.tileLayer(OSM_TILE_URL, {
       attribution: "",
@@ -217,6 +211,21 @@ export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, se
 
     window.setTimeout(() => map.invalidateSize(), 0);
 
+    return map;
+  }
+
+  useEffect(() => {
+    const element = mapElementRef.current;
+    if (!element) return undefined;
+
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+
+    const map = mountMap(element);
+    mapRef.current = map;
+
     return () => {
       map.remove();
       if (mapRef.current === map) {
@@ -225,7 +234,28 @@ export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, se
     };
   }, [mappablePorts, onSelectPort, selectedMappablePort, selectedPortId, zoneMapPoints]);
 
+  useEffect(() => {
+    const element = expandedMapElementRef.current;
+    if (!isExpanded || !element) return undefined;
+
+    if (expandedMapRef.current) {
+      expandedMapRef.current.remove();
+      expandedMapRef.current = null;
+    }
+
+    const map = mountMap(element);
+    expandedMapRef.current = map;
+
+    return () => {
+      map.remove();
+      if (expandedMapRef.current === map) {
+        expandedMapRef.current = null;
+      }
+    };
+  }, [isExpanded, mappablePorts, onSelectPort, selectedMappablePort, selectedPortId, zoneMapPoints]);
+
   return (
+    <>
     <article className="card card-pad gis-card">
       <div className="card-head">
         <div>
@@ -247,6 +277,9 @@ export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, se
 
       <div className="gis-map-shell">
         <div aria-label={`Bản đồ GIS ${portName}`} className="gis-map" ref={mapElementRef} role="application" />
+        <div aria-label="Dieu khien ban do" className="map-expand-controls">
+          <button aria-label="Mo rong ban do" className="map-expand-button" onClick={() => setIsExpanded(true)} type="button">⛶</button>
+        </div>
         {mappablePorts.length === 0 ? (
           <div className="gis-empty" role="status">Chưa có tọa độ GIS cho các cảng.</div>
         ) : null}
@@ -280,5 +313,25 @@ export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, se
         ))}
       </div>
     </article>
+    {isExpanded ? (
+      <div className="map-modal-backdrop">
+        <section aria-label="Ban do GIS mo rong" className="map-modal" role="dialog">
+          <div className="map-modal-head">
+            <div>
+              <h3>Bản đồ GIS {portName}</h3>
+              <p>Không gian bản đồ mở rộng</p>
+            </div>
+            <button aria-label="Dong ban do mo rong" className="map-modal-close" onClick={() => setIsExpanded(false)} type="button">×</button>
+          </div>
+          <div className="map-modal-body">
+            <div aria-label={`Ban do GIS mo rong ${portName}`} className="map-modal-canvas" ref={expandedMapElementRef} role="application" />
+            {mappablePorts.length === 0 ? (
+              <div className="gis-empty" role="status">Chưa có tọa độ GIS cho các cảng.</div>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    ) : null}
+    </>
   );
 }

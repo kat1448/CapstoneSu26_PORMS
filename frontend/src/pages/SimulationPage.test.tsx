@@ -5,12 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SimulationPage } from "./SimulationPage";
 import {
   createSimulationDataset,
+  deleteSimulationDataset,
+  getSimulationDataset,
   getSimulationDatasets,
   getSimulationMapPoints,
   getSimulationResult,
   getSimulationSnapshot,
   runDemoSimulation,
-  runSimulationDataset
+  runSimulationDataset,
+  updateSimulationDataset
 } from "../services/simulationService";
 import { getPorts, getPortZones } from "../services/portService";
 import type { SimulationSnapshot } from "../types/simulation";
@@ -21,12 +24,15 @@ vi.mock("../hooks/useDemoRefresh", () => ({
 
 vi.mock("../services/simulationService", () => ({
   createSimulationDataset: vi.fn(),
+  deleteSimulationDataset: vi.fn(),
+  getSimulationDataset: vi.fn(),
   getSimulationDatasets: vi.fn(),
   getSimulationMapPoints: vi.fn(),
   getSimulationResult: vi.fn(),
   getSimulationSnapshot: vi.fn(),
   runDemoSimulation: vi.fn(),
-  runSimulationDataset: vi.fn()
+  runSimulationDataset: vi.fn(),
+  updateSimulationDataset: vi.fn()
 }));
 
 vi.mock("../services/portService", () => ({
@@ -259,5 +265,61 @@ describe("SimulationPage", () => {
     expect(runSimulationDataset).toHaveBeenNthCalledWith(1, "dataset-1");
     expect(runSimulationDataset).toHaveBeenNthCalledWith(2, "dataset-2");
     expect(getSimulationResult).toHaveBeenCalledWith("session-2");
+  });
+
+  it("edits and deletes simulation datasets from the settings list", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(getSimulationSnapshot).mockResolvedValue({ ...snapshot, status: "IDLE", progressPercent: 0 });
+    vi.mocked(getSimulationDataset).mockResolvedValue({
+      datasetId: "dataset-1",
+      description: "Bao lon",
+      name: "Bao Da Nang",
+      portCode: "DNTSA",
+      snapshotCount: 1,
+      snapshots: [{
+        beaufortNumber: 8,
+        rainfall1hMm: 28,
+        snapshotNumber: 1,
+        visibilityKm: 4,
+        windSpeedMs: 18,
+        zoneId: "zone-dock-1"
+      }]
+    });
+    vi.mocked(updateSimulationDataset).mockResolvedValue({
+      datasetId: "dataset-1",
+      description: "Bao lon",
+      name: "Bao Da Nang Updated",
+      portCode: "DNTSA",
+      snapshotCount: 1
+    });
+    vi.mocked(deleteSimulationDataset).mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter>
+        <SimulationPage refreshKey={0} />
+      </MemoryRouter>
+    );
+
+    await screen.findByRole("checkbox", { name: /Bao Da Nang/ });
+    await user.click(screen.getAllByRole("button", { name: "Chỉnh sửa" })[0]);
+
+    expect(getSimulationDataset).toHaveBeenCalledWith("dataset-1");
+    expect(await screen.findByRole("dialog", { name: "Chỉnh sửa dữ liệu mô phỏng" })).toBeInTheDocument();
+    const nameInput = screen.getByLabelText("Tên kịch bản");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Bao Da Nang Updated");
+    await user.click(screen.getByRole("button", { name: "Lưu dữ liệu" }));
+
+    expect(updateSimulationDataset).toHaveBeenCalledWith("dataset-1", expect.objectContaining({
+      name: "Bao Da Nang Updated"
+    }));
+    expect(await screen.findByText("Đã cập nhật dữ liệu mô phỏng")).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: "Xóa" })[0]);
+
+    expect(deleteSimulationDataset).toHaveBeenCalledWith("dataset-1");
+    expect(await screen.findByText("Đã xóa dữ liệu mô phỏng")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /Bao Da Nang Updated/ })).not.toBeInTheDocument();
   });
 });

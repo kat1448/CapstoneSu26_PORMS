@@ -77,6 +77,30 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         return (reader.GetGuid(0), reader.GetString(1));
     }
 
+    public async Task<(Guid ZoneId, string ZoneName)> GetFirstZoneAsync(Guid portId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            SELECT id, name
+            FROM operational.zones
+            WHERE port_id = @portId
+              AND deleted_at IS NULL
+            ORDER BY display_order, name
+            LIMIT 1;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("portId", portId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException($"No active test zone exists for port {portId}.");
+        }
+
+        return (reader.GetGuid(0), reader.GetString(1));
+    }
+
     public async Task SeedAlertAsync(Guid alertId, CancellationToken cancellationToken = default)
     {
         var port = await GetPrimaryPortAsync(cancellationToken);
@@ -91,7 +115,9 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                 title,
                 message,
                 context,
-                expires_at
+                expires_at,
+                created_at,
+                updated_at
             )
             VALUES (
                 @id,
@@ -101,15 +127,20 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                 'Seeded smoke alert',
                 'Created by integration test.',
                 '{"source":"integration-test"}'::jsonb,
-                NOW() + INTERVAL '1 day'
+                NOW() + INTERVAL '1 day',
+                NOW(),
+                NOW()
             )
             ON CONFLICT (id) DO UPDATE
             SET port_id = EXCLUDED.port_id,
-                event_type = EXCLUDED.event_type,
-                entity_type = EXCLUDED.entity_type,
-                summary = EXCLUDED.summary,
-                payload = EXCLUDED.payload,
-                occurred_at = EXCLUDED.occurred_at;
+                alert_type = EXCLUDED.alert_type,
+                severity = EXCLUDED.severity,
+                title = EXCLUDED.title,
+                message = EXCLUDED.message,
+                context = EXCLUDED.context,
+                expires_at = EXCLUDED.expires_at,
+                created_at = EXCLUDED.created_at,
+                updated_at = NOW();
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
@@ -487,6 +518,40 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
             reader.GetInt64(14));
     }
 
+    public async Task<AlertSnapshot> GetLatestAlertForSessionAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            SELECT id,
+                   zone_id,
+                   title,
+                   message,
+                   created_at
+            FROM operational.alerts
+            WHERE simulation_session_id = @sessionId
+            ORDER BY created_at DESC
+            LIMIT 1;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("sessionId", sessionId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException($"No alert exists for simulation session {sessionId}.");
+        }
+
+        return new AlertSnapshot(
+            reader.GetGuid(0),
+            reader.IsDBNull(1) ? null : reader.GetGuid(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetFieldValue<DateTimeOffset>(4));
+    }
+
     private async Task<NpgsqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = new NpgsqlConnection(GetConnectionString());
@@ -511,3 +576,10 @@ public sealed record SimulationSessionSnapshot(
     long AlertCount,
     long ModeLogCount,
     long OperationEventCount);
+
+public sealed record AlertSnapshot(
+    Guid AlertId,
+    Guid? ZoneId,
+    string Title,
+    string Message,
+    DateTimeOffset CreatedAt);

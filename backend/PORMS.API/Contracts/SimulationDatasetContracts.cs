@@ -9,6 +9,26 @@ public sealed class SimulationDatasetSummaryResponse
     public required int SnapshotCount { get; init; }
 }
 
+public sealed class SimulationDatasetDetailResponse
+{
+    public required Guid DatasetId { get; init; }
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+    public required string PortCode { get; init; }
+    public required int SnapshotCount { get; init; }
+    public required IReadOnlyList<SimulationDatasetSnapshotResponse> Snapshots { get; init; }
+}
+
+public sealed class SimulationDatasetSnapshotResponse
+{
+    public required int SnapshotNumber { get; init; }
+    public required decimal WindSpeedMs { get; init; }
+    public required short BeaufortNumber { get; init; }
+    public required decimal Rainfall1hMm { get; init; }
+    public decimal? VisibilityKm { get; init; }
+    public Guid? ZoneId { get; init; }
+}
+
 public sealed class CreateSimulationDatasetRequest
 {
     public required string Name { get; init; }

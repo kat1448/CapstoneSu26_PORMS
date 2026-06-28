@@ -1,9 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GisMapCard } from "./GisMapCard";
 import type { PortSummary, PortZone } from "../../types/port";
+import { GisMapCard } from "./GisMapCard";
 
 const leafletState = vi.hoisted(() => ({
+  map: null as null | Record<string, ReturnType<typeof vi.fn>>,
   markers: [] as Array<{ click: (() => void) | null; coordinates: [number, number]; options: unknown; popup: string | null }>,
   tileLayers: [] as string[]
 }));
@@ -12,12 +13,16 @@ vi.mock("leaflet", () => ({
   default: {
     divIcon: (options: unknown) => options,
     latLngBounds: (coordinates: Array<[number, number]>) => coordinates,
-    map: () => ({
-      fitBounds: vi.fn(),
-      invalidateSize: vi.fn(),
-      remove: vi.fn(),
-      setView: vi.fn().mockReturnThis()
-    }),
+    map: () => {
+      const mapApi = {
+        fitBounds: vi.fn(),
+        invalidateSize: vi.fn(),
+        remove: vi.fn(),
+        setView: vi.fn().mockReturnThis()
+      };
+      leafletState.map = mapApi;
+      return mapApi;
+    },
     marker: (coordinates: [number, number], options: unknown) => {
       const entry = { click: null as (() => void) | null, coordinates, options, popup: null as string | null };
       leafletState.markers.push(entry);
@@ -109,6 +114,7 @@ const zonesWithoutCoordinates = zones.map((zone) => ({ ...zone, latitude: null, 
 
 afterEach(() => {
   cleanup();
+  leafletState.map = null;
   leafletState.markers = [];
   leafletState.tileLayers = [];
 });
@@ -136,6 +142,19 @@ describe("GisMapCard", () => {
     leafletState.markers[1].click?.();
 
     expect(onSelectPort).toHaveBeenCalledWith("port-2");
+  });
+
+  it("opens the map in a floating window from the bottom-left control", () => {
+    render(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="" zones={zones} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mo rong ban do" }));
+
+    expect(screen.getByRole("dialog", { name: "Ban do GIS mo rong" })).toBeInTheDocument();
+    expect(screen.getByRole("application", { name: "Ban do GIS mo rong Cang Tien Sa" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Dong ban do mo rong" }));
+
+    expect(screen.queryByRole("dialog", { name: "Ban do GIS mo rong" })).not.toBeInTheDocument();
   });
 
   it("places zones around the selected port when zone coordinates are missing", () => {
