@@ -1,16 +1,19 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "../components/common/Badge";
 import { SimulationMap } from "../components/simulation/SimulationMap";
 import { useDemoRefresh } from "../hooks/useDemoRefresh";
 import {
   createSimulationDataset,
+  deleteSimulationDataset,
+  getSimulationDataset,
   getSimulationDatasets,
   getSimulationMapPoints,
   getSimulationResult,
   getSimulationSnapshot,
   runDemoSimulation,
-  runSimulationDataset
+  runSimulationDataset,
+  updateSimulationDataset
 } from "../services/simulationService";
 import { getPorts, getPortZones } from "../services/portService";
 import type {
@@ -38,9 +41,14 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
   const [datasets, setDatasets] = useState<SimulationDatasetSummary[]>([]);
   const [baseMapPoints, setBaseMapPoints] = useState<SimulationMapPoint[]>([]);
   const [portsForMap, setPortsForMap] = useState<PortSummary[]>([]);
+  const [selectedPortIdForMap, setSelectedPortIdForMap] = useState("");
+  const selectedPortIdRef = useRef("");
+  const showAllPortsRef = useRef(true);
+  const [mapZones, setMapZones] = useState<PortZone[]>([]);
   const [selectedDatasetIds, setSelectedDatasetIds] = useState<string[]>([]);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingDatasetId, setEditingDatasetId] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [formZones, setFormZones] = useState<PortZone[]>([]);
@@ -61,6 +69,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
   const [running, setRunning] = useState(false);
   const [runningDatasetIndex, setRunningDatasetIndex] = useState(0);
   const [savingDataset, setSavingDataset] = useState(false);
+  const [datasetActionId, setDatasetActionId] = useState<string | null>(null);
 
   useEffect(() => {
     void getSimulationSnapshot().then(setSnapshot);
@@ -79,6 +88,20 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
     return () => {
       active = false;
     };
+  }, []);
+
+  const handleSelectPort = useCallback(async (portId: string) => {
+    showAllPortsRef.current = false;
+    selectedPortIdRef.current = portId;
+    setSelectedPortIdForMap(portId);
+    setMapZones(await getPortZones(portId));
+  }, []);
+
+  const handleResetSelection = useCallback(() => {
+    showAllPortsRef.current = true;
+    selectedPortIdRef.current = "";
+    setSelectedPortIdForMap("");
+    setMapZones([]);
   }, []);
 
   useEffect(() => {
@@ -164,15 +187,57 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
     setSavingDataset(true);
     setSaveError("");
     try {
-      const created = await createSimulationDataset(datasetForm);
-      setDatasets((current) => [created, ...current.filter((item) => item.datasetId !== created.datasetId)]);
-      setSelectedDatasetIds([created.datasetId]);
-      setSaveMessage("Đã lưu dữ liệu mô phỏng");
+      const saved = editingDatasetId
+        ? await updateSimulationDataset(editingDatasetId, datasetForm)
+        : await createSimulationDataset(datasetForm);
+      setDatasets((current) => [saved, ...current.filter((item) => item.datasetId !== saved.datasetId)]);
+      setSelectedDatasetIds([saved.datasetId]);
+      setSaveMessage(editingDatasetId ? "Đã cập nhật dữ liệu mô phỏng" : "Đã lưu dữ liệu mô phỏng");
       setCreateModalOpen(false);
+      setEditingDatasetId(null);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Không lưu được dữ liệu mô phỏng");
     } finally {
       setSavingDataset(false);
+    }
+  }
+
+  async function handleEditDataset(datasetId: string) {
+    setDatasetActionId(datasetId);
+    setSaveMessage("");
+    setSaveError("");
+    try {
+      const dataset = await getSimulationDataset(datasetId);
+      setDatasetForm({
+        description: dataset.description,
+        name: dataset.name,
+        portCode: dataset.portCode,
+        snapshots: dataset.snapshots.length ? dataset.snapshots : datasetForm.snapshots
+      });
+      setEditingDatasetId(datasetId);
+      setCreateModalOpen(true);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Không tải được dữ liệu mô phỏng");
+    } finally {
+      setDatasetActionId(null);
+    }
+  }
+
+  async function handleDeleteDataset(dataset: SimulationDatasetSummary) {
+    if (!window.confirm(`Xóa bộ dữ liệu "${dataset.name}"?`)) return;
+
+    setDatasetActionId(dataset.datasetId);
+    setSaveMessage("");
+    setSaveError("");
+    try {
+      await deleteSimulationDataset(dataset.datasetId);
+      setDatasets((current) => current.filter((item) => item.datasetId !== dataset.datasetId));
+      setSelectedDatasetIds((current) => current.filter((id) => id !== dataset.datasetId));
+      setSaveMessage("Đã xóa dữ liệu mô phỏng");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Không xóa được dữ liệu mô phỏng");
+    } finally {
+      setDatasetActionId(null);
     }
   }
 
@@ -372,15 +437,34 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
               <h3>Bản đồ mô phỏng</h3>
               <p>Điểm thay đổi sẽ phát sáng và tỏa vòng màu theo mức rủi ro</p>
             </div>
-            <Badge tone={mapPoints.length ? "info" : "muted"}>{mapPoints.length} điểm</Badge>
+            <div className="card-head-actions">
+              <button
+                type="button"
+                className="button button-secondary button-small"
+                onClick={handleResetSelection}
+                disabled={!selectedPortIdForMap}
+              >
+                Hiển thị tất cả cảng
+              </button>
+              <Badge tone={mapPoints.length ? "info" : "muted"}>{mapPoints.length} điểm</Badge>
+            </div>
           </div>
-          <SimulationMap points={mapPoints} running={running || snapshot.status === "RUNNING"} />
+          <SimulationMap
+            onResetSelection={handleResetSelection}
+            onSelectPort={(portId) => { void handleSelectPort(portId); }}
+            ports={portsForMap}
+            points={mapPoints}
+            running={running || snapshot.status === "RUNNING"}
+            selectedPortId={selectedPortIdForMap}
+            zones={mapZones}
+          />
           <div className="simulation-map-actions">
             <button
               className="button button-secondary"
               onClick={() => {
                 setSaveMessage("");
                 setSaveError("");
+                setEditingDatasetId(null);
                 setCreateModalOpen(true);
               }}
               type="button"
@@ -393,14 +477,14 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
       </div>
 
       {createModalOpen ? (
-        <div className="simulation-result-modal" role="dialog" aria-label="Tạo dữ liệu mô phỏng">
+        <div className="simulation-result-modal" role="dialog" aria-label={editingDatasetId ? "Chỉnh sửa dữ liệu mô phỏng" : "Tạo dữ liệu mô phỏng"}>
           <article className="card card-pad simulation-result-card">
             <div className="card-head">
               <div>
-                <h3>Tạo dữ liệu mô phỏng</h3>
+                <h3>{editingDatasetId ? "Chỉnh sửa dữ liệu mô phỏng" : "Tạo dữ liệu mô phỏng"}</h3>
                 <p>Nhập dữ liệu thời tiết để lưu thành dataset thật trong database</p>
               </div>
-              <button className="button button-secondary button-small" onClick={() => setCreateModalOpen(false)} type="button">Đóng</button>
+              <button className="button button-secondary button-small" onClick={() => { setCreateModalOpen(false); setEditingDatasetId(null); }} type="button">Đóng</button>
             </div>
             <form className="simulation-data-form" onSubmit={handleSaveDataset}>
               <label>
@@ -479,7 +563,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
                 </select>
               </label>
               <div className="form-actions wide-field">
-                <button className="button button-secondary" disabled={savingDataset} type="button" onClick={() => setCreateModalOpen(false)}>Hủy</button>
+                <button className="button button-secondary" disabled={savingDataset} type="button" onClick={() => { setCreateModalOpen(false); setEditingDatasetId(null); }}>Hủy</button>
                 <button className="button button-primary" disabled={savingDataset} type="submit">
                   {savingDataset ? "Đang lưu..." : "Lưu dữ liệu"}
                 </button>
@@ -502,18 +586,38 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
               <div className="simulation-dataset-empty">Chưa có dữ liệu</div>
             ) : null}
             {datasets.map((dataset) => (
-              <label className="simulation-dataset-option" key={dataset.datasetId}>
-                <input
-                  checked={selectedDatasetIds.includes(dataset.datasetId)}
-                  disabled={isRunning}
-                  onChange={() => toggleDatasetSelection(dataset.datasetId)}
-                  type="checkbox"
-                />
-                <span>
-                  <strong>{dataset.name}</strong>
-                  <small>{dataset.portCode} · {dataset.snapshotCount} mẫu</small>
-                </span>
-              </label>
+              <div className="simulation-dataset-option" key={dataset.datasetId}>
+                <label className="simulation-dataset-check">
+                  <input
+                    checked={selectedDatasetIds.includes(dataset.datasetId)}
+                    disabled={isRunning}
+                    onChange={() => toggleDatasetSelection(dataset.datasetId)}
+                    type="checkbox"
+                  />
+                  <span>
+                    <strong>{dataset.name}</strong>
+                    <small>{dataset.portCode} · {dataset.snapshotCount} mẫu</small>
+                  </span>
+                </label>
+                <div className="simulation-dataset-actions">
+                  <button
+                    className="button button-secondary button-small"
+                    disabled={isRunning || datasetActionId === dataset.datasetId}
+                    onClick={() => { void handleEditDataset(dataset.datasetId); }}
+                    type="button"
+                  >
+                    Chỉnh sửa
+                  </button>
+                  <button
+                    className="button button-danger button-small"
+                    disabled={isRunning || datasetActionId === dataset.datasetId}
+                    onClick={() => { void handleDeleteDataset(dataset); }}
+                    type="button"
+                  >
+                    Xóa
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
           <p className="simulation-selection-hint">

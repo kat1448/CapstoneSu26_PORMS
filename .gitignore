@@ -40,3 +40,4 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+.tmp-build/

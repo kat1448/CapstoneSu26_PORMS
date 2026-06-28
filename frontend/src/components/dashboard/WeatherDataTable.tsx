@@ -55,7 +55,7 @@ export function WeatherDataTable({ weather }: WeatherDataTableProps) {
       <div className="card-head">
         <div>
           <h3>Bảng dữ liệu OpenWeather</h3>
-          <p>Cập nhật tự động mỗi 10 phút theo dashboard</p>
+          <p>Cập nhật tự động theo dữ liệu OpenWeather mới nhất</p>
         </div>
       </div>
       <div className="weather-data-table" aria-label="Bảng dữ liệu OpenWeather">

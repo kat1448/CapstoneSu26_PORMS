@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
+using PORMS.API.Services;
 using PORMS.Infrastructure.Repositories;
 
 namespace PORMS.API.Controllers;
@@ -32,5 +33,14 @@ public sealed class WeatherController : ControllerBase
             RecordedAt = weather.RecordedAt,
             DataSource = weather.DataSource
         });
+    }
+
+    [HttpPost("refresh")]
+    public async Task<ActionResult> Refresh(
+        [FromServices] OpenWeatherService openWeatherService,
+        CancellationToken cancellationToken)
+    {
+        var result = await openWeatherService.RefreshActivePortsAsync(cancellationToken);
+        return Ok(new { result.FetchedCount });
     }
 }

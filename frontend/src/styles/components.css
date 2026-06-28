@@ -316,6 +316,109 @@
   z-index: 410;
 }
 
+.map-expand-controls {
+  bottom: 14px;
+  left: 14px;
+  position: absolute;
+  z-index: 420;
+}
+
+.map-expand-button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: 0 8px 18px rgba(15, 39, 60, 0.14);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  font-size: 17px;
+  font-weight: 700;
+  height: 34px;
+  justify-content: center;
+  line-height: 1;
+  width: 34px;
+}
+
+.map-expand-button:hover {
+  background: #f1f5f9;
+}
+
+.map-modal-backdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.64);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 1200;
+}
+
+.map-modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.34);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: min(86vh, 860px);
+  overflow: hidden;
+  width: min(1180px, calc(100vw - 48px));
+}
+
+.map-modal-head {
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  color: #0f172a;
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.map-modal-head h3 {
+  color: #0f172a;
+  font-size: 16px;
+  margin: 0;
+}
+
+.map-modal-head p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.map-modal-close {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #0f172a;
+  cursor: pointer;
+  display: flex;
+  font-size: 22px;
+  height: 36px;
+  justify-content: center;
+  line-height: 1;
+  width: 36px;
+}
+
+.map-modal-close:hover {
+  background: #f1f5f9;
+}
+
+.map-modal-body {
+  min-height: 0;
+  position: relative;
+}
+
+.map-modal-canvas {
+  height: 100%;
+  min-height: 520px;
+  width: 100%;
+}
+
 .gis-marker {
   align-items: center;
   border: 3px solid #fff;

@@ -3,9 +3,10 @@ import {
   resetDemoData,
   runDemoStepSequence
 } from "../mock/demoData";
-import { requestJson, withMockFallback } from "./api";
+import { requestJson, requestVoid, withMockFallback } from "./api";
 import type {
   CreateSimulationDatasetInput,
+  SimulationDatasetDetail,
   SimulationDatasetSummary,
   SimulationResult,
   SimulationRunResult,
@@ -50,11 +51,33 @@ export function getSimulationDatasets(): Promise<SimulationDatasetSummary[]> {
   return requestJson<SimulationDatasetSummary[]>("/api/simulation/datasets");
 }
 
+export function getSimulationDataset(datasetId: string): Promise<SimulationDatasetDetail> {
+  return requestJson<SimulationDatasetDetail>(`/api/simulation/datasets/${datasetId}`);
+}
+
 export function getSimulationMapPoints(): Promise<SimulationResult["mapPoints"]> {
   return requestJson<SimulationResult["mapPoints"]>("/api/simulation/map-points");
 }
 
 export function createSimulationDataset(input: CreateSimulationDatasetInput): Promise<SimulationDatasetSummary> {
+  return requestJson<SimulationDatasetSummary>("/api/simulation/datasets", {
+    body: JSON.stringify(toDatasetPayload(input)),
+    method: "POST"
+  });
+}
+
+export function updateSimulationDataset(datasetId: string, input: CreateSimulationDatasetInput): Promise<SimulationDatasetSummary> {
+  return requestJson<SimulationDatasetSummary>(`/api/simulation/datasets/${datasetId}`, {
+    body: JSON.stringify(toDatasetPayload(input)),
+    method: "PUT"
+  });
+}
+
+export function deleteSimulationDataset(datasetId: string): Promise<void> {
+  return requestVoid(`/api/simulation/datasets/${datasetId}`, { method: "DELETE" });
+}
+
+function toDatasetPayload(input: CreateSimulationDatasetInput): CreateSimulationDatasetInput {
   const payload: CreateSimulationDatasetInput = {
     ...input,
     snapshots: input.snapshots.map((snapshot) => ({
@@ -63,10 +86,7 @@ export function createSimulationDataset(input: CreateSimulationDatasetInput): Pr
     }))
   };
 
-  return requestJson<SimulationDatasetSummary>("/api/simulation/datasets", {
-    body: JSON.stringify(payload),
-    method: "POST"
-  });
+  return payload;
 }
 
 export function runSimulationDataset(datasetId: string): Promise<SimulationRunResult> {

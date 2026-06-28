@@ -17,6 +17,21 @@ public sealed class SimulationController : ControllerBase
         return Ok(datasets.Select(ToResponse).ToList());
     }
 
+    [HttpGet("datasets/{datasetId:guid}")]
+    public async Task<ActionResult<SimulationDatasetDetailResponse>> GetDataset(
+        Guid datasetId,
+        [FromServices] SimulationRepository repository,
+        CancellationToken cancellationToken)
+    {
+        var dataset = await repository.GetDatasetAsync(datasetId, cancellationToken);
+        if (dataset is null)
+        {
+            return NotFound(new ErrorResponse { Error = "The requested simulation dataset was not found." });
+        }
+
+        return Ok(ToDetailResponse(dataset));
+    }
+
     [HttpGet("map-points")]
     public async Task<ActionResult<IReadOnlyList<SimulationMapPointResponse>>> GetMapPoints(
         [FromServices] SimulationRepository repository,
@@ -52,6 +67,50 @@ public sealed class SimulationController : ControllerBase
             cancellationToken);
 
         return Created($"/api/simulation/datasets/{created.DatasetId}", ToResponse(created));
+    }
+
+    [HttpPut("datasets/{datasetId:guid}")]
+    public async Task<ActionResult<SimulationDatasetSummaryResponse>> UpdateDataset(
+        Guid datasetId,
+        [FromBody] CreateSimulationDatasetRequest request,
+        [FromServices] SimulationRepository repository,
+        CancellationToken cancellationToken)
+    {
+        if (request.Snapshots.Count == 0)
+        {
+            return BadRequest(new ErrorResponse { Error = "At least one simulation snapshot is required." });
+        }
+
+        var updated = await repository.UpdateDatasetAsync(
+            datasetId,
+            new CreateSimulationDatasetReadModel(
+                request.Name,
+                request.Description,
+                request.PortCode,
+                request.Snapshots.Select(item => new CreateSimulationSnapshotReadModel(
+                    item.SnapshotNumber,
+                    item.WindSpeedMs,
+                    item.BeaufortNumber,
+                    item.Rainfall1hMm,
+                    item.VisibilityKm,
+                    item.ZoneId)).ToList()),
+            cancellationToken);
+
+        return updated is null
+            ? NotFound(new ErrorResponse { Error = "The requested simulation dataset was not found." })
+            : Ok(ToResponse(updated));
+    }
+
+    [HttpDelete("datasets/{datasetId:guid}")]
+    public async Task<ActionResult> DeleteDataset(
+        Guid datasetId,
+        [FromServices] SimulationRepository repository,
+        CancellationToken cancellationToken)
+    {
+        var deleted = await repository.DeleteDatasetAsync(datasetId, cancellationToken);
+        return deleted
+            ? NoContent()
+            : NotFound(new ErrorResponse { Error = "The requested simulation dataset was not found." });
     }
 
     [HttpGet("current")]
@@ -174,6 +233,27 @@ public sealed class SimulationController : ControllerBase
             Description = dataset.Description,
             PortCode = dataset.PortCode,
             SnapshotCount = dataset.SnapshotCount
+        };
+    }
+
+    private static SimulationDatasetDetailResponse ToDetailResponse(SimulationDatasetDetailReadModel dataset)
+    {
+        return new SimulationDatasetDetailResponse
+        {
+            DatasetId = dataset.DatasetId,
+            Name = dataset.Name,
+            Description = dataset.Description,
+            PortCode = dataset.PortCode,
+            SnapshotCount = dataset.SnapshotCount,
+            Snapshots = dataset.Snapshots.Select(snapshot => new SimulationDatasetSnapshotResponse
+            {
+                SnapshotNumber = snapshot.SnapshotNumber,
+                WindSpeedMs = snapshot.WindSpeedMs,
+                BeaufortNumber = snapshot.BeaufortNumber,
+                Rainfall1hMm = snapshot.Rainfall1hMm,
+                VisibilityKm = snapshot.VisibilityKm,
+                ZoneId = snapshot.ZoneId
+            }).ToList()
         };
     }
 
