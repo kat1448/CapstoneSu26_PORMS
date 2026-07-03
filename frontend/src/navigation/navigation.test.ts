@@ -12,6 +12,7 @@ describe("role navigation", () => {
       "Công cụ & báo cáo"
     ]);
     expect(groups.flatMap((group) => group.items.map((item) => item.path))).toContain("/users");
+    expect(groups.flatMap((group) => group.items.map((item) => item.path))).toContain("/forecast-planning");
   });
 
   it("limits OPERATOR to operational routes", () => {
@@ -27,6 +28,8 @@ describe("role navigation", () => {
     expect(isRouteAllowed("ADMIN", "/users")).toBe(true);
     expect(isRouteAllowed("ADMIN", "/users/new")).toBe(true);
     expect(isRouteAllowed("ADMIN", "/users/user-1/edit")).toBe(true);
+    expect(isRouteAllowed("ADMIN", "/forecast-planning")).toBe(true);
+    expect(isRouteAllowed("PORT_MANAGER", "/forecast-planning")).toBe(true);
     expect(isRouteAllowed("PORT_MANAGER", "/users/new")).toBe(false);
   });
 });

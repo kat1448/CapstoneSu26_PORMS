@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSimulationDataset,
+  createForecastPlan,
   deleteSimulationDataset,
   getSimulationDataset,
   getSimulationDatasets,
@@ -175,5 +176,31 @@ describe("simulationService", () => {
       "http://localhost:5000/api/simulation/map-points",
       expect.any(Object)
     );
+  });
+
+  it("creates a future forecast plan for simulation planning", async () => {
+    const plan = {
+      dataset: { datasetId: "forecast-1", description: "Du bao 5 ngay", name: "Ke hoach du bao", portCode: "DNTSA", snapshotCount: 5 },
+      generatedAt: "2026-07-02T10:00:00Z",
+      horizonDays: 5,
+      items: [{
+        operationPlan: "Van hanh binh thuong",
+        plannedAt: "2026-07-03T00:00:00Z",
+        rainRiskLevel: "LOW",
+        riskLevel: "LOW",
+        summary: "Du bao on dinh",
+        visibilityRiskLevel: "LOW",
+        windRiskLevel: "LOW"
+      }],
+      sourceObservedAt: "2026-07-02T09:00:00Z"
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(plan), { status: 200 }));
+
+    await expect(createForecastPlan({ horizonDays: 5, portCode: "DNTSA" })).resolves.toEqual(plan);
+
+    expect(fetch).toHaveBeenCalledWith("http://localhost:5000/api/simulation/forecast-plan", expect.objectContaining({
+      body: JSON.stringify({ horizonDays: 5, portCode: "DNTSA" }),
+      method: "POST"
+    }));
   });
 });

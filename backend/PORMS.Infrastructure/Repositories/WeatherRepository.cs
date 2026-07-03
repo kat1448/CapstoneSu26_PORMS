@@ -44,7 +44,7 @@ public sealed class WeatherRepository
 
         if (!await reader.ReadAsync(cancellationToken))
         {
-            return new WeatherSnapshotReadModel(0, 0, null, null, 0, 0, 0, 0, null, null, null, null, null, "OPENWEATHER_API");
+            return new WeatherSnapshotReadModel(0, 0, null, null, 0, 0, 0, 0, null, null, null, null, null, "OPENWEATHER_API", Array.Empty<WeatherDataPointReadModel>());
         }
 
         return new WeatherSnapshotReadModel(
@@ -61,7 +61,89 @@ public sealed class WeatherRepository
             reader.IsDBNull(10) ? null : reader.GetString(10),
             reader.IsDBNull(11) ? null : reader.GetFieldValue<DateTimeOffset>(11),
             reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
-            reader.GetString(13));
+            reader.GetString(13),
+            await GetCurrentDataPointsAsync(cancellationToken));
+    }
+
+    private async Task<IReadOnlyList<WeatherDataPointReadModel>> GetCurrentDataPointsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+
+        const string sql = """
+            WITH ranked AS (
+                SELECT wr.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY wr.port_id, wr.zone_id
+                           ORDER BY wr.observed_at DESC, wr.recorded_at DESC
+                       ) AS row_number
+                FROM operational.weather_readings wr
+                WHERE wr.is_simulation = FALSE
+            )
+            , latest_port AS (
+                SELECT *
+                FROM ranked
+                WHERE row_number = 1
+                  AND zone_id IS NULL
+            )
+            , latest_zone AS (
+                SELECT *
+                FROM ranked
+                WHERE row_number = 1
+                  AND zone_id IS NOT NULL
+            )
+            SELECT p.code,
+                   p.name,
+                   z.name,
+                   COALESCE(z.latitude, p.latitude),
+                   COALESCE(z.longitude, p.longitude),
+                   COALESCE(lz.wind_speed_ms, lp.wind_speed_ms, 0),
+                   COALESCE(lz.beaufort_number, lp.beaufort_number, 0),
+                   COALESCE(lz.rainfall_1h_mm, lp.rainfall_1h_mm, 0),
+                   COALESCE(lz.visibility_km, lp.visibility_km, 0),
+                   COALESCE(lz.temperature_c, lp.temperature_c, 0),
+                   COALESCE(lz.weather_description, lp.weather_description),
+                   COALESCE(lz.observed_at, lp.observed_at),
+                   COALESCE(lz.data_source, lp.data_source, 'OPENWEATHER_API')
+            FROM operational.ports p
+            LEFT JOIN operational.zones z ON z.port_id = p.id
+                AND z.deleted_at IS NULL
+                AND z.is_active = TRUE
+            LEFT JOIN latest_zone lz ON lz.port_id = p.id
+                AND lz.zone_id = z.id
+            LEFT JOIN latest_port lp ON lp.port_id = p.id
+            WHERE p.deleted_at IS NULL
+              AND p.is_active = TRUE
+              AND (
+                  (z.id IS NOT NULL AND COALESCE(lz.id, lp.id) IS NOT NULL)
+                  OR (z.id IS NULL AND lp.id IS NOT NULL)
+              )
+            ORDER BY p.code, z.display_order NULLS FIRST, z.name NULLS FIRST
+            LIMIT 50;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var points = new List<WeatherDataPointReadModel>();
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            points.Add(new WeatherDataPointReadModel(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetDecimal(3),
+                reader.IsDBNull(4) ? null : reader.GetDecimal(4),
+                reader.GetDecimal(5),
+                reader.GetInt16(6),
+                reader.GetDecimal(7),
+                reader.GetDecimal(8),
+                reader.GetDecimal(9),
+                reader.IsDBNull(10) ? null : reader.GetString(10),
+                reader.IsDBNull(11) ? null : reader.GetFieldValue<DateTimeOffset>(11),
+                reader.GetString(12)));
+        }
+
+        return points;
     }
 
     public async Task<IReadOnlyList<OpenWeatherPortReadModel>> GetActiveOpenWeatherPortsAsync(CancellationToken cancellationToken)
@@ -69,7 +151,7 @@ public sealed class WeatherRepository
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
 
         const string sql = """
-            SELECT id, latitude, longitude
+            SELECT id, code, name, latitude, longitude
             FROM operational.ports
             WHERE deleted_at IS NULL
               AND is_active = TRUE
@@ -85,11 +167,43 @@ public sealed class WeatherRepository
         {
             ports.Add(new OpenWeatherPortReadModel(
                 reader.GetGuid(0),
-                reader.GetDecimal(1),
-                reader.GetDecimal(2)));
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetDecimal(3),
+                reader.GetDecimal(4)));
         }
 
         return ports;
+    }
+
+    public async Task<OpenWeatherPortReadModel?> GetOpenWeatherPortAsync(string portCode, CancellationToken cancellationToken)
+    {
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+
+        const string sql = """
+            SELECT id, code, name, latitude, longitude
+            FROM operational.ports
+            WHERE deleted_at IS NULL
+              AND is_active = TRUE
+              AND UPPER(weather_source) = 'OPENWEATHER'
+              AND UPPER(code) = @portCode
+            LIMIT 1;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("portCode", portCode.Trim().ToUpperInvariant());
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new OpenWeatherPortReadModel(
+            reader.GetGuid(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetDecimal(3),
+            reader.GetDecimal(4));
     }
 
     public async Task UpsertOpenWeatherReadingAsync(OpenWeatherReadingInput input, CancellationToken cancellationToken)
@@ -201,10 +315,28 @@ public sealed record WeatherSnapshotReadModel(
     string? WeatherDescription,
     DateTimeOffset? ObservedAt,
     DateTimeOffset? RecordedAt,
+    string DataSource,
+    IReadOnlyList<WeatherDataPointReadModel> DataPoints);
+
+public sealed record WeatherDataPointReadModel(
+    string PortCode,
+    string PortName,
+    string? ZoneName,
+    decimal? Latitude,
+    decimal? Longitude,
+    decimal WindSpeedMs,
+    short BeaufortNumber,
+    decimal Rainfall1hMm,
+    decimal VisibilityKm,
+    decimal TemperatureC,
+    string? WeatherDescription,
+    DateTimeOffset? ObservedAt,
     string DataSource);
 
 public sealed record OpenWeatherPortReadModel(
     Guid PortId,
+    string PortCode,
+    string PortName,
     decimal Latitude,
     decimal Longitude);
 

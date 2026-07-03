@@ -201,4 +201,36 @@ public sealed class SimulationFlowTests
         Assert.True(alert.CreatedAt >= startedAt.AddSeconds(-2), $"Alert created_at {alert.CreatedAt:o} was before run start {startedAt:o}.");
         Assert.True(alert.CreatedAt <= completedAt.AddSeconds(2), $"Alert created_at {alert.CreatedAt:o} was after run completed {completedAt:o}.");
     }
+
+    [Fact]
+    public async Task CreateForecastPlan_BuildsFuturePlanningDatasetFromLatestWeather()
+    {
+        await _factory.SeedForecastWeatherAsync(Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1"));
+        var port = await _factory.GetPrimaryPortAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/simulation/forecast-plan",
+            new CreateForecastPlanRequest
+            {
+                PortCode = port.PortCode,
+                HorizonDays = 5
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var plan = await response.Content.ReadFromJsonAsync<ForecastPlanResponse>();
+        Assert.NotNull(plan);
+        Assert.Equal(5, plan!.HorizonDays);
+        Assert.Equal(5, plan.Items.Count);
+        Assert.Equal(5, plan.Dataset.SnapshotCount);
+        Assert.Equal(port.PortCode, plan.Dataset.PortCode);
+        Assert.NotEqual(Guid.Empty, plan.Dataset.DatasetId);
+        Assert.All(plan.Items, item =>
+        {
+            Assert.True(item.PlannedAt > DateTimeOffset.UtcNow.AddHours(-1));
+            Assert.False(string.IsNullOrWhiteSpace(item.OperationPlan));
+            Assert.Contains(item.RiskLevel, new[] { "LOW", "MEDIUM", "HIGH", "CRITICAL" });
+        });
+    }
 }

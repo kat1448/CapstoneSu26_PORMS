@@ -113,6 +113,44 @@ public sealed class SimulationController : ControllerBase
             : NotFound(new ErrorResponse { Error = "The requested simulation dataset was not found." });
     }
 
+    [HttpPost("forecast-plan")]
+    public async Task<ActionResult<ForecastPlanResponse>> CreateForecastPlan(
+        [FromBody] CreateForecastPlanRequest request,
+        [FromServices] SimulationRepository repository,
+        CancellationToken cancellationToken)
+    {
+        if (request.HorizonDays is not 5)
+        {
+            return BadRequest(new ErrorResponse { Error = "Forecast horizon must be 5 days." });
+        }
+
+        try
+        {
+            var plan = await repository.CreateForecastPlanAsync(request.PortCode, request.HorizonDays, cancellationToken);
+            return Ok(new ForecastPlanResponse
+            {
+                Dataset = ToResponse(plan.Dataset),
+                HorizonDays = plan.HorizonDays,
+                SourceObservedAt = plan.SourceObservedAt,
+                GeneratedAt = plan.GeneratedAt,
+                Items = plan.Items.Select(item => new ForecastPlanItemResponse
+                {
+                    PlannedAt = item.PlannedAt,
+                    RiskLevel = item.RiskLevel,
+                    WindRiskLevel = item.WindRiskLevel,
+                    RainRiskLevel = item.RainRiskLevel,
+                    VisibilityRiskLevel = item.VisibilityRiskLevel,
+                    OperationPlan = item.OperationPlan,
+                    Summary = item.Summary
+                }).ToList()
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new ErrorResponse { Error = ex.Message });
+        }
+    }
+
     [HttpGet("current")]
     public async Task<ActionResult<SimulationSnapshotResponse>> GetCurrent(
         [FromServices] SimulationRepository repository,

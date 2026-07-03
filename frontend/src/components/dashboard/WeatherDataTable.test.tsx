@@ -17,7 +17,24 @@ const weather: WeatherSnapshot = {
   weatherDescription: "moderate rain",
   windDirectionDeg: 110,
   windGustMs: 22.4,
-  windSpeedMs: 18.4
+  windSpeedMs: 18.4,
+  dataPoints: [
+    {
+      beaufortNumber: 8,
+      dataSource: "OPENWEATHER_API",
+      latitude: 16.116235,
+      longitude: 108.230378,
+      observedAt: "2026-06-26T03:10:00Z",
+      portCode: "DNTSA",
+      portName: "Cảng Tiên Sa",
+      rainfall1hMm: 28.5,
+      temperatureC: 29,
+      visibilityKm: 4.2,
+      weatherDescription: "moderate rain",
+      windSpeedMs: 18.4,
+      zoneName: "Bến số 1"
+    }
+  ]
 };
 
 describe("WeatherDataTable", () => {
@@ -27,12 +44,16 @@ describe("WeatherDataTable", () => {
     expect(screen.getByRole("heading", { name: "Bảng dữ liệu OpenWeather" })).toBeInTheDocument();
     expect(screen.getByText("OPENWEATHER_API")).toBeInTheDocument();
     expect(screen.getByText("moderate rain · 500")).toBeInTheDocument();
-    expect(screen.getByText("18.4 m/s")).toBeInTheDocument();
+    expect(screen.getAllByText("18.4 m/s").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("22.4 m/s")).toBeInTheDocument();
     expect(screen.getByText("110°")).toBeInTheDocument();
     expect(screen.getByText("1008 hPa")).toBeInTheDocument();
-    expect(screen.getByText("26/06/2026 10:10:00")).toBeInTheDocument();
-    expect(screen.getByText("26/06/2026 10:11:30")).toBeInTheDocument();
+    expect(screen.getAllByText("26/06/2026 12:10:00").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("26/06/2026 12:11:30")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Điểm dữ liệu thời tiết theo vị trí" })).toBeInTheDocument();
+    expect(screen.getByText("Cảng Tiên Sa")).toBeInTheDocument();
+    expect(screen.getByText("Bến số 1")).toBeInTheDocument();
+    expect(screen.getByText("16.116235, 108.230378")).toBeInTheDocument();
   });
 
   it("shows placeholders for missing optional OpenWeather values", () => {

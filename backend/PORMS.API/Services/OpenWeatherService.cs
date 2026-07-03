@@ -42,6 +42,42 @@ public sealed class OpenWeatherService
         return new OpenWeatherRefreshResult(fetched);
     }
 
+    public async Task<OpenWeatherForecastReadModel> FetchDailyForecastAsync(
+        string portCode,
+        int days,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_options.ApiKey))
+        {
+            throw new InvalidOperationException("OpenWeather API key is not configured.");
+        }
+
+        if (days is < 1 or > 5)
+        {
+            throw new ArgumentOutOfRangeException(nameof(days), "Forecast days must be between 1 and 5.");
+        }
+
+        var port = await _weatherRepository.GetOpenWeatherPortAsync(portCode, cancellationToken)
+            ?? throw new InvalidOperationException($"OpenWeather port {portCode.Trim().ToUpperInvariant()} was not found.");
+        var baseUrl = _options.BaseUrl.TrimEnd('/');
+        var latitude = port.Latitude.ToString(CultureInfo.InvariantCulture);
+        var longitude = port.Longitude.ToString(CultureInfo.InvariantCulture);
+        var url = $"{baseUrl}/forecast?lat={latitude}&lon={longitude}&appid={_options.ApiKey}&units=metric&lang=vi";
+
+        using var response = await _httpClient.GetAsync(url, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var rawPayload = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var document = JsonDocument.Parse(rawPayload);
+        var forecastDays = OpenWeatherForecastParser.ParseDailyForecast(document.RootElement, days);
+
+        return new OpenWeatherForecastReadModel(
+            port.PortCode,
+            port.PortName,
+            DateTimeOffset.UtcNow,
+            forecastDays);
+    }
+
     private async Task<OpenWeatherReadingInput> FetchCurrentAsync(OpenWeatherPortReadModel port, CancellationToken cancellationToken)
     {
         var baseUrl = _options.BaseUrl.TrimEnd('/');
@@ -121,3 +157,115 @@ public sealed class OpenWeatherService
 }
 
 public sealed record OpenWeatherRefreshResult(int FetchedCount);
+
+public static class OpenWeatherForecastParser
+{
+    public static IReadOnlyList<OpenWeatherForecastDayReadModel> ParseDailyForecast(JsonElement root, int days)
+    {
+        if (!root.TryGetProperty("list", out var list) || list.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return list.EnumerateArray()
+            .Select(ParseForecastItem)
+            .GroupBy(item => item.Date.Date)
+            .OrderBy(group => group.Key)
+            .Take(days)
+            .Select(ToDailyForecast)
+            .ToList();
+    }
+
+    private static ForecastItem ParseForecastItem(JsonElement item)
+    {
+        var main = item.GetProperty("main");
+        var wind = item.TryGetProperty("wind", out var windElement) ? windElement : default;
+        var weatherItem = item.TryGetProperty("weather", out var weatherArray) && weatherArray.ValueKind == JsonValueKind.Array && weatherArray.GetArrayLength() > 0
+            ? weatherArray[0]
+            : default;
+        var rainMm = item.TryGetProperty("rain", out var rain) && rain.TryGetProperty("3h", out var rain3h)
+            ? rain3h.GetDecimal()
+            : 0m;
+
+        return new ForecastItem(
+            DateTimeOffset.FromUnixTimeSeconds(item.GetProperty("dt").GetInt64()),
+            main.TryGetProperty("temp", out var temp) ? temp.GetDecimal() : 0m,
+            main.TryGetProperty("temp_min", out var tempMin) ? tempMin.GetDecimal() : 0m,
+            main.TryGetProperty("temp_max", out var tempMax) ? tempMax.GetDecimal() : 0m,
+            wind.ValueKind == JsonValueKind.Object && wind.TryGetProperty("speed", out var windSpeed) ? windSpeed.GetDecimal() : 0m,
+            wind.ValueKind == JsonValueKind.Object && wind.TryGetProperty("gust", out var windGust) ? windGust.GetDecimal() : null,
+            wind.ValueKind == JsonValueKind.Object && wind.TryGetProperty("deg", out var windDeg) ? (short?)windDeg.GetInt16() : null,
+            rainMm,
+            item.TryGetProperty("pop", out var pop) ? (short)Math.Round(pop.GetDecimal() * 100m) : (short)0,
+            main.TryGetProperty("humidity", out var humidity) ? (short)humidity.GetInt16() : (short)0,
+            main.TryGetProperty("pressure", out var pressure) ? pressure.GetDecimal() : null,
+            weatherItem.ValueKind == JsonValueKind.Object && weatherItem.TryGetProperty("id", out var code) ? code.GetInt32() : null,
+            weatherItem.ValueKind == JsonValueKind.Object && weatherItem.TryGetProperty("description", out var description) ? description.GetString() : null);
+    }
+
+    private static OpenWeatherForecastDayReadModel ToDailyForecast(IGrouping<DateTime, ForecastItem> group)
+    {
+        var items = group.ToList();
+        var strongestWind = items.OrderByDescending(item => item.WindSpeedMs).First();
+        var highestPop = items.OrderByDescending(item => item.PopPct).First();
+        var representativeWeather = items
+            .OrderByDescending(item => item.PopPct)
+            .ThenByDescending(item => item.RainMm)
+            .First();
+
+        return new OpenWeatherForecastDayReadModel(
+            new DateTimeOffset(group.Key, TimeSpan.Zero),
+            Math.Round(items.Average(item => item.TemperatureC), 1),
+            items.Min(item => item.TemperatureMinC),
+            items.Max(item => item.TemperatureMaxC),
+            strongestWind.WindSpeedMs,
+            items.Where(item => item.WindGustMs.HasValue).Max(item => item.WindGustMs),
+            strongestWind.WindDirectionDeg,
+            items.Sum(item => item.RainMm),
+            highestPop.PopPct,
+            (short)Math.Round(items.Average(item => item.HumidityPct)),
+            items.Any(item => item.PressureHpa.HasValue)
+                ? Math.Round(items.Where(item => item.PressureHpa.HasValue).Average(item => item.PressureHpa!.Value), 0)
+                : null,
+            representativeWeather.WeatherCode,
+            representativeWeather.WeatherDescription,
+            representativeWeather.WeatherDescription);
+    }
+
+    private sealed record ForecastItem(
+        DateTimeOffset Date,
+        decimal TemperatureC,
+        decimal TemperatureMinC,
+        decimal TemperatureMaxC,
+        decimal WindSpeedMs,
+        decimal? WindGustMs,
+        short? WindDirectionDeg,
+        decimal RainMm,
+        short PopPct,
+        short HumidityPct,
+        decimal? PressureHpa,
+        int? WeatherCode,
+        string? WeatherDescription);
+}
+
+public sealed record OpenWeatherForecastReadModel(
+    string PortCode,
+    string PortName,
+    DateTimeOffset FetchedAt,
+    IReadOnlyList<OpenWeatherForecastDayReadModel> Days);
+
+public sealed record OpenWeatherForecastDayReadModel(
+    DateTimeOffset Date,
+    decimal TemperatureDayC,
+    decimal TemperatureMinC,
+    decimal TemperatureMaxC,
+    decimal WindSpeedMs,
+    decimal? WindGustMs,
+    short? WindDirectionDeg,
+    decimal RainMm,
+    short PopPct,
+    short HumidityPct,
+    decimal? PressureHpa,
+    int? WeatherCode,
+    string? WeatherDescription,
+    string? Summary);
