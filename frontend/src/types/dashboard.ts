@@ -16,6 +16,7 @@ export type DashboardSummary = {
 
 export type WeatherSnapshot = {
   beaufortNumber?: number | null;
+  dataPoints?: WeatherDataPoint[];
   dataSource?: string | null;
   humidityPct: number;
   observedAt?: string | null;
@@ -29,6 +30,22 @@ export type WeatherSnapshot = {
   windDirectionDeg?: number | null;
   windGustMs?: number | null;
   windSpeedMs: number;
+};
+
+export type WeatherDataPoint = {
+  beaufortNumber: number;
+  dataSource?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  observedAt?: string | null;
+  portCode: string;
+  portName: string;
+  rainfall1hMm: number;
+  temperatureC: number;
+  visibilityKm: number;
+  weatherDescription?: string | null;
+  windSpeedMs: number;
+  zoneName?: string | null;
 };
 
 export type RiskTrendPoint = {

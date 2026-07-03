@@ -29,6 +29,26 @@ export type SimulationDatasetSummary = {
   snapshotCount: number;
 };
 
+export type ForecastHorizonDays = 5;
+
+export type ForecastPlanItem = {
+  operationPlan: string;
+  plannedAt: string;
+  rainRiskLevel: RiskLevel;
+  riskLevel: RiskLevel;
+  summary: string;
+  visibilityRiskLevel: RiskLevel;
+  windRiskLevel: RiskLevel;
+};
+
+export type ForecastPlan = {
+  dataset: SimulationDatasetSummary;
+  generatedAt: string;
+  horizonDays: ForecastHorizonDays;
+  items: ForecastPlanItem[];
+  sourceObservedAt: string | null;
+};
+
 export type SimulationDatasetDetail = SimulationDatasetSummary & {
   snapshots: CreateSimulationSnapshotInput[];
 };

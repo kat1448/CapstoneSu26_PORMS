@@ -15,7 +15,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
   });
 
   if (!response.ok) {
-    throw new Error(`API ${path} failed with ${response.status}`);
+    throw new Error(await readErrorMessage(response, path));
   }
 
   return (await response.json()) as T;
@@ -33,8 +33,25 @@ export async function requestVoid(path: string, init?: RequestInit): Promise<voi
   });
 
   if (!response.ok) {
-    throw new Error(`API ${path} failed with ${response.status}`);
+    throw new Error(await readErrorMessage(response, path));
   }
+}
+
+async function readErrorMessage(response: Response, path: string): Promise<string> {
+  try {
+    const payload = await response.clone().json() as { error?: unknown; message?: unknown };
+    if (typeof payload.error === "string" && payload.error.trim()) return payload.error;
+    if (typeof payload.message === "string" && payload.message.trim()) return payload.message;
+  } catch {
+    try {
+      const text = await response.text();
+      if (text.trim()) return text;
+    } catch {
+      // Fall through to the generic API message.
+    }
+  }
+
+  return `API ${path} failed with ${response.status}`;
 }
 
 export async function withMockFallback<T>(request: () => Promise<T>, fallback: () => T | Promise<T>): Promise<T> {

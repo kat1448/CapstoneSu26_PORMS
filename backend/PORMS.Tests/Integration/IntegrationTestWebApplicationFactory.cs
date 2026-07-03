@@ -182,6 +182,60 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task SeedForecastWeatherAsync(Guid weatherReadingId, CancellationToken cancellationToken = default)
+    {
+        var port = await GetPrimaryPortAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+            INSERT INTO operational.weather_readings (
+                id,
+                port_id,
+                wind_speed_ms,
+                beaufort_number,
+                rainfall_1h_mm,
+                temperature_c,
+                humidity_pct,
+                visibility_km,
+                weather_description,
+                observed_at,
+                recorded_at,
+                data_source,
+                source_record_key,
+                raw_payload,
+                is_simulation
+            )
+            VALUES (
+                @id,
+                @portId,
+                8.5,
+                5,
+                6,
+                28,
+                74,
+                12,
+                'Forecast planning seed',
+                NOW(),
+                NOW(),
+                'OPENWEATHER_API',
+                @sourceRecordKey,
+                '{"source":"integration-test"}'::jsonb,
+                FALSE
+            )
+            ON CONFLICT (id) DO UPDATE
+            SET port_id = EXCLUDED.port_id,
+                observed_at = EXCLUDED.observed_at,
+                recorded_at = EXCLUDED.recorded_at,
+                updated_at = NOW();
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("id", weatherReadingId);
+        command.Parameters.AddWithValue("portId", port.PortId);
+        command.Parameters.AddWithValue("sourceRecordKey", $"forecast-plan-test:{weatherReadingId}");
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task HideAllPortsAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
