@@ -6,6 +6,8 @@ import {
 import { requestJson, requestVoid, withMockFallback } from "./api";
 import type {
   CreateSimulationDatasetInput,
+  ForecastPlan,
+  ForecastHorizonDays,
   SimulationDatasetDetail,
   SimulationDatasetSummary,
   SimulationResult,
@@ -75,6 +77,13 @@ export function updateSimulationDataset(datasetId: string, input: CreateSimulati
 
 export function deleteSimulationDataset(datasetId: string): Promise<void> {
   return requestVoid(`/api/simulation/datasets/${datasetId}`, { method: "DELETE" });
+}
+
+export function createForecastPlan(input: { horizonDays: ForecastHorizonDays; portCode: string }): Promise<ForecastPlan> {
+  return requestJson<ForecastPlan>("/api/simulation/forecast-plan", {
+    body: JSON.stringify(input),
+    method: "POST"
+  });
 }
 
 function toDatasetPayload(input: CreateSimulationDatasetInput): CreateSimulationDatasetInput {

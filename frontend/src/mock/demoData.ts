@@ -50,6 +50,21 @@ const baseState: DemoState = {
   },
   weather: {
     beaufortNumber: 8,
+    dataPoints: [{
+      beaufortNumber: 8,
+      dataSource: "OPENWEATHER_API",
+      latitude: 16.116235,
+      longitude: 108.230378,
+      observedAt: "2026-06-19T14:28:23Z",
+      portCode: "DNTSA",
+      portName: "Cảng Tiên Sa",
+      rainfall1hMm: 28.5,
+      temperatureC: 27,
+      visibilityKm: 4.2,
+      weatherDescription: "moderate rain",
+      windSpeedMs: 18.4,
+      zoneName: "Toàn cảng"
+    }],
     dataSource: "OPENWEATHER_API",
     humidityPct: 91,
     observedAt: "2026-06-19T14:28:23Z",

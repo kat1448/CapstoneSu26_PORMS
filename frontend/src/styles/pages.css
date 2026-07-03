@@ -463,6 +463,139 @@
   margin-top: 12px;
 }
 
+.simulation-forecast-panel {
+  margin-top: 14px;
+  min-width: 0;
+}
+
+.simulation-forecast-controls {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  margin-top: 14px;
+}
+
+.simulation-forecast-controls label {
+  color: var(--muted);
+  display: grid;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 6px;
+  min-width: 0;
+}
+
+.simulation-forecast-controls .button {
+  min-height: 36px;
+}
+
+.simulation-forecast-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.simulation-forecast-dataset {
+  margin-top: 14px;
+}
+
+.simulation-forecast-row {
+  align-items: center;
+  background: #f6f9fb;
+  border: 1px solid #e8eef4;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(160px, 0.75fr) auto minmax(220px, 1.25fr);
+  min-width: 0;
+  padding: 12px;
+}
+
+.simulation-forecast-row div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.simulation-forecast-row strong,
+.simulation-forecast-row small,
+.simulation-forecast-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.simulation-forecast-row strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.simulation-forecast-row small,
+.simulation-forecast-row span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.simulation-forecast-empty {
+  background: #f6f9fb;
+  border: 1px dashed #cfdbe5;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.forecast-table-shell {
+  border: 1px solid #e8eef4;
+  border-radius: 8px;
+  margin-top: 14px;
+  overflow-x: auto;
+}
+
+.forecast-table {
+  border-collapse: collapse;
+  min-width: 920px;
+  width: 100%;
+}
+
+.forecast-table th,
+.forecast-table td {
+  border-bottom: 1px solid #e8eef4;
+  color: var(--text);
+  font-size: 12px;
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.forecast-table th {
+  background: #f7f9fb;
+  color: #506476;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.forecast-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.forecast-table strong,
+.forecast-table small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.forecast-table small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+  margin-top: 3px;
+}
+
 .simulation-data-form {
   display: grid;
   gap: 10px;
@@ -1116,7 +1249,13 @@
   .user-form-grid,
   .port-form-grid,
   .inline-config-form,
-  .config-form-grid {
+  .config-form-grid,
+  .simulation-forecast-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .simulation-forecast-row {
+    align-items: start;
     grid-template-columns: 1fr;
   }
 

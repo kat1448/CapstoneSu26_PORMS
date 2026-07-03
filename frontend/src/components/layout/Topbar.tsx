@@ -14,6 +14,7 @@ type TopbarProps = {
 const pageTitles: Record<string, string> = {
   "/alerts": "Cảnh báo", "/analytics": "Phân tích BI", "/change-password": "Đổi mật khẩu",
   "/dashboard": "Dashboard", "/operation-log": "Nhật ký vận hành", "/ports": "Cảng & khu vực",
+  "/forecast-planning": "Dự báo vận hành",
   "/profile": "Thông tin cá nhân", "/risk-config": "Cấu hình ngưỡng rủi ro",
   "/simulation": "Chế độ mô phỏng", "/simulation-results": "Kết quả mô phỏng",
   "/sop-rules": "Quy tắc SOP", "/tasks": "Nhật ký nhiệm vụ", "/users": "Người dùng"

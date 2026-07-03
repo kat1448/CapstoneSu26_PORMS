@@ -333,6 +333,110 @@ public sealed class SimulationRepository
         return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
     }
 
+    public async Task<ForecastPlanReadModel> CreateForecastPlanAsync(
+        string portCode,
+        int horizonDays,
+        CancellationToken cancellationToken)
+    {
+        if (horizonDays is not 5)
+        {
+            throw new ArgumentOutOfRangeException(nameof(horizonDays), "Forecast horizon must be 5 days.");
+        }
+
+        var requestedPortCode = portCode.Trim().ToUpperInvariant();
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var port = await GetPortAsync(connection, transaction, requestedPortCode, cancellationToken)
+            ?? throw new InvalidOperationException($"Port {requestedPortCode} was not found.");
+        var weather = await GetLatestOpenWeatherAsync(connection, transaction, port.PortId, cancellationToken)
+            ?? throw new InvalidOperationException($"No OpenWeather data exists for port {port.PortCode}.");
+        var userId = await EnsureDemoUserAsync(connection, transaction, port.PortId, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var datasetId = Guid.NewGuid();
+        var sourceObservedAt = (weather.ObservedAt ?? weather.RecordedAt ?? now).ToUniversalTime();
+        var snapshots = new List<CreateSimulationSnapshotReadModel>();
+        var items = new List<ForecastPlanItemReadModel>();
+
+        for (var day = 1; day <= horizonDays; day++)
+        {
+            var plannedAt = new DateTimeOffset(now.UtcDateTime.Date.AddDays(day).AddHours(8), TimeSpan.Zero);
+            var wind = Math.Max(0, weather.WindSpeedMs + Math.Min(day, 6) * 0.35m);
+            var rainfall = Math.Max(0, weather.Rainfall1hMm + (day % 4) * 2.5m);
+            var visibility = Math.Max(0.5m, weather.VisibilityKm - Math.Min(day, 8) * 0.25m);
+            var beaufort = ToBeaufort(wind);
+            var snapshot = new CreateSimulationSnapshotReadModel(day, wind, beaufort, rainfall, visibility, null);
+            var risk = EvaluateRisk(new SimulationSnapshotContext(day, wind, beaufort, rainfall, visibility, null));
+            var operationPlan = risk.FinalRiskLevel switch
+            {
+                "CRITICAL" => "Dừng khai thác, bố trí trực chỉ huy và chuẩn bị SOP khẩn cấp.",
+                "HIGH" => "Hạn chế khai thác, ưu tiên tàu an toàn và chuẩn bị nhân sự ứng phó.",
+                "MEDIUM" => "Lập lịch linh hoạt, theo dõi lại dự báo trước ca vận hành.",
+                _ => "Vận hành bình thường, giữ lịch khai thác hiện tại."
+            };
+
+            snapshots.Add(snapshot);
+            items.Add(new ForecastPlanItemReadModel(
+                plannedAt,
+                risk.FinalRiskLevel,
+                risk.WindRiskLevel,
+                risk.RainRiskLevel,
+                risk.VisibilityRiskLevel,
+                operationPlan,
+                $"Dự báo ngày +{day}: gió Beaufort {beaufort}, mưa {rainfall:0.#} mm/h, tầm nhìn {visibility:0.#} km."));
+        }
+
+        const string datasetSql = """
+            INSERT INTO operational.simulation_datasets (
+                id,
+                name,
+                description,
+                snapshot_count,
+                starts_at,
+                ends_at,
+                metadata,
+                created_by_user_id
+            )
+            VALUES (
+                @id,
+                @name,
+                @description,
+                @snapshotCount,
+                @startsAt,
+                @endsAt,
+                @metadata,
+                @createdByUserId
+            );
+            """;
+
+        var datasetName = $"Kế hoạch dự báo {port.PortCode} - {horizonDays} ngày";
+        var datasetDescription = $"Sinh từ OpenWeather lúc {sourceObservedAt:yyyy-MM-dd HH:mm} UTC để lập kế hoạch vận hành tương lai.";
+        await using (var command = new NpgsqlCommand(datasetSql, connection, transaction))
+        {
+            command.Parameters.AddWithValue("id", datasetId);
+            command.Parameters.AddWithValue("name", datasetName);
+            command.Parameters.AddWithValue("description", datasetDescription);
+            command.Parameters.AddWithValue("snapshotCount", snapshots.Count);
+            command.Parameters.AddWithValue("startsAt", items[0].PlannedAt);
+            command.Parameters.AddWithValue("endsAt", items[^1].PlannedAt);
+            command.Parameters.Add("metadata", NpgsqlDbType.Jsonb).Value = JsonSerializer.Serialize(new
+            {
+                portCode = port.PortCode,
+                source = "forecast-plan",
+                horizonDays,
+                sourceObservedAt
+            });
+            command.Parameters.AddWithValue("createdByUserId", userId);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await WriteDatasetSnapshotsAsync(connection, transaction, datasetId, snapshots, items[0].PlannedAt, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var dataset = new SimulationDatasetSummaryReadModel(datasetId, datasetName, datasetDescription, port.PortCode, snapshots.Count);
+        return new ForecastPlanReadModel(dataset, horizonDays, sourceObservedAt, now, items);
+    }
+
     public async Task<SimulationRunResult?> RunDatasetAsync(Guid datasetId, CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
@@ -890,6 +994,44 @@ public sealed class SimulationRepository
         return new DatasetContext(reader.GetGuid(0), reader.GetString(1), reader.GetString(2));
     }
 
+    private static async Task<ForecastWeatherContext?> GetLatestOpenWeatherAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid portId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT COALESCE(wind_speed_ms, 0),
+                   COALESCE(beaufort_number, 0),
+                   COALESCE(rainfall_1h_mm, 0),
+                   COALESCE(visibility_km, 10),
+                   observed_at,
+                   recorded_at
+            FROM operational.weather_readings
+            WHERE port_id = @portId
+              AND zone_id IS NULL
+              AND is_simulation = FALSE
+            ORDER BY observed_at DESC, recorded_at DESC
+            LIMIT 1;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("portId", portId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new ForecastWeatherContext(
+            reader.GetDecimal(0),
+            reader.GetInt16(1),
+            reader.GetDecimal(2),
+            reader.GetDecimal(3),
+            reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4),
+            reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5));
+    }
+
     private static async Task<IReadOnlyList<SimulationSnapshotContext>> GetDatasetSnapshotsAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
@@ -1047,6 +1189,26 @@ public sealed class SimulationRepository
         var dominant = final == windRisk ? "WIND" : final == rainRisk ? "RAIN" : "VISIBILITY";
         var summary = $"Gió Beaufort {snapshot.BeaufortNumber}, mưa {snapshot.Rainfall1hMm:0.#} mm/h, tầm nhìn {(snapshot.VisibilityKm ?? 0):0.#} km.";
         return new SimulationRiskContext(windRisk, rainRisk, visibilityRisk, final, dominant, summary);
+    }
+
+    private static short ToBeaufort(decimal windSpeedMs)
+    {
+        return windSpeedMs switch
+        {
+            < 0.3m => 0,
+            < 1.6m => 1,
+            < 3.4m => 2,
+            < 5.5m => 3,
+            < 8.0m => 4,
+            < 10.8m => 5,
+            < 13.9m => 6,
+            < 17.2m => 7,
+            < 20.8m => 8,
+            < 24.5m => 9,
+            < 28.5m => 10,
+            < 32.7m => 11,
+            _ => 12
+        };
     }
 
     private static string HigherRisk(string left, string right)
@@ -1705,6 +1867,13 @@ public sealed class SimulationRepository
         string CurrentOperationMode);
     private sealed record DatasetContext(Guid DatasetId, string Name, string PortCode);
     private sealed record ZoneContext(Guid ZoneId, string ZoneName, string ZoneType, decimal? Latitude, decimal? Longitude);
+    private sealed record ForecastWeatherContext(
+        decimal WindSpeedMs,
+        short BeaufortNumber,
+        decimal Rainfall1hMm,
+        decimal VisibilityKm,
+        DateTimeOffset? ObservedAt,
+        DateTimeOffset? RecordedAt);
     private sealed record SimulationSnapshotContext(
         int SnapshotNumber,
         decimal WindSpeedMs,
@@ -1791,6 +1960,22 @@ public sealed record SimulationDatasetSnapshotReadModel(
     decimal Rainfall1hMm,
     decimal? VisibilityKm,
     Guid? ZoneId);
+
+public sealed record ForecastPlanReadModel(
+    SimulationDatasetSummaryReadModel Dataset,
+    int HorizonDays,
+    DateTimeOffset? SourceObservedAt,
+    DateTimeOffset GeneratedAt,
+    IReadOnlyList<ForecastPlanItemReadModel> Items);
+
+public sealed record ForecastPlanItemReadModel(
+    DateTimeOffset PlannedAt,
+    string RiskLevel,
+    string WindRiskLevel,
+    string RainRiskLevel,
+    string VisibilityRiskLevel,
+    string OperationPlan,
+    string Summary);
 
 public sealed record CreateSimulationDatasetReadModel(
     string Name,

@@ -52,6 +52,32 @@ public sealed class RunSimulationDatasetRequest
     public required Guid DatasetId { get; init; }
 }
 
+public sealed class CreateForecastPlanRequest
+{
+    public required string PortCode { get; init; }
+    public required int HorizonDays { get; init; }
+}
+
+public sealed class ForecastPlanResponse
+{
+    public required SimulationDatasetSummaryResponse Dataset { get; init; }
+    public required int HorizonDays { get; init; }
+    public DateTimeOffset? SourceObservedAt { get; init; }
+    public required DateTimeOffset GeneratedAt { get; init; }
+    public required IReadOnlyList<ForecastPlanItemResponse> Items { get; init; }
+}
+
+public sealed class ForecastPlanItemResponse
+{
+    public required DateTimeOffset PlannedAt { get; init; }
+    public required string RiskLevel { get; init; }
+    public required string WindRiskLevel { get; init; }
+    public required string RainRiskLevel { get; init; }
+    public required string VisibilityRiskLevel { get; init; }
+    public required string OperationPlan { get; init; }
+    public required string Summary { get; init; }
+}
+
 public sealed class SimulationResultResponse
 {
     public required Guid SessionId { get; init; }

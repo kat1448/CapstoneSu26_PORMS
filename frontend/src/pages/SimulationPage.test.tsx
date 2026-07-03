@@ -322,4 +322,20 @@ describe("SimulationPage", () => {
     expect(await screen.findByText("Đã xóa dữ liệu mô phỏng")).toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: /Bao Da Nang Updated/ })).not.toBeInTheDocument();
   });
+
+  it("keeps OpenWeather forecast planning out of the manual simulation page", async () => {
+    vi.mocked(getSimulationSnapshot).mockResolvedValue({ ...snapshot, status: "IDLE", progressPercent: 0 });
+    render(
+      <MemoryRouter>
+        <SimulationPage refreshKey={0} />
+      </MemoryRouter>
+    );
+
+    await screen.findByRole("heading", { name: "Thiết lập mô phỏng" });
+
+    expect(screen.queryByRole("heading", { name: "Kế hoạch dự báo tương lai" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cập nhật kế hoạch từ thời tiết mới" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Lap lich linh hoat")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /Ke hoach du bao DNTSA/ })).not.toBeInTheDocument();
+  });
 });
