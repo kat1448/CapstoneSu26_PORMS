@@ -346,7 +346,7 @@ const baseState: DemoState = {
       fullName: "Nguyễn Văn Hùng",
       lastLoginLabel: "Vừa xong",
       portName: "Tiên Sa",
-      role: "PORT_OPERATOR",
+      role: "STANDARD_USER",
       status: "ACTIVE",
       userId: "user-1"
     },
@@ -355,7 +355,7 @@ const baseState: DemoState = {
       fullName: "Trần Thị Lan",
       lastLoginLabel: "15:30 hôm nay",
       portName: "Tất cả",
-      role: "COMPANY_ADMIN",
+      role: "ADMIN",
       status: "ACTIVE",
       userId: "user-2"
     },
@@ -364,7 +364,7 @@ const baseState: DemoState = {
       fullName: "Phạm Minh Đức",
       lastLoginLabel: "13:20 hôm nay",
       portName: "Tiên Sa",
-      role: "PORT_OPERATOR",
+      role: "STANDARD_USER",
       status: "ACTIVE",
       userId: "user-3"
     }

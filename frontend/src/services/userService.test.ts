@@ -17,9 +17,9 @@ describe("userService", () => {
       email: "mai@example.com",
       fullName: "Le Thi Mai",
       lastLoginLabel: "Chưa đăng nhập",
-      portId: null,
-      portName: "Tất cả",
-      role: "PORT_MANAGER",
+      portId: "port-dntsa",
+      portName: "Cảng Tiên Sa",
+      role: "ADMIN",
       status: "ACTIVE",
       userId: "user-10"
     };
@@ -30,7 +30,7 @@ describe("userService", () => {
       fullName: "Le Thi Mai",
       password: "Strong@2027!",
       portId: "port-dntsa",
-      role: "PORT_MANAGER",
+      role: "ADMIN",
       status: "ACTIVE"
     })).resolves.toEqual(response);
 
@@ -40,7 +40,7 @@ describe("userService", () => {
         fullName: "Le Thi Mai",
         password: "Strong@2027!",
         portId: "port-dntsa",
-        role: "PORT_MANAGER",
+        role: "ADMIN",
         status: "ACTIVE"
       }),
       method: "POST"
@@ -54,7 +54,7 @@ describe("userService", () => {
       lastLoginLabel: "Chưa đăng nhập",
       portId: "port-dntsa",
       portName: "Cảng Tiên Sa",
-      role: "PORT_MANAGER",
+      role: "STANDARD_USER",
       status: "ACTIVE",
       userId: "user-10"
     };
@@ -64,7 +64,7 @@ describe("userService", () => {
       email: "mai.updated@example.com",
       fullName: "Le Thi Mai Updated",
       portId: "port-dntsa",
-      role: "PORT_MANAGER",
+      role: "STANDARD_USER",
       status: "ACTIVE"
     })).resolves.toEqual(response);
 

@@ -80,7 +80,12 @@ builder.Services
             ClockSkew = TimeSpan.FromSeconds(30)
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("SuperAdminOnly", policy => policy.RequireRole("SUPER_ADMIN"));
+    options.AddPolicy("AdminOrSuperAdmin", policy => policy.RequireRole("SUPER_ADMIN", "ADMIN"));
+    options.AddPolicy("AllAppUsers", policy => policy.RequireRole("SUPER_ADMIN", "ADMIN", "STANDARD_USER"));
+});
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
