@@ -2,9 +2,9 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UsersPage } from "./UsersPage";
 import { deleteUser, getUsers } from "../services/userService";
 import type { UserRecord } from "../services/userService";
+import { UsersPage } from "./UsersPage";
 
 vi.mock("../services/userService", () => ({
   deleteUser: vi.fn(),
@@ -18,7 +18,7 @@ const userRecords: UserRecord[] = [
     lastLoginLabel: "Vua xong",
     portId: "port-dntsa",
     portName: "Cang Tien Sa",
-    role: "PORT_MANAGER",
+    role: "ADMIN",
     status: "ACTIVE",
     userId: "user-1"
   },
@@ -26,9 +26,9 @@ const userRecords: UserRecord[] = [
     email: "lan@example.com",
     fullName: "Tran Thi Lan",
     lastLoginLabel: "Chua dang nhap",
-    portId: null,
-    portName: "Tat ca",
-    role: "OPERATOR",
+    portId: "port-dntsa",
+    portName: "Cang Tien Sa",
+    role: "STANDARD_USER",
     status: "LOCKED",
     userId: "user-2"
   }

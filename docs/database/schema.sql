@@ -22,7 +22,7 @@ CREATE SCHEMA IF NOT EXISTS analytics;
 
 DO $$ BEGIN
     CREATE TYPE operational.user_role_enum AS ENUM
-        ('ADMIN', 'PORT_MANAGER', 'OPERATOR');
+        ('SUPER_ADMIN', 'ADMIN', 'STANDARD_USER');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -149,7 +149,7 @@ CREATE TABLE IF NOT EXISTS operational.users (
     full_name                VARCHAR(255) NOT NULL,
     phone_number             VARCHAR(20),
     password_hash            VARCHAR(255) NOT NULL,
-    role                     operational.user_role_enum NOT NULL DEFAULT 'OPERATOR',
+    role                     operational.user_role_enum NOT NULL DEFAULT 'STANDARD_USER',
     status                   operational.user_status_enum NOT NULL DEFAULT 'ACTIVE',
     assigned_port_id         UUID REFERENCES operational.ports(id) ON DELETE RESTRICT,
     failed_login_count       SMALLINT NOT NULL DEFAULT 0
@@ -162,9 +162,9 @@ CREATE TABLE IF NOT EXISTS operational.users (
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at               TIMESTAMPTZ,
     CONSTRAINT users_role_port_assignment CHECK (
-        (role = 'ADMIN' AND assigned_port_id IS NULL)
+        (role = 'SUPER_ADMIN' AND assigned_port_id IS NULL)
         OR
-        (role IN ('PORT_MANAGER', 'OPERATOR') AND assigned_port_id IS NOT NULL)
+        (role IN ('ADMIN', 'STANDARD_USER') AND assigned_port_id IS NOT NULL)
     )
 );
 

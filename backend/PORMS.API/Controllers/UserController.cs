@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
 using PORMS.API.Services;
@@ -6,10 +7,11 @@ using PORMS.Infrastructure.Repositories;
 namespace PORMS.API.Controllers;
 
 [ApiController]
+[Authorize(Policy = "SuperAdminOnly")]
 [Route("api/users")]
 public sealed class UserController : ControllerBase
 {
-    private static readonly HashSet<string> AllowedRoles = ["ADMIN", "PORT_MANAGER", "OPERATOR"];
+    private static readonly HashSet<string> AllowedRoles = ["SUPER_ADMIN", "ADMIN", "STANDARD_USER"];
     private static readonly HashSet<string> AllowedStatuses = ["ACTIVE", "INACTIVE", "LOCKED"];
 
     [HttpGet]
@@ -118,12 +120,12 @@ public sealed class UserController : ControllerBase
             return "Trạng thái không hợp lệ.";
         }
 
-        if (role == "ADMIN" && portId is not null)
+        if (role == "SUPER_ADMIN" && portId is not null)
         {
-            return "ADMIN không gán cảng phụ trách.";
+            return "SUPER_ADMIN không gán cảng phụ trách.";
         }
 
-        if (role != "ADMIN" && portId is null)
+        if (role != "SUPER_ADMIN" && portId is null)
         {
             return "Người dùng vận hành phải được gán cảng phụ trách.";
         }

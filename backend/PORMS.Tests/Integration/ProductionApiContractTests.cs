@@ -62,7 +62,7 @@ public sealed class ProductionApiContractTests
     [Fact]
     public async Task OperationEvents_ReturnFrontendReadModelFields()
     {
-        await _factory.SeedOperationEventAsync(Guid.Parse("44444444-4444-4444-4444-444444444444"));
+        await _factory.SeedOperationEventAsync(Guid.NewGuid());
         var client = _factory.CreateClient();
 
         var response = await client.GetAsync("/api/operation-events");
@@ -75,7 +75,6 @@ public sealed class ProductionApiContractTests
     }
 
     [Theory]
-    [InlineData("/api/users")]
     [InlineData("/api/weather/current")]
     [InlineData("/api/risk/trend")]
     [InlineData("/api/simulation/current")]

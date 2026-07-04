@@ -81,10 +81,10 @@ END $$;
 
 -- Vai trò người dùng — RBAC
 -- ADMIN         : Toàn quyền hệ thống (thêm port, cấu hình threshold, quản lý user)
--- COMPANY_ADMIN : Quản lý cảng được phân công (xem tất cả, sửa SOP, override mode)
--- OPERATOR      : Nhân viên vận hành (chỉ xem dashboard, đọc alert, mark alert as read)
+-- ADMIN         : Cấu hình ngưỡng/SOP dữ liệu thật và tạo task vận hành
+-- STANDARD_USER : Xem dữ liệu và chạy mô phỏng
 DO $$ BEGIN
-    CREATE TYPE operational.user_role_enum AS ENUM ('ADMIN', 'COMPANY_ADMIN', 'OPERATOR');
+    CREATE TYPE operational.user_role_enum AS ENUM ('SUPER_ADMIN', 'ADMIN', 'STANDARD_USER');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -285,13 +285,13 @@ CREATE TABLE IF NOT EXISTS operational.users (
     password_hash       VARCHAR(255)    NOT NULL,
 
     -- Vai trò — quyết định access control
-    role                operational.user_role_enum NOT NULL DEFAULT 'OPERATOR',
+    role                operational.user_role_enum NOT NULL DEFAULT 'STANDARD_USER',
 
     -- Trạng thái tài khoản
     status              operational.user_status_enum NOT NULL DEFAULT 'ACTIVE',
 
     -- Port mà user này phụ trách (NULL cho ADMIN — quản lý tất cả)
-    -- COMPANY_ADMIN và OPERATOR chỉ xem được data của port_id này
+    -- ADMIN và STANDARD_USER chỉ xem được data của port_id này
     assigned_port_id    UUID
                             REFERENCES operational.ports(id)
                             ON DELETE SET NULL,
@@ -328,7 +328,7 @@ CREATE TABLE IF NOT EXISTS operational.users (
                             ON DELETE SET NULL
 );
 
-COMMENT ON TABLE  operational.users                      IS 'Tài khoản người dùng — RBAC: ADMIN/COMPANY_ADMIN/OPERATOR';
+COMMENT ON TABLE  operational.users                      IS 'Tài khoản người dùng — RBAC: SUPER_ADMIN/ADMIN/STANDARD_USER';
 COMMENT ON COLUMN operational.users.password_hash        IS 'bcrypt hash với cost=12. KHÔNG return qua API, KHÔNG log';
 COMMENT ON COLUMN operational.users.assigned_port_id     IS 'Port phụ trách. NULL = ADMIN (xem tất cả port)';
 COMMENT ON COLUMN operational.users.refresh_token_hash   IS 'Hash của refresh token để validate. NULL = logged out';
@@ -1471,7 +1471,7 @@ VALUES
         'System Administrator',
         -- bcrypt hash placeholder — PHẢI chạy lại với hash thật trước khi deploy
         '$2a$12$EiOVbgHA01dPxu209RTJUOsJ4I7jDrQiXeIEAGG.iXmqYpBl2vSmG',
-        'ADMIN',
+        'SUPER_ADMIN',
         'ACTIVE'
     )
 ON CONFLICT (email) DO NOTHING;

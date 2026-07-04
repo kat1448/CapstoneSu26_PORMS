@@ -1406,7 +1406,7 @@ public sealed class SimulationRepository
                 'demo.operator@porms.local',
                 'PORMS Demo Operator',
                 'demo-not-for-login',
-                'OPERATOR',
+                'STANDARD_USER',
                 'ACTIVE',
                 @portId,
                 NOW()

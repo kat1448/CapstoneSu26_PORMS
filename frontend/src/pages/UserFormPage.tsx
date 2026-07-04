@@ -29,20 +29,20 @@ const emptyForm: UserFormState = {
   fullName: "",
   password: "",
   portId: "port-dntsa",
-  role: "OPERATOR",
+  role: "STANDARD_USER",
   status: "ACTIVE"
 };
 
 const roleOptions: Array<{ label: string; value: UserRole }> = [
+  { label: "Super Admin", value: "SUPER_ADMIN" },
   { label: "Admin", value: "ADMIN" },
-  { label: "Quản lý cảng", value: "PORT_MANAGER" },
-  { label: "Vận hành", value: "OPERATOR" }
+  { label: "Standard User", value: "STANDARD_USER" }
 ];
 
 const statusOptions: Array<{ label: string; value: UserStatus }> = [
   { label: "Hoạt động", value: "ACTIVE" },
   { label: "Tạm dừng", value: "INACTIVE" },
-  { label: "Khoá", value: "LOCKED" }
+  { label: "Khóa", value: "LOCKED" }
 ];
 
 const portOptions = [
@@ -57,7 +57,7 @@ function toNullablePortId(portId: string) {
 }
 
 function nextPortForRole(role: UserRole, currentPortId: string) {
-  if (role === "ADMIN") {
+  if (role === "SUPER_ADMIN") {
     return "";
   }
 
@@ -70,7 +70,7 @@ function formFromUser(user: UserRecord): UserFormState {
     email: user.email,
     fullName: user.fullName,
     password: "",
-    portId: role === "ADMIN" ? "" : user.portId ?? "port-dntsa",
+    portId: role === "SUPER_ADMIN" ? "" : user.portId ?? "port-dntsa",
     role,
     status: user.status
   };
