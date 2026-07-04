@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { getPorts } from "../services/portService";
 import {
   createUser,
   getUsers,
@@ -28,7 +29,7 @@ const emptyForm: UserFormState = {
   email: "",
   fullName: "",
   password: "",
-  portId: "port-dntsa",
+  portId: "",
   role: "STANDARD_USER",
   status: "ACTIVE"
 };
@@ -45,32 +46,25 @@ const statusOptions: Array<{ label: string; value: UserStatus }> = [
   { label: "Khóa", value: "LOCKED" }
 ];
 
-const portOptions = [
-  { label: "Tất cả", value: "" },
-  { label: "Cảng Tiên Sa", value: "port-dntsa" },
-  { label: "Cảng Liên Chiểu", value: "port-lien-chieu" },
-  { label: "Cảng Chân Mây", value: "port-chan-may" }
-];
-
 function toNullablePortId(portId: string) {
   return portId.trim() ? portId : null;
 }
 
-function nextPortForRole(role: UserRole, currentPortId: string) {
+function nextPortForRole(role: UserRole, currentPortId: string, fallbackPortId: string) {
   if (role === "SUPER_ADMIN") {
     return "";
   }
 
-  return currentPortId.trim() ? currentPortId : "port-dntsa";
+  return currentPortId.trim() ? currentPortId : fallbackPortId;
 }
 
-function formFromUser(user: UserRecord): UserFormState {
+function formFromUser(user: UserRecord, fallbackPortId: string): UserFormState {
   const role = user.role as UserRole;
   return {
     email: user.email,
     fullName: user.fullName,
     password: "",
-    portId: role === "SUPER_ADMIN" ? "" : user.portId ?? "port-dntsa",
+    portId: role === "SUPER_ADMIN" ? "" : user.portId ?? fallbackPortId,
     role,
     status: user.status
   };
@@ -83,7 +77,34 @@ export function UserFormPage({ mode }: UserFormPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(mode === "edit");
   const [notFound, setNotFound] = useState(false);
+  const [portOptions, setPortOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    getPorts()
+      .then((ports) => {
+        if (!active) return;
+        const options = ports.map((port) => ({ label: port.portName, value: port.portId }));
+        setPortOptions(options);
+        setForm((value) => {
+          if (value.role === "SUPER_ADMIN" || value.portId.trim() || options.length === 0) {
+            return value;
+          }
+
+          return { ...value, portId: options[0].value };
+        });
+      })
+      .catch((caught) => {
+        if (!active) return;
+        setError(caught instanceof Error ? caught.message : "Không thể tải danh sách cảng.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (mode !== "edit") {
@@ -102,7 +123,7 @@ export function UserFormPage({ mode }: UserFormPageProps) {
           setNotFound(true);
           return;
         }
-        setForm(formFromUser(selectedUser));
+        setForm((value) => formFromUser(selectedUser, value.portId));
       })
       .catch((caught) => {
         if (!active) return;
@@ -212,7 +233,11 @@ export function UserFormPage({ mode }: UserFormPageProps) {
             <select
               onChange={(event) => {
                 const role = event.target.value as UserRole;
-                setForm((value) => ({ ...value, portId: nextPortForRole(role, value.portId), role }));
+                setForm((value) => ({
+                  ...value,
+                  portId: nextPortForRole(role, value.portId, portOptions[0]?.value ?? ""),
+                  role
+                }));
               }}
               value={form.role}
             >
@@ -234,6 +259,7 @@ export function UserFormPage({ mode }: UserFormPageProps) {
               onChange={(event) => setForm((value) => ({ ...value, portId: event.target.value }))}
               value={form.portId}
             >
+              <option disabled={form.role !== "SUPER_ADMIN"} value="">Tất cả</option>
               {portOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>

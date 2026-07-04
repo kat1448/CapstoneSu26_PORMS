@@ -91,11 +91,28 @@ function toDatasetPayload(input: CreateSimulationDatasetInput): CreateSimulation
     ...input,
     snapshots: input.snapshots.map((snapshot) => ({
       ...snapshot,
+      beaufortNumber: toBeaufort(snapshot.windSpeedMs),
       zoneId: snapshot.zoneId?.trim() ? snapshot.zoneId.trim() : null
     }))
   };
 
   return payload;
+}
+
+function toBeaufort(windSpeedMs: number): number {
+  if (windSpeedMs < 0.3) return 0;
+  if (windSpeedMs < 1.6) return 1;
+  if (windSpeedMs < 3.4) return 2;
+  if (windSpeedMs < 5.5) return 3;
+  if (windSpeedMs < 8) return 4;
+  if (windSpeedMs < 10.8) return 5;
+  if (windSpeedMs < 13.9) return 6;
+  if (windSpeedMs < 17.2) return 7;
+  if (windSpeedMs < 20.8) return 8;
+  if (windSpeedMs < 24.5) return 9;
+  if (windSpeedMs < 28.5) return 10;
+  if (windSpeedMs < 32.7) return 11;
+  return 12;
 }
 
 export function runSimulationDataset(datasetId: string): Promise<SimulationRunResult> {

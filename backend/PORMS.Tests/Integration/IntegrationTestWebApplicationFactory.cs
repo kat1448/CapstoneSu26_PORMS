@@ -182,6 +182,60 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task SeedTaskAsync(string taskCode, CancellationToken cancellationToken = default)
+    {
+        var port = await GetPrimaryPortAsync(cancellationToken);
+        var zone = await GetFirstZoneAsync(port.PortId, cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+            INSERT INTO operational.tasks (
+                task_code,
+                port_id,
+                zone_id,
+                title,
+                description,
+                priority,
+                status,
+                assigned_team,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                @taskCode,
+                @portId,
+                @zoneId,
+                'Seeded integration task',
+                'Created by integration test.',
+                'HIGH',
+                'NEW',
+                'Đội vận hành',
+                NOW(),
+                NOW()
+            )
+            ON CONFLICT (task_code) DO NOTHING;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("taskCode", taskCode);
+        command.Parameters.AddWithValue("portId", port.PortId);
+        command.Parameters.AddWithValue("zoneId", zone.ZoneId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task DeleteTaskByCodeAsync(string taskCode, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            DELETE FROM operational.tasks
+            WHERE task_code = @taskCode;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("taskCode", taskCode);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task SeedSimulationOperationEventAsync(Guid operationEventId, Guid sessionId, CancellationToken cancellationToken = default)
     {
         var port = await GetPrimaryPortAsync(cancellationToken);

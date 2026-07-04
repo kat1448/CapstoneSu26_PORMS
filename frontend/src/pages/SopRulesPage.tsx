@@ -12,7 +12,7 @@ import {
 } from "../services/sopRulesService";
 import type { RiskLevel } from "../services/riskConfigService";
 
-const riskOptions: RiskLevel[] = ["MEDIUM", "HIGH", "CRITICAL"];
+const riskOptions: RiskLevel[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const zoneOptions = ["", "DOCK", "YARD", "GATE", "WAREHOUSE"];
 const actionOptions: SopActionType[] = ["CREATE_TASK", "SEND_ALERT", "RESTRICT_ZONE", "SET_LIMITED_MODE", "STOP_OPERATIONS"];
 
@@ -30,9 +30,10 @@ const emptyForm: SopRuleInput = {
   triggerRiskLevel: "HIGH"
 };
 
-function riskTone(risk: string): "danger" | "info" | "warning" {
+function riskTone(risk: string): "danger" | "info" | "success" | "warning" {
   if (risk === "CRITICAL") return "danger";
   if (risk === "HIGH") return "warning";
+  if (risk === "LOW") return "success";
   return "info";
 }
 
@@ -52,12 +53,21 @@ function formFromRule(rule: SopRule): SopRuleInput {
   };
 }
 
+function matchesRule(rule: SopRule, query: string, zoneFilter: string) {
+  const normalized = query.trim().toLowerCase();
+  const textMatched = !normalized
+    || rule.ruleCode.toLowerCase().includes(normalized)
+    || rule.ruleName.toLowerCase().includes(normalized);
+  const zoneMatched = !zoneFilter || rule.appliesToZoneType === zoneFilter;
+  return textMatched && zoneMatched;
+}
+
 export function SopRulesPage() {
   const [data, setData] = useState<SopRulesResponse | null>(null);
   const [form, setForm] = useState<SopRuleInput>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [riskFilter, setRiskFilter] = useState("");
+  const [selectedRisk, setSelectedRisk] = useState<RiskLevel | null>(null);
   const [zoneFilter, setZoneFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -87,21 +97,33 @@ export function SopRulesPage() {
     };
   }, []);
 
-  const filteredRules = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return (data?.rules ?? []).filter((rule) => {
-      const textMatched = !normalized
-        || rule.ruleCode.toLowerCase().includes(normalized)
-        || rule.ruleName.toLowerCase().includes(normalized);
-      const riskMatched = !riskFilter || rule.triggerRiskLevel === riskFilter;
-      const zoneMatched = !zoneFilter || rule.appliesToZoneType === zoneFilter;
-      return textMatched && riskMatched && zoneMatched;
+  const groupedRules = useMemo(() => {
+    const rules = data?.rules ?? [];
+    return riskOptions.map((riskLevel) => {
+      const groupRules = rules
+        .filter((rule) => rule.triggerRiskLevel === riskLevel && matchesRule(rule, query, zoneFilter))
+        .sort((left, right) => left.executionOrder - right.executionOrder);
+      const actionCounts = groupRules.reduce<Record<string, number>>((counts, rule) => ({
+        ...counts,
+        [rule.actionType]: (counts[rule.actionType] ?? 0) + 1
+      }), {});
+      const topAction = Object.entries(actionCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "Chưa có";
+
+      return {
+        activeCount: groupRules.filter((rule) => rule.isActive).length,
+        executionCount: groupRules.reduce((total, rule) => total + rule.executionCount, 0),
+        riskLevel,
+        rules: groupRules,
+        topAction
+      };
     });
-  }, [data?.rules, query, riskFilter, zoneFilter]);
+  }, [data?.rules, query, zoneFilter]);
+
+  const selectedGroup = groupedRules.find((group) => group.riskLevel === selectedRisk) ?? null;
 
   function openCreateForm() {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm(selectedRisk ? { ...emptyForm, triggerRiskLevel: selectedRisk } : emptyForm);
     setShowForm(true);
   }
 
@@ -216,75 +238,71 @@ export function SopRulesPage() {
         </form>
       ) : null}
 
-      <div className="sop-layout-grid">
-        <div className="page-grid">
-          <div className="card toolbar sop-toolbar">
-            <input className="input" onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã hoặc tên quy tắc" value={query} />
-            <select className="select-input" onChange={(event) => setRiskFilter(event.target.value)} value={riskFilter}>
-              <option value="">Tất cả mức rủi ro</option>
-              {riskOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-            <select className="select-input" onChange={(event) => setZoneFilter(event.target.value)} value={zoneFilter}>
-              <option value="">Tất cả khu vực</option>
-              {zoneOptions.filter(Boolean).map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </div>
+      <div className="card toolbar sop-toolbar">
+        <input className="input" onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã hoặc tên quy tắc" value={query} />
+        <select className="select-input" onChange={(event) => setZoneFilter(event.target.value)} value={zoneFilter}>
+          <option value="">Tất cả khu vực</option>
+          {zoneOptions.filter(Boolean).map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+      </div>
 
-          <article className="card card-pad">
-            <div className="card-head">
-              <div>
-                <h3>Danh sách quy tắc</h3>
-                <p>Thứ tự ưu tiên thấp hơn sẽ chạy trước khi nhiều quy tắc cùng khớp</p>
-              </div>
-              <Badge tone="info">{summary.activeRules} active</Badge>
-            </div>
-            <div className="sop-rule-list">
-              {filteredRules.map((rule) => (
-                <div className="sop-rule-card" key={rule.id}>
-                  <div className="sop-order">{rule.executionOrder}</div>
-                  <div className="sop-main">
-                    <h3>{rule.ruleName}</h3>
-                    <div className="sop-meta">
-                      <span className="code-chip">{rule.ruleCode}</span>
-                      <Badge tone={riskTone(rule.triggerRiskLevel)}>{rule.triggerRiskLevel}</Badge>
-                      <Badge tone="muted">{rule.appliesToZoneType ?? "ALL"}</Badge>
-                      <Badge tone={rule.isActive ? "success" : "muted"}>{rule.isActive ? "Đang bật" : "Tắt"}</Badge>
-                    </div>
-                    <p>{rule.actionType}</p>
-                  </div>
-                  <div className="sop-stats">
-                    <strong>{rule.executionCount}</strong>
-                    <small>lần chạy</small>
-                    <button className="button button-secondary button-small" onClick={() => openEditForm(rule)} type="button">Chỉnh sửa</button>
-                    <button className="button button-secondary button-small" onClick={() => handleDelete(rule)} type="button">Xóa</button>
-                  </div>
+      {!selectedGroup ? (
+        <section className="sop-risk-grid" aria-label="Nhóm quy tắc SOP theo mức rủi ro">
+          {groupedRules.map((group) => (
+            <article className="card card-pad sop-risk-card" key={group.riskLevel}>
+              <div className="card-head">
+                <div>
+                  <h3>{group.riskLevel}</h3>
+                  <p>{group.rules.length} quy tắc · {group.activeCount} đang bật</p>
                 </div>
-              ))}
-            </div>
-          </article>
-        </div>
-
-        <aside className="card card-pad sop-timeline-panel">
+                <Badge tone={riskTone(group.riskLevel)}>{group.riskLevel}</Badge>
+              </div>
+              <div className="sop-risk-metrics">
+                <span><strong>{group.executionCount}</strong><small>lần chạy</small></span>
+                <span><strong>{group.topAction}</strong><small>action nổi bật</small></span>
+              </div>
+              <button className="button button-secondary" onClick={() => setSelectedRisk(group.riskLevel)} type="button">Chi tiết</button>
+            </article>
+          ))}
+        </section>
+      ) : (
+        <article className="card card-pad">
           <div className="card-head">
             <div>
-              <h3>Kích hoạt gần đây</h3>
-              <p>Audit nhanh các SOP đã chạy</p>
+              <h3>Danh sách quy tắc {selectedGroup.riskLevel}</h3>
+              <p>Thứ tự ưu tiên thấp hơn sẽ chạy trước khi nhiều quy tắc cùng khớp</p>
+            </div>
+            <div className="card-head-actions">
+              <Badge tone={riskTone(selectedGroup.riskLevel)}>{selectedGroup.rules.length} quy tắc</Badge>
+              <button className="button button-secondary button-small" onClick={() => setSelectedRisk(null)} type="button">Quay lại tổng quan</button>
             </div>
           </div>
-          <div className="timeline-list">
-            {(data?.executions ?? []).map((item) => (
-              <div className={`timeline-entry risk-${item.riskLevel.toLowerCase()}`} key={item.id}>
-                <div>
-                  <strong>{item.ruleCode}</strong>
-                  <p>{item.ruleName} · {item.actionType}{item.zoneName ? ` · ${item.zoneName}` : ""}</p>
+          <div className="sop-rule-list">
+            {selectedGroup.rules.length === 0 ? <div className="empty-state">Chưa có quy tắc cho mức {selectedGroup.riskLevel}.</div> : null}
+            {selectedGroup.rules.map((rule) => (
+              <div className="sop-rule-card" key={rule.id}>
+                <div className="sop-order">{rule.executionOrder}</div>
+                <div className="sop-main">
+                  <h3>{rule.ruleName}</h3>
+                  <div className="sop-meta">
+                    <span className="code-chip">{rule.ruleCode}</span>
+                    <Badge tone={riskTone(rule.triggerRiskLevel)}>{rule.triggerRiskLevel}</Badge>
+                    <Badge tone="muted">{rule.appliesToZoneType ?? "ALL"}</Badge>
+                    <Badge tone={rule.isActive ? "success" : "muted"}>{rule.isActive ? "Đang bật" : "Tắt"}</Badge>
+                  </div>
+                  <p>{rule.actionType}</p>
                 </div>
-                <span>{item.status}</span>
+                <div className="sop-stats">
+                  <strong>{rule.executionCount}</strong>
+                  <small>lần chạy</small>
+                  <button className="button button-secondary button-small" onClick={() => openEditForm(rule)} type="button">Chỉnh sửa</button>
+                  <button className="button button-secondary button-small" onClick={() => handleDelete(rule)} type="button">Xóa</button>
+                </div>
               </div>
             ))}
-            {data?.executions.length === 0 ? <div className="empty-state">Chưa có lần kích hoạt SOP.</div> : null}
           </div>
-        </aside>
-      </div>
+        </article>
+      )}
     </section>
   );
 }

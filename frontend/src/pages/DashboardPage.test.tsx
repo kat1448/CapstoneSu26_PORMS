@@ -179,7 +179,7 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Trung tâm điều hành" })).toBeInTheDocument();
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Mức rủi ro hiện tại");
-    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Trạng thái khu vực");
+    expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Trạng thái khu vực");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ban do GIS Tất cả cảng");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");

@@ -2,9 +2,14 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getPorts } from "../services/portService";
 import { createUser, getUsers, updateUser } from "../services/userService";
 import type { UserRecord } from "../services/userService";
 import { UserFormPage } from "./UserFormPage";
+
+vi.mock("../services/portService", () => ({
+  getPorts: vi.fn()
+}));
 
 vi.mock("../services/userService", () => ({
   createUser: vi.fn(),
@@ -12,12 +17,28 @@ vi.mock("../services/userService", () => ({
   updateUser: vi.fn()
 }));
 
+const portId = "11111111-1111-1111-1111-111111111111";
+const ports = [
+  {
+    activeAlertCount: 0,
+    currentOperationMode: "NORMAL" as const,
+    currentRiskLevel: "LOW" as const,
+    isActive: true,
+    latitude: 16.1,
+    longitude: 108.2,
+    portCode: "DNTSA",
+    portId,
+    portName: "Cang Tien Sa",
+    updatedAtLabel: "Vua xong"
+  }
+];
+
 const userRecords: UserRecord[] = [
   {
     email: "hung@example.com",
     fullName: "Nguyen Van Hung",
     lastLoginLabel: "Vua xong",
-    portId: "port-dntsa",
+    portId,
     portName: "Cang Tien Sa",
     role: "ADMIN",
     status: "ACTIVE",
@@ -45,6 +66,7 @@ afterEach(() => {
 describe("UserFormPage", () => {
   it("creates a user and returns to the user list", async () => {
     const user = userEvent.setup();
+    vi.mocked(getPorts).mockResolvedValue(ports);
     vi.mocked(createUser).mockResolvedValue({ ...userRecords[0], userId: "user-2" });
 
     renderRoutes("/users/new", "create");
@@ -59,7 +81,7 @@ describe("UserFormPage", () => {
       email: "mai@example.com",
       fullName: "Le Thi Mai",
       password: "Strong@2027!",
-      portId: "port-dntsa",
+      portId,
       role: "ADMIN",
       status: "ACTIVE"
     });
@@ -68,6 +90,7 @@ describe("UserFormPage", () => {
 
   it("clears assigned port for super admin", async () => {
     const user = userEvent.setup();
+    vi.mocked(getPorts).mockResolvedValue(ports);
     vi.mocked(createUser).mockResolvedValue({
       ...userRecords[0],
       portId: null,
@@ -92,6 +115,7 @@ describe("UserFormPage", () => {
 
   it("loads the selected user, updates it, and returns to the user list", async () => {
     const user = userEvent.setup();
+    vi.mocked(getPorts).mockResolvedValue(ports);
     vi.mocked(getUsers).mockResolvedValue(userRecords);
     vi.mocked(updateUser).mockResolvedValue({ ...userRecords[0], fullName: "Nguyen Van Hung Updated" });
 
@@ -106,7 +130,7 @@ describe("UserFormPage", () => {
     expect(updateUser).toHaveBeenCalledWith("user-1", {
       email: "hung@example.com",
       fullName: "Nguyen Van Hung Updated",
-      portId: "port-dntsa",
+      portId,
       role: "ADMIN",
       status: "ACTIVE"
     });

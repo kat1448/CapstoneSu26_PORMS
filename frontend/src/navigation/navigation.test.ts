@@ -29,7 +29,7 @@ describe("role navigation", () => {
     const paths = getNavigationForRole("STANDARD_USER")
       .flatMap((group) => group.items.map((item) => item.path));
 
-    expect(paths).toEqual(["/dashboard", "/alerts", "/ports", "/simulation", "/simulation-results"]);
+    expect(paths).toEqual(["/dashboard", "/alerts", "/ports", "/simulation"]);
   });
 
   it("rejects direct access to disallowed routes", () => {

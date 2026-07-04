@@ -2,7 +2,7 @@ import { getOperationEvents as getOperationEventsData } from "../mock/demoData";
 import { formatTimeLabel, requestJson, withMockFallback } from "./api";
 import type { OperationEvent } from "../types/log";
 
-type OperationEventApiResponse = Omit<OperationEvent, "actorName" | "entityType" | "occurredAt" | "portCode"> & {
+type OperationEventApiResponse = Omit<OperationEvent, "actorName" | "entityType" | "occurredAt" | "occurredAtRaw" | "portCode"> & {
   actorName: string | null;
   entityType: string | null;
   occurredAt: string;
@@ -17,6 +17,7 @@ export async function getOperationEvents(scope: OperationEventScope = "live"): P
     actorName: event.actorName ?? "SYSTEM",
     entityType: event.entityType ?? "system",
     occurredAt: formatTimeLabel(event.occurredAt),
+    occurredAtRaw: event.occurredAt,
     portCode: event.portCode ?? "N/A"
   }));
 
