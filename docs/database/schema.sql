@@ -22,7 +22,7 @@ CREATE SCHEMA IF NOT EXISTS analytics;
 
 DO $$ BEGIN
     CREATE TYPE operational.user_role_enum AS ENUM
-        ('ADMIN', 'PORT_MANAGER', 'OPERATOR');
+        ('SUPER_ADMIN', 'ADMIN', 'STANDARD_USER');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -149,7 +149,7 @@ CREATE TABLE IF NOT EXISTS operational.users (
     full_name                VARCHAR(255) NOT NULL,
     phone_number             VARCHAR(20),
     password_hash            VARCHAR(255) NOT NULL,
-    role                     operational.user_role_enum NOT NULL DEFAULT 'OPERATOR',
+    role                     operational.user_role_enum NOT NULL DEFAULT 'STANDARD_USER',
     status                   operational.user_status_enum NOT NULL DEFAULT 'ACTIVE',
     assigned_port_id         UUID REFERENCES operational.ports(id) ON DELETE RESTRICT,
     failed_login_count       SMALLINT NOT NULL DEFAULT 0
@@ -162,9 +162,9 @@ CREATE TABLE IF NOT EXISTS operational.users (
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at               TIMESTAMPTZ,
     CONSTRAINT users_role_port_assignment CHECK (
-        (role = 'ADMIN' AND assigned_port_id IS NULL)
+        (role = 'SUPER_ADMIN' AND assigned_port_id IS NULL)
         OR
-        (role IN ('PORT_MANAGER', 'OPERATOR') AND assigned_port_id IS NOT NULL)
+        (role IN ('ADMIN', 'STANDARD_USER') AND assigned_port_id IS NOT NULL)
     )
 );
 
@@ -920,6 +920,10 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    IF NEW.is_simulation = TRUE THEN
+        RETURN NEW;
+    END IF;
+
     IF NEW.zone_id IS NULL THEN
         UPDATE operational.ports
         SET current_risk_level = NEW.final_risk_level
@@ -943,6 +947,10 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    IF NEW.simulation_session_id IS NOT NULL OR NEW.change_source = 'SIMULATION' THEN
+        RETURN NEW;
+    END IF;
+
     UPDATE operational.ports
     SET current_operation_mode = NEW.new_mode
     WHERE id = NEW.port_id;
@@ -1153,7 +1161,7 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO operational.zones (
     port_id, name, zone_type, description,
-    capacity_value, capacity_unit, display_order
+    capacity_value, capacity_unit, display_order, latitude, longitude
 )
 SELECT
     p.id,
@@ -1162,17 +1170,19 @@ SELECT
     z.description,
     z.capacity_value,
     z.capacity_unit,
-    z.display_order
+    z.display_order,
+    z.latitude,
+    z.longitude
 FROM operational.ports p
 CROSS JOIN (
     VALUES
-        ('Bến số 1', 'DOCK', 'Cầu tàu container chính', 2, 'tàu', 1),
-        ('Bến số 2', 'DOCK', 'Cầu tàu hàng tổng hợp', 2, 'tàu', 2),
-        ('Bãi container A', 'YARD', 'Bãi container nhập', 1200, 'TEU', 3),
-        ('Bãi container B', 'YARD', 'Bãi container xuất', 980, 'TEU', 4),
-        ('Cổng chính', 'GATE', 'Cổng kiểm soát phương tiện', 8, 'làn', 5),
-        ('Kho tổng hợp', 'WAREHOUSE', 'Kho hàng tổng hợp', 5000, 'm2', 6)
-) AS z(name, zone_type, description, capacity_value, capacity_unit, display_order)
+        ('Bến số 1', 'DOCK', 'Cầu tàu container chính', 2, 'tàu', 1, 16.124000, 108.214000),
+        ('Bến số 2', 'DOCK', 'Cầu tàu hàng tổng hợp', 2, 'tàu', 2, 16.124500, 108.214500),
+        ('Bãi container A', 'YARD', 'Bãi container nhập', 1200, 'TEU', 3, 16.123000, 108.216000),
+        ('Bãi container B', 'YARD', 'Bãi container xuất', 980, 'TEU', 4, 16.122000, 108.217000),
+        ('Cổng chính', 'GATE', 'Cổng kiểm soát phương tiện', 8, 'làn', 5, 16.125000, 108.213000),
+        ('Kho tổng hợp', 'WAREHOUSE', 'Kho hàng tổng hợp', 5000, 'm2', 6, 16.121000, 108.215000)
+) AS z(name, zone_type, description, capacity_value, capacity_unit, display_order, latitude, longitude)
 WHERE p.code = 'DNTSA'
 ON CONFLICT DO NOTHING;
 

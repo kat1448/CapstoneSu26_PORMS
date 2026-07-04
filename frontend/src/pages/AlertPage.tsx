@@ -30,6 +30,7 @@ export function AlertPage({ refreshKey }: AlertPageProps) {
             <tr>
               <th>Mức độ</th>
               <th>Nội dung</th>
+              <th>Cảng</th>
               <th>Loại</th>
               <th>Khu vực</th>
               <th>Thời gian</th>
@@ -47,6 +48,7 @@ export function AlertPage({ refreshKey }: AlertPageProps) {
                   <strong>{alert.title}</strong>
                   <p>{alert.message}</p>
                 </td>
+                <td>{alert.portCode} - {alert.portName}</td>
                 <td>{alert.alertType}</td>
                 <td>{alert.zoneName}</td>
                 <td>{alert.createdAt}</td>

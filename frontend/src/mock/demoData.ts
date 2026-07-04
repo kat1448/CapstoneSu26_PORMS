@@ -14,6 +14,7 @@ type UsersPageRecord = {
   email: string;
   fullName: string;
   lastLoginLabel: string;
+  portId?: string | null;
   portName: string;
   role: string;
   status: "ACTIVE" | "INACTIVE" | "LOCKED";
@@ -48,10 +49,34 @@ const baseState: DemoState = {
     windSpeedMs: 18.4
   },
   weather: {
+    beaufortNumber: 8,
+    dataPoints: [{
+      beaufortNumber: 8,
+      dataSource: "OPENWEATHER_API",
+      latitude: 16.116235,
+      longitude: 108.230378,
+      observedAt: "2026-06-19T14:28:23Z",
+      portCode: "DNTSA",
+      portName: "Cảng Tiên Sa",
+      rainfall1hMm: 28.5,
+      temperatureC: 27,
+      visibilityKm: 4.2,
+      weatherDescription: "moderate rain",
+      windSpeedMs: 18.4,
+      zoneName: "Toàn cảng"
+    }],
+    dataSource: "OPENWEATHER_API",
     humidityPct: 91,
+    observedAt: "2026-06-19T14:28:23Z",
+    pressureHpa: 1008,
     rainfall1hMm: 28.5,
+    recordedAt: "2026-06-19T14:29:12Z",
     temperatureC: 27,
     visibilityKm: 4.2,
+    weatherCode: 500,
+    weatherDescription: "moderate rain",
+    windDirectionDeg: 110,
+    windGustMs: 22.4,
     windSpeedMs: 18.4
   },
   riskTrend: [
@@ -70,6 +95,8 @@ const baseState: DemoState = {
       currentOperationMode: "LIMITED",
       currentRiskLevel: "HIGH",
       isActive: true,
+      latitude: 16.1228,
+      longitude: 108.2144,
       portCode: "DNTSA",
       portId: primaryPortId,
       portName: "Cảng Tiên Sa",
@@ -80,6 +107,8 @@ const baseState: DemoState = {
       currentOperationMode: "NORMAL",
       currentRiskLevel: "MEDIUM",
       isActive: true,
+      latitude: 16.1650,
+      longitude: 108.1915,
       portCode: "DNLH",
       portId: "port-lien-chieu",
       portName: "Cảng Liên Chiểu",
@@ -90,6 +119,8 @@ const baseState: DemoState = {
       currentOperationMode: "NORMAL",
       currentRiskLevel: "LOW",
       isActive: true,
+      latitude: 16.3378,
+      longitude: 108.0144,
       portCode: "DNCM",
       portId: "port-chan-may",
       portName: "Cảng Chân Mây",
@@ -104,6 +135,8 @@ const baseState: DemoState = {
         displayOrder: 1,
         isActive: true,
         isRestricted: true,
+        latitude: 16.1240,
+        longitude: 108.2140,
         overrideEnabled: true,
         portId: primaryPortId,
         restrictionReason: "Dừng bốc xếp do gió cấp 10",
@@ -118,6 +151,8 @@ const baseState: DemoState = {
         displayOrder: 2,
         isActive: true,
         isRestricted: true,
+        latitude: 16.1245,
+        longitude: 108.2145,
         overrideEnabled: false,
         portId: primaryPortId,
         restrictionReason: "Hạn chế thiết bị nâng cao",
@@ -132,6 +167,8 @@ const baseState: DemoState = {
         displayOrder: 3,
         isActive: true,
         isRestricted: false,
+        latitude: 16.1230,
+        longitude: 108.2160,
         overrideEnabled: false,
         portId: primaryPortId,
         restrictionReason: null,
@@ -146,6 +183,8 @@ const baseState: DemoState = {
         displayOrder: 4,
         isActive: true,
         isRestricted: false,
+        latitude: 16.1250,
+        longitude: 108.2130,
         overrideEnabled: false,
         portId: primaryPortId,
         restrictionReason: null,
@@ -162,6 +201,8 @@ const baseState: DemoState = {
         displayOrder: 1,
         isActive: true,
         isRestricted: false,
+        latitude: 16.1650,
+        longitude: 108.1915,
         overrideEnabled: false,
         portId: "port-lien-chieu",
         restrictionReason: null,
@@ -178,6 +219,8 @@ const baseState: DemoState = {
         displayOrder: 1,
         isActive: true,
         isRestricted: false,
+        latitude: 16.3378,
+        longitude: 108.0144,
         overrideEnabled: false,
         portId: "port-chan-may",
         restrictionReason: null,
@@ -303,7 +346,7 @@ const baseState: DemoState = {
       fullName: "Nguyễn Văn Hùng",
       lastLoginLabel: "Vừa xong",
       portName: "Tiên Sa",
-      role: "PORT_OPERATOR",
+      role: "STANDARD_USER",
       status: "ACTIVE",
       userId: "user-1"
     },
@@ -312,7 +355,7 @@ const baseState: DemoState = {
       fullName: "Trần Thị Lan",
       lastLoginLabel: "15:30 hôm nay",
       portName: "Tất cả",
-      role: "COMPANY_ADMIN",
+      role: "ADMIN",
       status: "ACTIVE",
       userId: "user-2"
     },
@@ -321,7 +364,7 @@ const baseState: DemoState = {
       fullName: "Phạm Minh Đức",
       lastLoginLabel: "13:20 hôm nay",
       portName: "Tiên Sa",
-      role: "PORT_OPERATOR",
+      role: "STANDARD_USER",
       status: "ACTIVE",
       userId: "user-3"
     }
@@ -422,12 +465,110 @@ export function getPortZones(portId: string): PortZone[] {
   return clone(demoState.zonesByPortId[portId] ?? []);
 }
 
+export function updatePort(portId: string, input: DemoPortUpdateInput): PortSummary {
+  let updated: PortSummary | null = null;
+  demoState.ports = demoState.ports.map((port) => {
+    if (port.portId !== portId) {
+      return port;
+    }
+
+    updated = {
+      ...port,
+      isActive: input.isActive,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      portCode: input.code,
+      portName: input.name
+    };
+    return updated;
+  });
+
+  notify();
+  return clone(updated ?? demoState.ports.find((port) => port.portId === portId)!);
+}
+
 export function getSimulationSnapshot(): SimulationSnapshot {
   return clone(demoState.simulation);
 }
 
 export function getUsers(): UsersPageRecord[] {
   return clone(demoState.users);
+}
+
+export type DemoUserCreateInput = {
+  email: string;
+  fullName: string;
+  password: string;
+  portId?: string | null;
+  role: string;
+  status: "ACTIVE" | "INACTIVE" | "LOCKED";
+};
+
+export type DemoUserUpdateInput = Omit<DemoUserCreateInput, "password">;
+
+export type DemoPortUpdateInput = {
+  address?: string | null;
+  code: string;
+  isActive: boolean;
+  latitude: number;
+  longitude: number;
+  name: string;
+  timezone: string;
+  weatherSource: string;
+  weatherStationId?: string | null;
+};
+
+function portNameFromId(portId: string | null | undefined): string {
+  if (!portId) {
+    return "Tất cả";
+  }
+
+  return demoState.ports.find((port) => port.portId === portId)?.portName ?? "Tất cả";
+}
+
+export function createUser(input: DemoUserCreateInput): UsersPageRecord {
+  const user: UsersPageRecord = {
+    email: input.email,
+    fullName: input.fullName,
+    lastLoginLabel: "Chưa đăng nhập",
+    portId: input.portId ?? null,
+    portName: portNameFromId(input.portId),
+    role: input.role,
+    status: input.status,
+    userId: `user-${Date.now()}`
+  };
+
+  demoState.users = [user, ...demoState.users];
+  notify();
+  return clone(user);
+}
+
+export function updateUser(userId: string, input: DemoUserUpdateInput): UsersPageRecord {
+  let updated: UsersPageRecord | null = null;
+  demoState.users = demoState.users.map((user) => {
+    if (user.userId !== userId) {
+      return user;
+    }
+
+    updated = {
+      ...user,
+      email: input.email,
+      fullName: input.fullName,
+      portId: input.portId ?? null,
+      portName: portNameFromId(input.portId),
+      role: input.role,
+      status: input.status
+    };
+    return updated;
+  });
+
+  notify();
+  return clone(updated ?? demoState.users.find((user) => user.userId === userId)!);
+}
+
+export function deleteUser(userId: string): void {
+  demoState.users = demoState.users.filter((user) => user.userId !== userId);
+  notify();
 }
 
 export function resetDemoData() {

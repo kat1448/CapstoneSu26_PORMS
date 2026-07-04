@@ -16,6 +16,8 @@ builder.Services.Configure<CorsOptions>(
     builder.Configuration.GetSection(CorsOptions.SectionName));
 builder.Services.Configure<JwtOptions>(
     builder.Configuration.GetSection(JwtOptions.SectionName));
+builder.Services.Configure<OpenWeatherOptions>(
+    builder.Configuration.GetSection(OpenWeatherOptions.SectionName));
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
@@ -57,7 +59,9 @@ builder.Services.AddScoped<SimulationRepository>();
 builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<WeatherRepository>();
 builder.Services.AddScoped<RiskRepository>();
+builder.Services.AddScoped<SopRuleRepository>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddHttpClient<OpenWeatherService>();
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("Missing JWT configuration.");
 builder.Services
@@ -76,7 +80,12 @@ builder.Services
             ClockSkew = TimeSpan.FromSeconds(30)
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("SuperAdminOnly", policy => policy.RequireRole("SUPER_ADMIN"));
+    options.AddPolicy("AdminOrSuperAdmin", policy => policy.RequireRole("SUPER_ADMIN", "ADMIN"));
+    options.AddPolicy("AllAppUsers", policy => policy.RequireRole("SUPER_ADMIN", "ADMIN", "STANDARD_USER"));
+});
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

@@ -17,6 +17,51 @@ public sealed class AlertRepository
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
 
         const string sql = """
+            WITH alert_feed AS (
+                SELECT a.id,
+                       a.port_id,
+                       p.code AS port_code,
+                       p.name AS port_name,
+                       COALESCE(a.zone_id, ra.zone_id) AS zone_id,
+                       z.name AS zone_name,
+                       a.alert_type::text AS alert_type,
+                       a.severity::text AS severity,
+                       CASE
+                           WHEN a.alert_type = 'SIMULATION' THEN CONCAT('Cảnh báo mô phỏng ', a.severity::text, ' tại ', COALESCE(z.name, p.name))
+                           ELSE a.title
+                       END AS title,
+                       CASE
+                           WHEN a.alert_type = 'SIMULATION' THEN CONCAT(
+                               COALESCE(z.name, p.name),
+                               ' (',
+                               p.code,
+                               ') đạt mức ',
+                               a.severity::text,
+                               COALESCE(': ' || NULLIF(CASE ra.assessment_summary
+                                   WHEN 'Stable harbor conditions' THEN 'Điều kiện cảng ổn định'
+                                   WHEN 'Increasing wind and moderate rain' THEN 'Gió tăng và mưa vừa'
+                                   WHEN 'Unsafe cargo handling conditions' THEN 'Điều kiện làm hàng không an toàn'
+                                   WHEN 'Operations must stop immediately' THEN 'Phải dừng khai thác ngay lập tức'
+                                   ELSE ra.assessment_summary
+                               END, ''), '.'))
+                           ELSE a.message
+                       END AS message,
+                       CASE
+                           WHEN a.simulation_session_id IS NOT NULL AND a.created_at > NOW() THEN COALESCE(s.created_at, s.started_at, a.created_at)
+                           ELSE a.created_at
+                       END AS display_created_at,
+                       a.expires_at,
+                       COUNT(ar.id) AS recipient_count,
+                       COUNT(ar.read_at) AS read_count,
+                       COUNT(ar.acknowledged_at) AS acknowledged_count
+                FROM operational.alerts a
+                JOIN operational.ports p ON p.id = a.port_id
+                LEFT JOIN operational.risk_assessments ra ON ra.id = a.risk_assessment_id
+                LEFT JOIN operational.zones z ON z.id = COALESCE(a.zone_id, ra.zone_id)
+                LEFT JOIN operational.simulation_sessions s ON s.id = a.simulation_session_id
+                LEFT JOIN operational.alert_receipts ar ON ar.alert_id = a.id
+                GROUP BY a.id, p.code, p.name, ra.zone_id, ra.assessment_summary, z.name, s.created_at, s.started_at
+            )
             SELECT id,
                    port_id,
                    port_code,
@@ -27,13 +72,13 @@ public sealed class AlertRepository
                    severity,
                    title,
                    message,
-                   created_at,
+                   display_created_at,
                    expires_at,
                    recipient_count,
                    read_count,
                    acknowledged_count
-            FROM operational.v_alert_feed
-            ORDER BY created_at DESC
+            FROM alert_feed
+            ORDER BY display_created_at DESC
             LIMIT 50;
             """;
 
