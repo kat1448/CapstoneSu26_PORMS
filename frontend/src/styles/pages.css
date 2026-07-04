@@ -1449,7 +1449,8 @@
 }
 
 .bi-kpi-grid > .card.bi-kpi-card.bi-card-pad {
-  padding: 32px 32px 32px 56px;
+  padding: 32px 32px 32px 32px;
+  padding-left: 56px;
 }
 
 .bi-kpi-card::before {

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
 using PORMS.Infrastructure.Repositories;
@@ -6,6 +7,7 @@ using System.Text.Json;
 namespace PORMS.API.Controllers;
 
 [ApiController]
+[Authorize(Policy = "AdminOrSuperAdmin")]
 [Route("api/sop-rules")]
 public sealed class SopController : ControllerBase
 {

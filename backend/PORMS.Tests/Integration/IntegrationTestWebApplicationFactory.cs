@@ -302,8 +302,7 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
             ON CONFLICT (id) DO UPDATE
             SET port_id = EXCLUDED.port_id,
                 observed_at = EXCLUDED.observed_at,
-                recorded_at = EXCLUDED.recorded_at,
-                updated_at = NOW();
+                recorded_at = EXCLUDED.recorded_at;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
@@ -444,8 +443,8 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                     70,
                     10,
                     'OpenWeather low risk',
-                    NOW() - INTERVAL '10 minutes',
-                    NOW() - INTERVAL '9 minutes',
+                    NOW() + INTERVAL '10 minutes',
+                    NOW() + INTERVAL '11 minutes',
                     'OPENWEATHER_API',
                     FALSE
                 );
@@ -477,7 +476,7 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                     FALSE,
                     'WIND',
                     'OpenWeather should drive dashboard risk.',
-                    NOW() - INTERVAL '8 minutes',
+                    NOW() + INTERVAL '12 minutes',
                     FALSE
                 );
 
@@ -508,8 +507,8 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                     90,
                     0.8,
                     'Simulation critical risk',
-                    NOW(),
-                    NOW(),
+                    NOW() + INTERVAL '20 minutes',
+                    NOW() + INTERVAL '21 minutes',
                     'SIMULATION_DEMO',
                     TRUE
                 );
@@ -543,7 +542,7 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                     TRUE,
                     'WIND',
                     'Simulation must not drive dashboard risk.',
-                    NOW(),
+                    NOW() + INTERVAL '22 minutes',
                     TRUE
                 );
 

@@ -1,5 +1,10 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.IdentityModel.Tokens;
 using PORMS.API.Contracts;
 using Xunit;
 
@@ -9,7 +14,6 @@ namespace PORMS.Tests.Integration;
 public sealed class ReadApiSmokeTests
 {
     private static readonly Guid SeedAlertId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-    private static readonly Guid SeedOperationEventId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private readonly IntegrationTestWebApplicationFactory _factory;
 
     public ReadApiSmokeTests(IntegrationTestWebApplicationFactory factory)
@@ -72,6 +76,9 @@ public sealed class ReadApiSmokeTests
     public async Task UpdatePort_ReturnsSuccessAndUpdatesPort()
     {
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateToken("SUPER_ADMIN"));
         var port = await _factory.GetPrimaryPortAsync();
 
         var request = new UpdatePortRequest(
@@ -96,6 +103,29 @@ public sealed class ReadApiSmokeTests
         Assert.Equal("Updated port name", updated.PortName);
     }
 
+    private static string CreateToken(string role)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("PORMS-development-signing-key-change-in-production-2026"));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, $"{role.ToLowerInvariant()}@porms.vn"),
+            new Claim(ClaimTypes.Name, role),
+            new Claim(ClaimTypes.Role, role),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: "PORMS",
+            audience: "PORMS.Frontend",
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(15),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
     [Fact]
     public async Task Alerts_ReturnSuccessAndContainSeededAlert()
     {
@@ -117,7 +147,8 @@ public sealed class ReadApiSmokeTests
     [Fact]
     public async Task OperationEvents_ReturnSuccessAndContainSeededOperationEvent()
     {
-        await _factory.SeedOperationEventAsync(SeedOperationEventId);
+        var seedOperationEventId = Guid.NewGuid();
+        await _factory.SeedOperationEventAsync(seedOperationEventId);
         var client = _factory.CreateClient();
 
         var response = await client.GetAsync("/api/operation-events");
@@ -126,7 +157,7 @@ public sealed class ReadApiSmokeTests
 
         var events = await response.Content.ReadFromJsonAsync<List<OperationEventResponse>>();
         Assert.NotNull(events);
-        var operationEvent = Assert.Single(events!.Where(item => item.OperationEventId == SeedOperationEventId));
+        var operationEvent = Assert.Single(events!.Where(item => item.OperationEventId == seedOperationEventId));
         Assert.Equal("SYSTEM_TEST", operationEvent.EventType);
         Assert.Equal("Smoke test event", operationEvent.Summary);
         Assert.NotNull(operationEvent.PortCode);
@@ -135,9 +166,9 @@ public sealed class ReadApiSmokeTests
     [Fact]
     public async Task OperationEvents_SeparatesLiveAndSimulationLogs()
     {
-        var liveEventId = Guid.Parse("55555555-5555-5555-5555-555555555555");
-        var simulationEventId = Guid.Parse("66666666-6666-6666-6666-666666666666");
-        var simulationSessionId = Guid.Parse("77777777-7777-7777-7777-777777777777");
+        var liveEventId = Guid.NewGuid();
+        var simulationEventId = Guid.NewGuid();
+        var simulationSessionId = Guid.NewGuid();
         await _factory.SeedOperationEventAsync(liveEventId);
         await _factory.SeedSimulationOperationEventAsync(simulationEventId, simulationSessionId);
         var client = _factory.CreateClient();
