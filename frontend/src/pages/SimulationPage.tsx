@@ -389,15 +389,6 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
               />
             </label>
             <label>
-              <span>Beaufort</span>
-              <input
-                aria-label="Beaufort"
-                onChange={(event) => setDatasetForm((value) => ({ ...value, snapshots: [{ ...firstSnapshot, beaufortNumber: Number(event.target.value) }] }))}
-                type="number"
-                value={firstSnapshot.beaufortNumber}
-              />
-            </label>
-            <label>
               <span>Mưa mm/h</span>
               <input
                 aria-label="Mưa mm/h"
@@ -520,15 +511,6 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
                   onChange={(event) => setDatasetForm((value) => ({ ...value, snapshots: [{ ...firstSnapshot, windSpeedMs: Number(event.target.value) }] }))}
                   type="number"
                   value={firstSnapshot.windSpeedMs}
-                />
-              </label>
-              <label>
-                <span>Beaufort</span>
-                <input
-                  aria-label="Beaufort"
-                  onChange={(event) => setDatasetForm((value) => ({ ...value, snapshots: [{ ...firstSnapshot, beaufortNumber: Number(event.target.value) }] }))}
-                  type="number"
-                  value={firstSnapshot.beaufortNumber}
                 />
               </label>
               <label>

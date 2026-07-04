@@ -56,7 +56,6 @@ export const navigationGroups: NavigationGroup[] = [
     label: "Công cụ & báo cáo",
     items: [
       { icon: "play", label: "Mô phỏng", path: "/simulation", roles: allRoles },
-      { icon: "chart", label: "Kết quả mô phỏng", path: "/simulation-results", roles: allRoles },
       { icon: "chart", label: "Dự báo vận hành", path: "/forecast-planning", roles: adminRoles },
       { icon: "chart", label: "Phân tích BI", path: "/analytics", roles: adminRoles }
     ]
@@ -72,6 +71,10 @@ export function getNavigationForRole(role: DemoUserRole): NavigationGroup[] {
 export function isRouteAllowed(role: DemoUserRole, pathname: string): boolean {
   if (pathname === "/profile" || pathname === "/change-password") {
     return true;
+  }
+
+  if (pathname === "/simulation-results") {
+    return allRoles.includes(role);
   }
 
   if (pathname === "/ports/new") {

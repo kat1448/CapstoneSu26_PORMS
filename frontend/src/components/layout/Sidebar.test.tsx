@@ -24,6 +24,7 @@ describe("Sidebar", () => {
 
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Mô phỏng")).toBeInTheDocument();
+    expect(screen.queryByText("Kết quả mô phỏng")).not.toBeInTheDocument();
     expect(screen.queryByText("Nhật ký nhiệm vụ")).not.toBeInTheDocument();
     expect(screen.queryByText("Người dùng")).not.toBeInTheDocument();
     expect(screen.queryByText("Ngưỡng rủi ro")).not.toBeInTheDocument();

@@ -4,7 +4,6 @@ import { GisMapCard } from "../components/dashboard/GisMapCard";
 import { ModeCard } from "../components/dashboard/ModeCard";
 import { RiskHeroCard } from "../components/dashboard/RiskHeroCard";
 import { WeatherDataTable } from "../components/dashboard/WeatherDataTable";
-import { ZoneStatusCard } from "../components/dashboard/ZoneStatusCard";
 import { useDemoRefresh } from "../hooks/useDemoRefresh";
 import { getAlerts } from "../services/alertService";
 import { getDashboardSummary, getWeatherSnapshot } from "../services/dashboardService";
@@ -80,7 +79,6 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
 
   const selectedPort = ports.find((port) => port.portId === selectedPortId);
   const mapPortName = selectedPort?.portName ?? (selectedPortId ? summary.portName : "Tất cả cảng");
-  const zoneStatusPortId = selectedPortId || summary.portId;
 
   return (
     <section className="page-grid">
@@ -105,7 +103,6 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
             zones={zones}
           />
           <WeatherDataTable weather={weather} />
-          <ZoneStatusCard portId={zoneStatusPortId} zones={zones} />
         </div>
         <div className="dashboard-side" data-testid="dashboard-right">
           <AlertListCard alerts={alerts} />
