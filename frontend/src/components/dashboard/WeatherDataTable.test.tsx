@@ -28,7 +28,9 @@ const weather: WeatherSnapshot = {
       portCode: "DNTSA",
       portName: "Cảng Tiên Sa",
       rainfall1hMm: 28.5,
+      recordedAt: "2026-06-26T03:11:30Z",
       temperatureC: 29,
+      humidityPct: 82,
       visibilityKm: 4.2,
       weatherDescription: "moderate rain",
       windSpeedMs: 18.4,
@@ -41,16 +43,15 @@ describe("WeatherDataTable", () => {
   it("renders OpenWeather detail rows", () => {
     render(<WeatherDataTable weather={weather} />);
 
-    expect(screen.getByRole("heading", { name: "Bảng dữ liệu OpenWeather" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Dữ liệu thời tiết theo cảng và khu vực" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Dữ liệu thời tiết theo cảng và khu vực" })).toBeInTheDocument();
     expect(screen.getByText("OPENWEATHER_API")).toBeInTheDocument();
-    expect(screen.getByText("moderate rain · 500")).toBeInTheDocument();
-    expect(screen.getAllByText("18.4 m/s").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("22.4 m/s")).toBeInTheDocument();
-    expect(screen.getByText("110°")).toBeInTheDocument();
-    expect(screen.getByText("1008 hPa")).toBeInTheDocument();
-    expect(screen.getAllByText("26/06/2026 12:10:00").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("moderate rain")).toBeInTheDocument();
+    expect(screen.getByText("18.4 m/s")).toBeInTheDocument();
+    expect(screen.getByText("Beaufort 8")).toBeInTheDocument();
+    expect(screen.getByText("82%")).toBeInTheDocument();
+    expect(screen.getByText("26/06/2026 12:10:00")).toBeInTheDocument();
     expect(screen.getByText("26/06/2026 12:11:30")).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Điểm dữ liệu thời tiết theo vị trí" })).toBeInTheDocument();
     expect(screen.getByText("Cảng Tiên Sa")).toBeInTheDocument();
     expect(screen.getByText("Bến số 1")).toBeInTheDocument();
     expect(screen.getByText("16.116235, 108.230378")).toBeInTheDocument();
@@ -59,10 +60,11 @@ describe("WeatherDataTable", () => {
   it("shows placeholders for missing optional OpenWeather values", () => {
     render(
       <WeatherDataTable
-        weather={{ ...weather, pressureHpa: null, weatherCode: null, weatherDescription: null, windGustMs: null }}
+        weather={{ ...weather, dataPoints: [], pressureHpa: null, weatherCode: null, weatherDescription: null, windGustMs: null }}
       />
     );
 
-    expect(screen.getAllByText("Chưa có dữ liệu").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByText("Chưa có dữ liệu").length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText("Toàn cảng")).toBeInTheDocument();
   });
 });

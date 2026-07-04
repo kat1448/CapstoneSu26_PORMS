@@ -78,6 +78,8 @@ export type SimulationRunResult = {
 export type SimulationMapPoint = {
   latitude: number;
   longitude: number;
+  portCode?: string;
+  portId?: string;
   riskLevel: RiskLevel;
   zoneId: string;
   zoneName: string;

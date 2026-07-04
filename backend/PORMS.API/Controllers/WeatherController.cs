@@ -44,8 +44,10 @@ public sealed class WeatherController : ControllerBase
                 Rainfall1hMm = point.Rainfall1hMm,
                 VisibilityKm = point.VisibilityKm,
                 TemperatureC = point.TemperatureC,
+                HumidityPct = point.HumidityPct,
                 WeatherDescription = point.WeatherDescription,
                 ObservedAt = point.ObservedAt,
+                RecordedAt = point.RecordedAt,
                 DataSource = point.DataSource
             }).ToList()
         });
@@ -92,6 +94,7 @@ public sealed class WeatherController : ControllerBase
                     TemperatureDayC = day.TemperatureDayC,
                     TemperatureMinC = day.TemperatureMinC,
                     TemperatureMaxC = day.TemperatureMaxC,
+                    VisibilityKm = day.VisibilityKm,
                     WindSpeedMs = day.WindSpeedMs,
                     WindGustMs = day.WindGustMs,
                     WindDirectionDeg = day.WindDirectionDeg,

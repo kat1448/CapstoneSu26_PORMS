@@ -9,7 +9,9 @@ type OperationEventApiResponse = Omit<OperationEvent, "actorName" | "entityType"
   portCode: string | null;
 };
 
-export async function getOperationEvents(): Promise<OperationEvent[]> {
+export type OperationEventScope = "live" | "simulation";
+
+export async function getOperationEvents(scope: OperationEventScope = "live"): Promise<OperationEvent[]> {
   const normalize = (events: OperationEventApiResponse[]) => events.map((event) => ({
     ...event,
     actorName: event.actorName ?? "SYSTEM",
@@ -20,7 +22,8 @@ export async function getOperationEvents(): Promise<OperationEvent[]> {
 
   return withMockFallback(
     async () => {
-      const events = await requestJson<OperationEventApiResponse[]>("/api/operation-events");
+      const path = scope === "simulation" ? "/api/operation-events?scope=simulation" : "/api/operation-events";
+      const events = await requestJson<OperationEventApiResponse[]>(path);
       return normalize(events);
     },
     () => normalize(getOperationEventsData())

@@ -187,6 +187,7 @@ export function ForecastPlanningPage() {
                   <th>Nhiệt độ</th>
                   <th>Gió</th>
                   <th>Mưa</th>
+                  <th>Tầm nhìn</th>
                   <th>Độ ẩm</th>
                   <th>Áp suất</th>
                 </tr>
@@ -208,6 +209,7 @@ export function ForecastPlanningPage() {
                       <strong>{day.rainMm.toFixed(1)} mm</strong>
                       <small>{day.popPct}% khả năng</small>
                     </td>
+                    <td>{day.visibilityKm !== null ? `${day.visibilityKm.toFixed(1)} km` : "Chưa có"}</td>
                     <td>{day.humidityPct}%</td>
                     <td>{day.pressureHpa !== null ? `${day.pressureHpa.toFixed(0)} hPa` : "Chưa có"}</td>
                   </tr>

@@ -53,6 +53,7 @@ beforeEach(() => {
         temperatureMinC: 25,
         weatherCode: 500,
         weatherDescription: "mưa vừa",
+        visibilityKm: 6.2,
         windDirectionDeg: 110,
         windGustMs: 14.2,
         windSpeedMs: 9.4
@@ -101,6 +102,7 @@ describe("ForecastPlanningPage", () => {
     expect(getOpenWeatherForecast).toHaveBeenCalledWith("DNTSA", 5);
     expect(screen.getByText("Mưa rào rải rác")).toBeInTheDocument();
     expect(screen.getByText("9.4 m/s")).toBeInTheDocument();
+    expect(screen.getByText("6.2 km")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Cập nhật kế hoạch từ OpenWeather" }));
 

@@ -12,7 +12,7 @@ public sealed class OperationEventRepository
         _connectionFactory = connectionFactory;
     }
 
-    public async Task<IReadOnlyList<OperationEventReadModel>> GetOperationEventsAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<OperationEventReadModel>> GetOperationEventsAsync(bool simulationOnly, CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
 
@@ -29,16 +29,20 @@ public sealed class OperationEventRepository
                    e.entity_type,
                    e.entity_id,
                    e.summary,
-                   e.occurred_at
+                   e.occurred_at,
+                   e.simulation_session_id
             FROM operational.operation_events e
             LEFT JOIN operational.ports p ON p.id = e.port_id
             LEFT JOIN operational.zones z ON z.id = e.zone_id
             LEFT JOIN operational.users u ON u.id = e.actor_user_id
+            WHERE (@simulationOnly = TRUE AND e.simulation_session_id IS NOT NULL)
+               OR (@simulationOnly = FALSE AND e.simulation_session_id IS NULL)
             ORDER BY e.occurred_at DESC
             LIMIT 50;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("simulationOnly", simulationOnly);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var results = new List<OperationEventReadModel>();
@@ -57,7 +61,8 @@ public sealed class OperationEventRepository
                 reader.IsDBNull(9) ? null : reader.GetString(9),
                 reader.IsDBNull(10) ? null : reader.GetGuid(10),
                 reader.GetString(11),
-                reader.GetFieldValue<DateTimeOffset>(12)));
+                reader.GetFieldValue<DateTimeOffset>(12),
+                reader.IsDBNull(13) ? null : reader.GetGuid(13)));
         }
 
         return results;
@@ -77,4 +82,5 @@ public sealed record OperationEventReadModel(
     string? EntityType,
     Guid? EntityId,
     string Summary,
-    DateTimeOffset OccurredAt);
+    DateTimeOffset OccurredAt,
+    Guid? SimulationSessionId);

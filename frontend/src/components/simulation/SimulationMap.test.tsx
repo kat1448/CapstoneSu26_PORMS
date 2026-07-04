@@ -6,7 +6,7 @@ import { SimulationMap } from "./SimulationMap";
 
 const leafletState = vi.hoisted(() => ({
   map: null as null | Record<string, ReturnType<typeof vi.fn>>,
-  markers: [] as Array<{ click: (() => void) | null; coordinates: [number, number]; popup: string | null }>,
+  markers: [] as Array<{ click: (() => void) | null; coordinates: [number, number]; options: unknown; popup: string | null }>,
   tileLayers: [] as string[]
 }));
 
@@ -28,8 +28,8 @@ vi.mock("leaflet", () => ({
       leafletState.map = mapApi;
       return mapApi;
     },
-    marker: (coordinates: [number, number]) => {
-      const entry = { click: null as (() => void) | null, coordinates, popup: null as string | null };
+    marker: (coordinates: [number, number], options: unknown) => {
+      const entry = { click: null as (() => void) | null, coordinates, options, popup: null as string | null };
       leafletState.markers.push(entry);
       const markerApi = {
         addTo: vi.fn().mockReturnThis(),
@@ -100,7 +100,7 @@ const zones: PortZone[] = [
 ];
 
 const points: SimulationMapPoint[] = [
-  { latitude: 16.1, longitude: 108.2, riskLevel: "CRITICAL", zoneId: "zone-1", zoneName: "Ben so 1" }
+  { latitude: 16.1, longitude: 108.2, portCode: "DNTSA", portId: "port-1", riskLevel: "CRITICAL", zoneId: "zone-1", zoneName: "Ben so 1" }
 ];
 
 afterEach(() => {
@@ -132,6 +132,23 @@ describe("SimulationMap", () => {
     leafletState.markers[1].click?.();
 
     expect(onSelectPort).toHaveBeenCalledWith("port-2");
+  });
+
+  it("colors the selected port marker by simulated risk instead of live dashboard risk", () => {
+    render(
+      <SimulationMap
+        onResetSelection={vi.fn()}
+        onSelectPort={vi.fn()}
+        points={points}
+        ports={[{ ...ports[0], currentRiskLevel: "LOW" }]}
+        running={false}
+        selectedPortId=""
+        zones={[]}
+      />
+    );
+
+    expect(JSON.stringify(leafletState.markers[0].options)).toContain("#d94848");
+    expect(leafletState.markers[0].popup).toContain("CRITICAL");
   });
 
   it("renders selected port zones using simulation risk and port-coordinate fallback", () => {

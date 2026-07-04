@@ -129,6 +129,8 @@ describe("GisMapCard", () => {
     expect(leafletState.tileLayers).toContain("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
     expect(leafletState.markers).toHaveLength(3);
     expect(leafletState.markers[0].coordinates).toEqual([16.124, 108.214]);
+    expect(JSON.stringify(leafletState.markers[0].options)).toContain("<span>DNTSA</span>");
+    expect(JSON.stringify(leafletState.markers[0].options)).not.toContain(">1<");
     expect(leafletState.markers[0].popup).toContain("Cang Tien Sa");
     expect(leafletState.markers[2].coordinates).toEqual([16.123, 108.216]);
     expect(leafletState.markers[2].popup).toContain("Bai container A");

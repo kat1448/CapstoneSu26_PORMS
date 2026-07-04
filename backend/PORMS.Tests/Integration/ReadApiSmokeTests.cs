@@ -131,4 +131,32 @@ public sealed class ReadApiSmokeTests
         Assert.Equal("Smoke test event", operationEvent.Summary);
         Assert.NotNull(operationEvent.PortCode);
     }
+
+    [Fact]
+    public async Task OperationEvents_SeparatesLiveAndSimulationLogs()
+    {
+        var liveEventId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var simulationEventId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+        var simulationSessionId = Guid.Parse("77777777-7777-7777-7777-777777777777");
+        await _factory.SeedOperationEventAsync(liveEventId);
+        await _factory.SeedSimulationOperationEventAsync(simulationEventId, simulationSessionId);
+        var client = _factory.CreateClient();
+
+        var liveResponse = await client.GetAsync("/api/operation-events");
+        var simulationResponse = await client.GetAsync("/api/operation-events?scope=simulation");
+
+        Assert.Equal(HttpStatusCode.OK, liveResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, simulationResponse.StatusCode);
+
+        var liveEvents = await liveResponse.Content.ReadFromJsonAsync<List<OperationEventResponse>>();
+        var simulationEvents = await simulationResponse.Content.ReadFromJsonAsync<List<OperationEventResponse>>();
+
+        Assert.NotNull(liveEvents);
+        Assert.NotNull(simulationEvents);
+        Assert.Contains(liveEvents!, item => item.OperationEventId == liveEventId);
+        Assert.DoesNotContain(liveEvents!, item => item.OperationEventId == simulationEventId);
+        var simulationEvent = Assert.Single(simulationEvents!, item => item.OperationEventId == simulationEventId);
+        Assert.True(simulationEvent.IsSimulation);
+        Assert.Equal(simulationSessionId, simulationEvent.SimulationSessionId);
+    }
 }

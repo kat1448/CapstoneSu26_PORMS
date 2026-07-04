@@ -8,6 +8,7 @@ export type OpenWeatherForecastDay = {
   temperatureDayC: number;
   temperatureMaxC: number;
   temperatureMinC: number;
+  visibilityKm: number | null;
   weatherCode: number | null;
   weatherDescription: string | null;
   windDirectionDeg: number | null;

@@ -15,5 +15,7 @@ public sealed class OperationEventResponse
     public Guid? EntityId { get; set; }
     public string Summary { get; set; } = string.Empty;
     public DateTimeOffset OccurredAt { get; set; }
+    public Guid? SimulationSessionId { get; set; }
+    public bool IsSimulation { get; set; }
     public string Tone { get; set; } = "info";
 }

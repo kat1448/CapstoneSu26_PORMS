@@ -183,13 +183,16 @@ describe("DashboardPage", () => {
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ban do GIS Tất cả cảng");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
-    expect(screen.getByTestId("dashboard-right")).toHaveTextContent("Thời tiết hiện tại");
-    expect(screen.getByTestId("dashboard-right")).toHaveTextContent("Bảng dữ liệu OpenWeather");
-    expect(screen.getByTestId("dashboard-right")).toHaveTextContent("OPENWEATHER_API");
-    expect(screen.getByTestId("dashboard-right")).toHaveTextContent("moderate rain");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Dữ liệu thời tiết theo cảng và khu vực");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("OPENWEATHER_API");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("moderate rain");
+    expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Xu hướng rủi ro 24 giờ");
+    expect(screen.getByTestId("dashboard-right")).not.toHaveTextContent("Thời tiết hiện tại");
+    expect(screen.getByTestId("dashboard-right")).not.toHaveTextContent("Dữ liệu thời tiết theo cảng và khu vực");
     expect(screen.queryByRole("button", { name: /Chạy mô phỏng demo|Đang chạy mô phỏng/ })).not.toBeInTheDocument();
     expect(screen.getByTestId("dashboard-right")).toHaveTextContent("Cảnh báo đang hoạt động");
     expect(screen.queryByText("Nhật ký gần đây")).not.toBeInTheDocument();
+    expect(serviceMocks.getRiskTrend).not.toHaveBeenCalled();
   });
 
   it("refreshes dashboard data every 10 minutes", async () => {
@@ -203,6 +206,7 @@ describe("DashboardPage", () => {
     await flushDashboardLoad();
     expect(serviceMocks.getDashboardSummary).toHaveBeenCalledTimes(1);
     expect(serviceMocks.getWeatherSnapshot).toHaveBeenCalledTimes(1);
+    expect(serviceMocks.getRiskTrend).not.toHaveBeenCalled();
 
     await act(async () => {
       vi.advanceTimersByTime(600_000);
@@ -212,6 +216,7 @@ describe("DashboardPage", () => {
 
     expect(serviceMocks.getDashboardSummary).toHaveBeenCalledTimes(2);
     expect(serviceMocks.getWeatherSnapshot).toHaveBeenCalledTimes(2);
+    expect(serviceMocks.getRiskTrend).not.toHaveBeenCalled();
     expect(serviceMocks.getPorts).toHaveBeenCalledTimes(2);
     expect(serviceMocks.getPortZones).not.toHaveBeenCalledTimes(2);
   });

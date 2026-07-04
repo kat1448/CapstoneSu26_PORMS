@@ -140,6 +140,8 @@ public sealed class SimulationFlowTests
             .EnumerateArray()
             .Single(item => item.GetProperty("zoneId").GetGuid() == zone.ZoneId);
 
+        Assert.Equal(port.PortId, mapPoint.GetProperty("portId").GetGuid());
+        Assert.Equal(port.PortCode, mapPoint.GetProperty("portCode").GetString());
         Assert.Equal("LOW", mapPoint.GetProperty("riskLevel").GetString());
         Assert.DoesNotContain(
             resultPayload.RootElement.GetProperty("dangerousZones").EnumerateArray(),
@@ -147,6 +149,54 @@ public sealed class SimulationFlowTests
         Assert.DoesNotContain(
             resultPayload.RootElement.GetProperty("tasks").EnumerateArray(),
             item => item.GetProperty("zoneName").GetString() == zone.ZoneName);
+    }
+
+    [Fact]
+    public async Task RunDataset_DoesNotOverwriteLiveZoneRisk()
+    {
+        await _factory.ResetPrimaryPortStateAsync();
+        var port = await _factory.GetPrimaryPortAsync();
+        var zone = await _factory.GetFirstZoneAsync(port.PortId);
+        var client = _factory.CreateClient();
+
+        var createResponse = await client.PostAsJsonAsync(
+            "/api/simulation/datasets",
+            new CreateSimulationDatasetRequest
+            {
+                Name = $"Simulation isolated zone risk {Guid.NewGuid():N}",
+                Description = "Critical simulated data must not change live zone risk.",
+                PortCode = port.PortCode,
+                Snapshots =
+                [
+                    new CreateSimulationSnapshotRequest
+                    {
+                        SnapshotNumber = 1,
+                        WindSpeedMs = 27.4m,
+                        BeaufortNumber = 10,
+                        Rainfall1hMm = 60m,
+                        VisibilityKm = 0.8m,
+                        ZoneId = zone.ZoneId
+                    }
+                ]
+            });
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<SimulationDatasetSummaryResponse>();
+        Assert.NotNull(created);
+
+        var runResponse = await client.PostAsJsonAsync(
+            "/api/simulation/run",
+            new RunSimulationDatasetRequest { DatasetId = created!.DatasetId });
+
+        Assert.Equal(HttpStatusCode.OK, runResponse.StatusCode);
+
+        var zonesResponse = await client.GetAsync($"/api/ports/{port.PortId}/zones");
+        Assert.Equal(HttpStatusCode.OK, zonesResponse.StatusCode);
+
+        var zones = await zonesResponse.Content.ReadFromJsonAsync<IReadOnlyList<ZoneResponse>>();
+        Assert.NotNull(zones);
+        var liveZone = Assert.Single(zones!, item => item.ZoneId == zone.ZoneId);
+        Assert.Equal("LOW", liveZone.CurrentRiskLevel);
     }
 
     [Fact]

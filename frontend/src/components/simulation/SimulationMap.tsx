@@ -23,6 +23,11 @@ type MappablePort = PortSummary & {
   longitude: number;
 };
 
+type DisplayPort = MappablePort & {
+  displayRiskLevel: RiskLevel;
+  riskSource: "live" | "simulation";
+};
+
 type ZoneMapPoint = PortZone & {
   displayLatitude: number;
   displayLongitude: number;
@@ -35,6 +40,13 @@ const riskColors: Record<RiskLevel, string> = {
   HIGH: "#ee7623",
   LOW: "#19a66a",
   MEDIUM: "#e9a11b"
+};
+
+const riskScore: Record<RiskLevel, number> = {
+  CRITICAL: 4,
+  HIGH: 3,
+  MEDIUM: 2,
+  LOW: 1
 };
 
 const modeLabels: Record<OperationMode, string> = {
@@ -60,13 +72,15 @@ function hasZoneCoordinates(zone: PortZone) {
   return typeof zone.latitude === "number" && typeof zone.longitude === "number";
 }
 
-function createPortIcon(port: MappablePort, index: number, selectedPortId: string) {
+function createPortIcon(port: DisplayPort, selectedPortId: string) {
   const selectedClass = port.portId === selectedPortId ? " is-selected" : "";
+  const portName = escapeHtml(port.portName);
+  const portCode = escapeHtml(port.portCode);
   return L.divIcon({
     className: "",
-    html: `<div class="gis-marker${selectedClass}" style="background:${riskColors[port.currentRiskLevel]}">${index + 1}</div>`,
-    iconAnchor: [18, 18],
-    iconSize: [36, 36]
+    html: `<div class="gis-marker gis-marker-port${selectedClass}" title="${portName}" style="background:${riskColors[port.displayRiskLevel]}"><span>${portCode}</span></div>`,
+    iconAnchor: [80, 18],
+    iconSize: [160, 36]
   });
 }
 
@@ -84,12 +98,13 @@ function createZoneIcon(point: ZoneMapPoint, running: boolean) {
   });
 }
 
-function portPopupContent(port: MappablePort) {
-  const color = riskColors[port.currentRiskLevel];
+function portPopupContent(port: DisplayPort) {
+  const color = riskColors[port.displayRiskLevel];
+  const riskLabel = port.riskSource === "simulation" ? "Rui ro mo phong" : "Rui ro";
   return [
     `<div class="gis-popup-title">${escapeHtml(port.portName)}</div>`,
     `<div class="gis-popup-meta">${escapeHtml(port.portCode)} · ${escapeHtml(modeLabels[port.currentOperationMode])}</div>`,
-    `<div class="gis-popup-meta">Rui ro: <strong style="color:${color}">${escapeHtml(port.currentRiskLevel)}</strong></div>`,
+    `<div class="gis-popup-meta">${riskLabel}: <strong style="color:${color}">${escapeHtml(port.displayRiskLevel)}</strong></div>`,
     `<div class="gis-popup-meta">${port.latitude.toFixed(6)}, ${port.longitude.toFixed(6)}</div>`
   ].join("");
 }
@@ -103,6 +118,37 @@ function zonePopupContent(point: ZoneMapPoint) {
     `<div class="gis-popup-meta">${escapeHtml(sourceLabel)}</div>`,
     `<div class="gis-popup-meta">${point.displayLatitude.toFixed(6)}, ${point.displayLongitude.toFixed(6)}</div>`
   ].join("");
+}
+
+function higherRisk(left: RiskLevel, right: RiskLevel) {
+  return riskScore[right] > riskScore[left] ? right : left;
+}
+
+function applySimulationRiskToPorts(ports: MappablePort[], points: SimulationMapPoint[]): DisplayPort[] {
+  const riskByPortId = new Map<string, RiskLevel>();
+  const riskByPortCode = new Map<string, RiskLevel>();
+
+  points.forEach((point) => {
+    if (point.portId) {
+      const current = riskByPortId.get(point.portId);
+      riskByPortId.set(point.portId, current ? higherRisk(current, point.riskLevel) : point.riskLevel);
+    }
+
+    if (point.portCode) {
+      const key = point.portCode.toUpperCase();
+      const current = riskByPortCode.get(key);
+      riskByPortCode.set(key, current ? higherRisk(current, point.riskLevel) : point.riskLevel);
+    }
+  });
+
+  return ports.map((port) => {
+    const simulationRisk = riskByPortId.get(port.portId) ?? riskByPortCode.get(port.portCode.toUpperCase());
+    return {
+      ...port,
+      displayRiskLevel: simulationRisk ?? port.currentRiskLevel,
+      riskSource: simulationRisk ? "simulation" : "live"
+    };
+  });
 }
 
 function createZoneMapPoints(
@@ -157,7 +203,7 @@ export function SimulationMap({
   const expandedMapRef = useRef<L.Map | null>(null);
   const expandedMarkerLayerRef = useRef<L.LayerGroup | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  const mappablePorts = useMemo(() => ports.filter(hasPortCoordinates), [ports]);
+  const mappablePorts = useMemo(() => applySimulationRiskToPorts(ports.filter(hasPortCoordinates), points), [points, ports]);
   const selectedPort = useMemo(
     () => mappablePorts.find((port) => port.portId === selectedPortId),
     [mappablePorts, selectedPortId]
@@ -194,9 +240,9 @@ export function SimulationMap({
       ...zoneMapPoints.map((point) => [point.displayLatitude, point.displayLongitude] as [number, number])
     ];
 
-    visiblePorts.forEach((port, index) => {
+    visiblePorts.forEach((port) => {
       const marker = L.marker([port.latitude, port.longitude], {
-        icon: createPortIcon(port, index, selectedPortId)
+        icon: createPortIcon(port, selectedPortId)
       });
       marker
         .addTo(markerLayer)
