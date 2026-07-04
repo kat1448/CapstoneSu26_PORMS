@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { Link } from "react-router-dom";
 import type { OperationMode, RiskLevel } from "../../types/dashboard";
 import type { PortSummary, PortZone } from "../../types/port";
 import { Badge } from "../common/Badge";
@@ -146,6 +147,10 @@ function coordinateLabel(zone: PortZone) {
   }
 
   return `${zone.latitude.toFixed(6)}, ${zone.longitude.toFixed(6)}`;
+}
+
+function zoneDetailPath(zone: PortZone) {
+  return `/ports/${zone.portId}?zoneId=${zone.zoneId}`;
 }
 
 export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, selectedPortId, zones }: GisMapCardProps) {
@@ -294,10 +299,12 @@ export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, se
           <span>Rủi ro</span>
           <span>Trạng thái</span>
           <span>Tọa độ</span>
+          <span>Thao tác</span>
         </div>
         {zones.length === 0 ? (
           <div className="gis-data-row">
             <strong>Chưa có khu vực</strong>
+            <span>-</span>
             <span>-</span>
             <span>-</span>
             <span>-</span>
@@ -311,6 +318,10 @@ export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, se
             <span><Badge tone={riskTones[zone.currentRiskLevel]}>{zone.currentRiskLevel}</Badge></span>
             <span>{zone.statusLabel}</span>
             <span>{coordinateLabel(zone)}{typeof zone.latitude !== "number" || typeof zone.longitude !== "number" ? " · Theo toa do cang" : ""}</span>
+            <span className="gis-row-actions">
+              <Link className="button button-secondary button-small" to={`/ports/${zone.portId}`}>Chi tiết cảng</Link>
+              <Link className="button button-secondary button-small" to={zoneDetailPath(zone)}>Chi tiết khu vực</Link>
+            </span>
           </div>
         ))}
       </div>

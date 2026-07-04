@@ -87,6 +87,34 @@ describe("simulationService", () => {
     }));
   });
 
+  it("derives Beaufort from wind speed before saving simulation datasets", async () => {
+    const input: CreateSimulationDatasetInput = {
+      description: "Tinh Beaufort tu gio",
+      name: "Kich ban gio",
+      portCode: "DNTSA",
+      snapshots: [{
+        beaufortNumber: 0,
+        rainfall1hMm: 28,
+        snapshotNumber: 1,
+        visibilityKm: 4,
+        windSpeedMs: 18,
+        zoneId: "zone-1"
+      }]
+    };
+    const dataset = { datasetId: "dataset-beaufort", description: input.description, name: input.name, portCode: "DNTSA", snapshotCount: 1 };
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(dataset), { status: 201 }));
+
+    await expect(createSimulationDataset(input)).resolves.toEqual(dataset);
+
+    expect(fetch).toHaveBeenCalledWith("http://localhost:5000/api/simulation/datasets", expect.objectContaining({
+      body: JSON.stringify({
+        ...input,
+        snapshots: [{ ...input.snapshots[0], beaufortNumber: 8 }]
+      }),
+      method: "POST"
+    }));
+  });
+
   it("updates and deletes simulation datasets through the real API", async () => {
     const input: CreateSimulationDatasetInput = {
       description: "Kich ban da sua",

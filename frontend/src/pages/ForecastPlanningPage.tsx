@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "../components/common/Badge";
 import { getPorts } from "../services/portService";
@@ -8,10 +8,16 @@ import type { PortSummary } from "../types/port";
 import type { ForecastHorizonDays, ForecastPlan } from "../types/simulation";
 import type { OpenWeatherForecast } from "../types/weather";
 
+const FORECAST_AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
+
 function riskTone(riskLevel: string): "danger" | "info" | "warning" {
   if (riskLevel === "CRITICAL") return "danger";
   if (riskLevel === "HIGH") return "warning";
   return "info";
+}
+
+function formatDateTime(value: Date) {
+  return value.toLocaleString("vi-VN");
 }
 
 export function ForecastPlanningPage() {
@@ -24,7 +30,9 @@ export function ForecastPlanningPage() {
   const [forecastLoading, setForecastLoading] = useState(false);
   const [error, setError] = useState("");
   const [forecastError, setForecastError] = useState("");
+  const [lastForecastUpdatedAt, setLastForecastUpdatedAt] = useState<Date | null>(null);
   const [message, setMessage] = useState("");
+  const [nextForecastRefreshAt, setNextForecastRefreshAt] = useState<Date | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -43,28 +51,31 @@ export function ForecastPlanningPage() {
     };
   }, []);
 
-  useEffect(() => {
-    let active = true;
+  const reloadForecast = useCallback(async () => {
     setForecastLoading(true);
     setForecastError("");
-    getOpenWeatherForecast(portCode, 5)
-      .then((nextForecast) => {
-        if (active) setForecast(nextForecast);
-      })
-      .catch((requestError) => {
-        if (active) {
-          setForecast(null);
-          setForecastError(requestError instanceof Error ? requestError.message : "Không tải được dự báo OpenWeather");
-        }
-      })
-      .finally(() => {
-        if (active) setForecastLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+    try {
+      const nextForecast = await getOpenWeatherForecast(portCode, 5);
+      const now = new Date();
+      setForecast(nextForecast);
+      setLastForecastUpdatedAt(now);
+      setNextForecastRefreshAt(new Date(now.getTime() + FORECAST_AUTO_REFRESH_MS));
+    } catch (requestError) {
+      setForecast(null);
+      setForecastError(requestError instanceof Error ? requestError.message : "Không tải được dự báo OpenWeather");
+    } finally {
+      setForecastLoading(false);
+    }
   }, [portCode]);
+
+  useEffect(() => {
+    void reloadForecast();
+  }, [reloadForecast]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => void reloadForecast(), FORECAST_AUTO_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [reloadForecast]);
 
   async function handleCreateForecastPlan() {
     setLoading(true);
@@ -173,8 +184,18 @@ export function ForecastPlanningPage() {
           <div>
             <h3>Bảng dự báo OpenWeather 5 ngày</h3>
             <p>Dữ liệu dự báo trực tiếp từ OpenWeather API, dùng để đối chiếu trước khi tạo kế hoạch vận hành.</p>
+            <p>
+              {lastForecastUpdatedAt
+                ? `Cập nhật lúc ${formatDateTime(lastForecastUpdatedAt)}. Tự động cập nhật hằng ngày${nextForecastRefreshAt ? `, lần kế tiếp ${formatDateTime(nextForecastRefreshAt)}` : ""}.`
+                : "Bảng sẽ tải dự báo khi mở trang và tự động cập nhật hằng ngày."}
+            </p>
           </div>
-          <Badge tone="info">{forecastLoading ? "Đang tải" : "5 ngày"}</Badge>
+          <div className="card-head-actions">
+            <button className="button button-secondary button-small" disabled={forecastLoading} onClick={() => void reloadForecast()} type="button">
+              {forecastLoading ? "Đang tải..." : "Reload dự báo"}
+            </button>
+            <Badge tone="info">{forecastLoading ? "Đang tải" : "5 ngày"}</Badge>
+          </div>
         </div>
         {forecastError ? <p className="form-error">{forecastError}</p> : null}
         {forecast ? (

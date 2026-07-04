@@ -223,12 +223,15 @@ describe("SimulationPage", () => {
     await user.click(screen.getByRole("button", { name: "Tạo dữ liệu mô phỏng" }));
 
     expect(screen.getByRole("dialog", { name: "Tạo dữ liệu mô phỏng" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Beaufort")).not.toBeInTheDocument();
     expect(await screen.findByRole("combobox", { name: "Zone ID" })).toHaveTextContent("Ben so 1");
     await user.selectOptions(screen.getByRole("combobox", { name: "Zone ID" }), "zone-dock-1");
     await user.type(screen.getByLabelText("Tên kịch bản"), "Kich ban moi");
     await user.click(screen.getByRole("button", { name: "Lưu dữ liệu" }));
 
-    expect(createSimulationDataset).toHaveBeenCalled();
+    expect(createSimulationDataset).toHaveBeenCalledWith(expect.objectContaining({
+      snapshots: [expect.objectContaining({ windSpeedMs: 18 })]
+    }));
     expect(await screen.findByText("Đã lưu dữ liệu mô phỏng")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Kich ban moi/ })).toBeChecked();
     expect(screen.getByRole("button", { name: "Chạy dữ liệu đã chọn" })).toBeInTheDocument();
@@ -306,6 +309,7 @@ describe("SimulationPage", () => {
 
     expect(getSimulationDataset).toHaveBeenCalledWith("dataset-1");
     expect(await screen.findByRole("dialog", { name: "Chỉnh sửa dữ liệu mô phỏng" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Beaufort")).not.toBeInTheDocument();
     const nameInput = screen.getByLabelText("Tên kịch bản");
     await user.clear(nameInput);
     await user.type(nameInput, "Bao Da Nang Updated");

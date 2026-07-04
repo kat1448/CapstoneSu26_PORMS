@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using Microsoft.IdentityModel.Tokens;
 using PORMS.API.Contracts;
 using Xunit;
@@ -142,6 +143,38 @@ public sealed class ReadApiSmokeTests
         Assert.Equal("SYSTEM", alert.AlertType);
         Assert.Equal("HIGH", alert.Severity);
         Assert.Equal("Seeded smoke alert", alert.Title);
+    }
+
+    [Fact]
+    public async Task Tasks_ReturnSuccessAndContainSeededTask()
+    {
+        var taskCode = $"TASK-IT-{Guid.NewGuid():N}"[..20];
+        try
+        {
+            await _factory.SeedTaskAsync(taskCode);
+            var client = _factory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                CreateToken("ADMIN"));
+
+            var response = await client.GetAsync("/api/tasks");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var task = payload.RootElement.EnumerateArray()
+                .Single(item => item.GetProperty("taskCode").GetString() == taskCode);
+
+            Assert.Equal("Seeded integration task", task.GetProperty("title").GetString());
+            Assert.Equal("HIGH", task.GetProperty("priority").GetString());
+            Assert.Equal("NEW", task.GetProperty("status").GetString());
+            Assert.False(task.GetProperty("isSimulation").GetBoolean());
+            Assert.True(task.TryGetProperty("portName", out _));
+        }
+        finally
+        {
+            await _factory.DeleteTaskByCodeAsync(taskCode);
+        }
     }
 
     [Fact]

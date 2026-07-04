@@ -531,8 +531,8 @@
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(150px, 1.2fr) 80px 96px minmax(100px, 1fr) minmax(160px, 1fr);
-  min-width: 760px;
+  grid-template-columns: minmax(150px, 1.2fr) 80px 96px minmax(100px, 1fr) minmax(160px, 1fr) minmax(210px, auto);
+  min-width: 980px;
   padding: 10px 12px;
 }
 
@@ -551,6 +551,12 @@
 .gis-data-row strong,
 .gis-data-row span {
   font-size: 12px;
+}
+
+.gis-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .leaflet-control {

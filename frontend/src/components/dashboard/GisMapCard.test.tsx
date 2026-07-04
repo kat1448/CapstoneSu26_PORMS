@@ -1,4 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PortSummary, PortZone } from "../../types/port";
 import { GisMapCard } from "./GisMapCard";
@@ -112,6 +114,10 @@ const zones: PortZone[] = [
 
 const zonesWithoutCoordinates = zones.map((zone) => ({ ...zone, latitude: null, longitude: null }));
 
+function renderMapCard(element: ReactElement) {
+  return render(<MemoryRouter>{element}</MemoryRouter>);
+}
+
 afterEach(() => {
   cleanup();
   leafletState.map = null;
@@ -121,11 +127,13 @@ afterEach(() => {
 
 describe("GisMapCard", () => {
   it("renders OpenStreetMap markers for ports and the selected port zones", () => {
-    render(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zones} />);
+    renderMapCard(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zones} />);
 
     expect(screen.getByRole("heading", { name: /GIS Cang Tien Sa/ })).toBeInTheDocument();
     expect(screen.getByText("Ben so 1")).toBeInTheDocument();
     expect(screen.getByText("16.124000, 108.214000")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Chi tiết cảng" })[0]).toHaveAttribute("href", "/ports/port-1");
+    expect(screen.getAllByRole("link", { name: "Chi tiết khu vực" })[0]).toHaveAttribute("href", "/ports/port-1?zoneId=zone-1");
     expect(leafletState.tileLayers).toContain("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
     expect(leafletState.markers).toHaveLength(3);
     expect(leafletState.markers[0].coordinates).toEqual([16.124, 108.214]);
@@ -139,7 +147,7 @@ describe("GisMapCard", () => {
   it("selects a port when its map marker is clicked", () => {
     const onSelectPort = vi.fn();
 
-    render(<GisMapCard onSelectPort={onSelectPort} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="" zones={zones} />);
+    renderMapCard(<GisMapCard onSelectPort={onSelectPort} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="" zones={zones} />);
 
     leafletState.markers[1].click?.();
 
@@ -147,7 +155,7 @@ describe("GisMapCard", () => {
   });
 
   it("opens the map in a floating window from the bottom-left control", () => {
-    render(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="" zones={zones} />);
+    renderMapCard(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="" zones={zones} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mo rong ban do" }));
 
@@ -160,7 +168,7 @@ describe("GisMapCard", () => {
   });
 
   it("places zones around the selected port when zone coordinates are missing", () => {
-    render(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zonesWithoutCoordinates} />);
+    renderMapCard(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zonesWithoutCoordinates} />);
 
     expect(leafletState.markers).toHaveLength(3);
     expect(leafletState.markers[1].coordinates[1]).not.toBe(108.214);
@@ -170,7 +178,7 @@ describe("GisMapCard", () => {
   });
 
   it("still renders the OpenStreetMap canvas when no port has coordinates", () => {
-    render(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={[]} selectedPortId="port-1" zones={zones} />);
+    renderMapCard(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={[]} selectedPortId="port-1" zones={zones} />);
 
     expect(screen.getByRole("status")).toHaveTextContent("GIS");
     expect(screen.getByRole("application", { name: /GIS Cang Tien Sa/ })).toBeInTheDocument();

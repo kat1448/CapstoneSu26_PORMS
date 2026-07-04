@@ -60,6 +60,7 @@ builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<WeatherRepository>();
 builder.Services.AddScoped<RiskRepository>();
 builder.Services.AddScoped<SopRuleRepository>();
+builder.Services.AddScoped<TaskRepository>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddHttpClient<OpenWeatherService>();
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
