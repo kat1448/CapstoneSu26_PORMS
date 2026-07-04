@@ -299,6 +299,8 @@ public sealed class SimulationController : ControllerBase
     {
         return new SimulationMapPointResponse
         {
+            PortId = point.PortId,
+            PortCode = point.PortCode,
             ZoneId = point.ZoneId,
             ZoneName = point.ZoneName,
             Latitude = point.Latitude,

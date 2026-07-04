@@ -920,6 +920,10 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    IF NEW.is_simulation = TRUE THEN
+        RETURN NEW;
+    END IF;
+
     IF NEW.zone_id IS NULL THEN
         UPDATE operational.ports
         SET current_risk_level = NEW.final_risk_level
@@ -943,6 +947,10 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    IF NEW.simulation_session_id IS NOT NULL OR NEW.change_source = 'SIMULATION' THEN
+        RETURN NEW;
+    END IF;
+
     UPDATE operational.ports
     SET current_operation_mode = NEW.new_mode
     WHERE id = NEW.port_id;

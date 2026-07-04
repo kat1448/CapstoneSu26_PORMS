@@ -41,7 +41,9 @@ export type WeatherDataPoint = {
   portCode: string;
   portName: string;
   rainfall1hMm: number;
+  recordedAt?: string | null;
   temperatureC: number;
+  humidityPct?: number | null;
   visibilityKm: number;
   weatherDescription?: string | null;
   windSpeedMs: number;

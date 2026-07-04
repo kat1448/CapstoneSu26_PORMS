@@ -1167,7 +1167,7 @@ $$;
 CREATE OR REPLACE FUNCTION operational.sync_port_risk_level()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF NEW.level_changed = TRUE THEN
+    IF NEW.is_simulation = FALSE AND NEW.level_changed = TRUE THEN
         UPDATE operational.ports
         SET    current_risk_level = NEW.final_risk_level,
                updated_at         = NOW()
@@ -1189,6 +1189,10 @@ COMMENT ON FUNCTION operational.sync_port_risk_level() IS
 CREATE OR REPLACE FUNCTION operational.sync_port_mode()
 RETURNS TRIGGER AS $$
 BEGIN
+    IF NEW.is_simulation = TRUE THEN
+        RETURN NEW;
+    END IF;
+
     UPDATE operational.ports
     SET    current_mode = NEW.new_mode,
            updated_at   = NOW()

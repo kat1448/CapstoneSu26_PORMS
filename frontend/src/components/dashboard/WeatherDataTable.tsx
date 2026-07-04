@@ -33,6 +33,10 @@ function formatWeatherDescription(weather: WeatherSnapshot) {
   return "Chưa có dữ liệu";
 }
 
+function formatPointWeatherDescription(description: string | null | undefined) {
+  return description?.trim() || "Chưa có dữ liệu";
+}
+
 function formatCoordinate(latitude: number | null | undefined, longitude: number | null | undefined) {
   if (latitude === null || latitude === undefined || longitude === null || longitude === undefined) {
     return "Chưa có dữ liệu";
@@ -42,57 +46,53 @@ function formatCoordinate(latitude: number | null | undefined, longitude: number
 }
 
 export function WeatherDataTable({ weather }: WeatherDataTableProps) {
-  const rows = [
-    ["Nguồn dữ liệu", weather.dataSource ?? "Chưa có dữ liệu"],
-    ["Thời điểm quan trắc", formatTimestamp(weather.observedAt)],
-    ["Thời điểm ghi nhận", formatTimestamp(weather.recordedAt)],
-    ["Mô tả thời tiết", formatWeatherDescription(weather)],
-    ["Tốc độ gió", formatNumber(weather.windSpeedMs, "m/s")],
-    ["Gió giật", formatNumber(weather.windGustMs, "m/s")],
-    ["Hướng gió", formatInteger(weather.windDirectionDeg, "°")],
-    ["Beaufort", formatInteger(weather.beaufortNumber, "")],
-    ["Lượng mưa 1h", formatNumber(weather.rainfall1hMm, "mm/h")],
-    ["Tầm nhìn", formatNumber(weather.visibilityKm, "km")],
-    ["Nhiệt độ", formatNumber(weather.temperatureC, "°C", 0)],
-    ["Độ ẩm", formatInteger(weather.humidityPct, "%")],
-    ["Áp suất", formatNumber(weather.pressureHpa, "hPa", 0)]
-  ];
-  const points = weather.dataPoints ?? [];
+  const points = weather.dataPoints?.length ? weather.dataPoints : [{
+    beaufortNumber: weather.beaufortNumber ?? 0,
+    dataSource: weather.dataSource,
+    latitude: null,
+    longitude: null,
+    observedAt: weather.observedAt,
+    portCode: "Chưa có dữ liệu",
+    portName: "Chưa có dữ liệu",
+    rainfall1hMm: weather.rainfall1hMm,
+    recordedAt: weather.recordedAt,
+    temperatureC: weather.temperatureC,
+    humidityPct: weather.humidityPct,
+    visibilityKm: weather.visibilityKm,
+    weatherDescription: formatWeatherDescription(weather),
+    windSpeedMs: weather.windSpeedMs,
+    zoneName: "Toàn cảng"
+  }];
 
   return (
     <article className="card card-pad weather-data-card">
       <div className="card-head">
         <div>
-          <h3>Bảng dữ liệu OpenWeather</h3>
-          <p>Cập nhật tự động theo dữ liệu OpenWeather mới nhất</p>
+          <h3>Dữ liệu thời tiết theo cảng và khu vực</h3>
+          <p>Mỗi dòng thể hiện dữ liệu OpenWeather gắn với cảng, khu vực, vị trí và thời gian cập nhật.</p>
         </div>
-      </div>
-      <div className="weather-data-table" aria-label="Bảng dữ liệu OpenWeather">
-        {rows.map(([label, value]) => (
-          <div className="weather-data-row" key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </div>
-        ))}
       </div>
 
       <div className="weather-point-table-shell">
-        <table aria-label="Điểm dữ liệu thời tiết theo vị trí" className="weather-point-table">
+        <table aria-label="Dữ liệu thời tiết theo cảng và khu vực" className="weather-point-table">
           <thead>
             <tr>
               <th>Cảng</th>
               <th>Khu vực</th>
               <th>Vị trí</th>
-              <th>Quan trắc</th>
+              <th>Quan trắc lúc</th>
+              <th>Cập nhật lúc</th>
+              <th>Nguồn</th>
+              <th>Thời tiết</th>
               <th>Gió</th>
               <th>Mưa</th>
               <th>Tầm nhìn</th>
               <th>Nhiệt độ</th>
-              <th>Mô tả</th>
+              <th>Độ ẩm</th>
             </tr>
           </thead>
           <tbody>
-            {points.length ? points.map((point) => (
+            {points.map((point) => (
               <tr key={`${point.portCode}-${point.zoneName ?? "port"}-${point.observedAt ?? ""}`}>
                 <td>
                   <strong>{point.portName}</strong>
@@ -101,6 +101,9 @@ export function WeatherDataTable({ weather }: WeatherDataTableProps) {
                 <td>{point.zoneName || "Toàn cảng"}</td>
                 <td>{formatCoordinate(point.latitude, point.longitude)}</td>
                 <td>{formatTimestamp(point.observedAt)}</td>
+                <td>{formatTimestamp(point.recordedAt)}</td>
+                <td>{point.dataSource || "Chưa có dữ liệu"}</td>
+                <td>{formatPointWeatherDescription(point.weatherDescription)}</td>
                 <td>
                   <strong>{formatNumber(point.windSpeedMs, "m/s")}</strong>
                   <small>Beaufort {point.beaufortNumber}</small>
@@ -108,13 +111,9 @@ export function WeatherDataTable({ weather }: WeatherDataTableProps) {
                 <td>{formatNumber(point.rainfall1hMm, "mm/h")}</td>
                 <td>{formatNumber(point.visibilityKm, "km")}</td>
                 <td>{formatNumber(point.temperatureC, "°C", 0)}</td>
-                <td>{point.weatherDescription || "Chưa có dữ liệu"}</td>
+                <td>{formatInteger(point.humidityPct, "%")}</td>
               </tr>
-            )) : (
-              <tr>
-                <td colSpan={9}>Chưa có điểm dữ liệu thời tiết theo vị trí</td>
-              </tr>
-            )}
+            ))}
           </tbody>
         </table>
       </div>

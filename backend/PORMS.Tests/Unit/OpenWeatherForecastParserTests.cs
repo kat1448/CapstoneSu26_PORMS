@@ -15,6 +15,7 @@ public sealed class OpenWeatherForecastParserTests
                 {
                   "dt": 1783036800,
                   "main": { "temp": 27.5, "temp_min": 26.1, "temp_max": 29.2, "humidity": 80, "pressure": 1006 },
+                  "visibility": 9000,
                   "weather": [{ "id": 500, "description": "mua nhe" }],
                   "wind": { "speed": 6.4, "gust": 9.1, "deg": 120 },
                   "rain": { "3h": 1.2 },
@@ -23,6 +24,7 @@ public sealed class OpenWeatherForecastParserTests
                 {
                   "dt": 1783047600,
                   "main": { "temp": 28.5, "temp_min": 27.2, "temp_max": 31.4, "humidity": 78, "pressure": 1004 },
+                  "visibility": 6000,
                   "weather": [{ "id": 501, "description": "mua vua" }],
                   "wind": { "speed": 8.2, "gust": 12.3, "deg": 130 },
                   "rain": { "3h": 2.8 },
@@ -31,6 +33,7 @@ public sealed class OpenWeatherForecastParserTests
                 {
                   "dt": 1783123200,
                   "main": { "temp": 29.1, "temp_min": 25.7, "temp_max": 30.0, "humidity": 76, "pressure": 1008 },
+                  "visibility": 10000,
                   "weather": [{ "id": 801, "description": "it may" }],
                   "wind": { "speed": 5.1, "deg": 90 },
                   "pop": 0.10
@@ -52,5 +55,6 @@ public sealed class OpenWeatherForecastParserTests
         Assert.Equal("mua vua", days[0].WeatherDescription);
         Assert.Equal(79, days[0].HumidityPct);
         Assert.Equal(1005m, days[0].PressureHpa);
+        Assert.Equal(6m, days[0].VisibilityKm);
     }
 }
