@@ -182,6 +182,83 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task SeedSimulationOperationEventAsync(Guid operationEventId, Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        var port = await GetPrimaryPortAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+            INSERT INTO operational.simulation_datasets (
+                id,
+                name,
+                description,
+                snapshot_count
+            )
+            VALUES (
+                @datasetId,
+                'Operation log simulation dataset',
+                'Integration test dataset',
+                1
+            )
+            ON CONFLICT (id) DO NOTHING;
+
+            INSERT INTO operational.simulation_sessions (
+                id,
+                dataset_id,
+                port_id,
+                started_by_user_id,
+                status,
+                progress_percent,
+                current_snapshot_number,
+                peak_risk_level,
+                started_at
+            )
+            SELECT
+                @sessionId,
+                @datasetId,
+                @portId,
+                id,
+                'COMPLETED',
+                100,
+                1,
+                'CRITICAL',
+                NOW()
+            FROM operational.users
+            ORDER BY created_at
+            LIMIT 1
+            ON CONFLICT (id) DO NOTHING;
+
+            INSERT INTO operational.operation_events (
+                id,
+                event_type,
+                port_id,
+                entity_type,
+                summary,
+                payload,
+                simulation_session_id,
+                occurred_at
+            )
+            VALUES (
+                @id,
+                'SIMULATION_STEP',
+                @portId,
+                'simulation',
+                'Simulation smoke event',
+                '{"source":"integration-test"}'::jsonb,
+                @sessionId,
+                NOW()
+            )
+            ON CONFLICT (id) DO NOTHING;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("id", operationEventId);
+        command.Parameters.AddWithValue("datasetId", Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1"));
+        command.Parameters.AddWithValue("sessionId", sessionId);
+        command.Parameters.AddWithValue("portId", port.PortId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task SeedForecastWeatherAsync(Guid weatherReadingId, CancellationToken cancellationToken = default)
     {
         var port = await GetPrimaryPortAsync(cancellationToken);
@@ -270,6 +347,13 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
             SET current_risk_level = 'LOW',
                 current_operation_mode = 'NORMAL'
             WHERE id = @portId;
+
+            UPDATE operational.zones
+            SET current_risk_level = 'LOW',
+                is_restricted = FALSE,
+                restriction_reason = NULL
+            WHERE port_id = @portId
+              AND deleted_at IS NULL;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
@@ -513,8 +597,18 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                    s.peak_risk_level,
                    s.generated_alert_count,
                    s.mode_change_count,
-                   p.current_risk_level,
-                   p.current_operation_mode,
+                   COALESCE(s.peak_risk_level::text, 'LOW') AS current_risk_level,
+                   COALESCE((
+                       SELECT m.new_mode::text
+                       FROM operational.operation_mode_logs m
+                       WHERE m.simulation_session_id = s.id
+                       ORDER BY m.changed_at DESC
+                       LIMIT 1
+                   ), CASE s.peak_risk_level
+                       WHEN 'CRITICAL' THEN 'STOP'
+                       WHEN 'HIGH' THEN 'LIMITED'
+                       ELSE 'NORMAL'
+                   END) AS current_operation_mode,
                    COALESCE((
                        SELECT COUNT(*)
                        FROM operational.weather_readings w

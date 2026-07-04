@@ -101,8 +101,10 @@ public sealed class WeatherRepository
                    COALESCE(lz.rainfall_1h_mm, lp.rainfall_1h_mm, 0),
                    COALESCE(lz.visibility_km, lp.visibility_km, 0),
                    COALESCE(lz.temperature_c, lp.temperature_c, 0),
+                   COALESCE(lz.humidity_pct, lp.humidity_pct, 0),
                    COALESCE(lz.weather_description, lp.weather_description),
                    COALESCE(lz.observed_at, lp.observed_at),
+                   COALESCE(lz.recorded_at, lp.recorded_at),
                    COALESCE(lz.data_source, lp.data_source, 'OPENWEATHER_API')
             FROM operational.ports p
             LEFT JOIN operational.zones z ON z.port_id = p.id
@@ -138,9 +140,11 @@ public sealed class WeatherRepository
                 reader.GetDecimal(7),
                 reader.GetDecimal(8),
                 reader.GetDecimal(9),
-                reader.IsDBNull(10) ? null : reader.GetString(10),
-                reader.IsDBNull(11) ? null : reader.GetFieldValue<DateTimeOffset>(11),
-                reader.GetString(12)));
+                reader.GetInt16(10),
+                reader.IsDBNull(11) ? null : reader.GetString(11),
+                reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
+                reader.IsDBNull(13) ? null : reader.GetFieldValue<DateTimeOffset>(13),
+                reader.GetString(14)));
         }
 
         return points;
@@ -329,8 +333,10 @@ public sealed record WeatherDataPointReadModel(
     decimal Rainfall1hMm,
     decimal VisibilityKm,
     decimal TemperatureC,
+    short HumidityPct,
     string? WeatherDescription,
     DateTimeOffset? ObservedAt,
+    DateTimeOffset? RecordedAt,
     string DataSource);
 
 public sealed record OpenWeatherPortReadModel(

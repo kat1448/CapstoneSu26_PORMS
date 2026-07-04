@@ -88,6 +88,8 @@ public sealed class SimulationResultResponse
 
 public sealed class SimulationMapPointResponse
 {
+    public required Guid PortId { get; init; }
+    public required string PortCode { get; init; }
     public required Guid ZoneId { get; init; }
     public required string ZoneName { get; init; }
     public required decimal Latitude { get; init; }

@@ -31,8 +31,10 @@ public sealed class WeatherDataPointResponse
     public required decimal Rainfall1hMm { get; init; }
     public required decimal VisibilityKm { get; init; }
     public required decimal TemperatureC { get; init; }
+    public required short HumidityPct { get; init; }
     public string? WeatherDescription { get; init; }
     public DateTimeOffset? ObservedAt { get; init; }
+    public DateTimeOffset? RecordedAt { get; init; }
     public string DataSource { get; init; } = string.Empty;
 }
 
@@ -50,6 +52,7 @@ public sealed class OpenWeatherForecastDayResponse
     public required decimal TemperatureDayC { get; init; }
     public required decimal TemperatureMinC { get; init; }
     public required decimal TemperatureMaxC { get; init; }
+    public decimal? VisibilityKm { get; init; }
     public required decimal WindSpeedMs { get; init; }
     public decimal? WindGustMs { get; init; }
     public short? WindDirectionDeg { get; init; }

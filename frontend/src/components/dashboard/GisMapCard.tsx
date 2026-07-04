@@ -70,13 +70,15 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
-function createPortMarkerIcon(port: MappablePort, index: number, selectedPortId: string) {
+function createPortMarkerIcon(port: MappablePort, selectedPortId: string) {
   const selectedClass = port.portId === selectedPortId ? " is-selected" : "";
+  const portName = escapeHtml(port.portName);
+  const portCode = escapeHtml(port.portCode);
   return L.divIcon({
     className: "",
-    html: `<div class="gis-marker${selectedClass}" style="background:${riskColors[port.currentRiskLevel]}">${index + 1}</div>`,
-    iconAnchor: [18, 18],
-    iconSize: [36, 36]
+    html: `<div class="gis-marker gis-marker-port${selectedClass}" title="${portName}" style="background:${riskColors[port.currentRiskLevel]}"><span>${portCode}</span></div>`,
+    iconAnchor: [80, 18],
+    iconSize: [160, 36]
   });
 }
 
@@ -184,9 +186,9 @@ export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, se
       ...visiblePorts.map((port) => [port.latitude, port.longitude] as [number, number]),
       ...zoneMapPoints.map((zone) => [zone.displayLatitude, zone.displayLongitude] as [number, number])
     ];
-    visiblePorts.forEach((port, index) => {
+    visiblePorts.forEach((port) => {
       const marker = L.marker([port.latitude, port.longitude], {
-        icon: createPortMarkerIcon(port, index, selectedPortId)
+        icon: createPortMarkerIcon(port, selectedPortId)
       });
       marker
         .addTo(map)

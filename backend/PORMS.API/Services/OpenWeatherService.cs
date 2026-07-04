@@ -192,6 +192,7 @@ public static class OpenWeatherForecastParser
             main.TryGetProperty("temp", out var temp) ? temp.GetDecimal() : 0m,
             main.TryGetProperty("temp_min", out var tempMin) ? tempMin.GetDecimal() : 0m,
             main.TryGetProperty("temp_max", out var tempMax) ? tempMax.GetDecimal() : 0m,
+            item.TryGetProperty("visibility", out var visibility) ? Math.Round(visibility.GetDecimal() / 1000m, 2) : null,
             wind.ValueKind == JsonValueKind.Object && wind.TryGetProperty("speed", out var windSpeed) ? windSpeed.GetDecimal() : 0m,
             wind.ValueKind == JsonValueKind.Object && wind.TryGetProperty("gust", out var windGust) ? windGust.GetDecimal() : null,
             wind.ValueKind == JsonValueKind.Object && wind.TryGetProperty("deg", out var windDeg) ? (short?)windDeg.GetInt16() : null,
@@ -218,6 +219,9 @@ public static class OpenWeatherForecastParser
             Math.Round(items.Average(item => item.TemperatureC), 1),
             items.Min(item => item.TemperatureMinC),
             items.Max(item => item.TemperatureMaxC),
+            items.Any(item => item.VisibilityKm.HasValue)
+                ? items.Where(item => item.VisibilityKm.HasValue).Min(item => item.VisibilityKm!.Value)
+                : null,
             strongestWind.WindSpeedMs,
             items.Where(item => item.WindGustMs.HasValue).Max(item => item.WindGustMs),
             strongestWind.WindDirectionDeg,
@@ -237,6 +241,7 @@ public static class OpenWeatherForecastParser
         decimal TemperatureC,
         decimal TemperatureMinC,
         decimal TemperatureMaxC,
+        decimal? VisibilityKm,
         decimal WindSpeedMs,
         decimal? WindGustMs,
         short? WindDirectionDeg,
@@ -259,6 +264,7 @@ public sealed record OpenWeatherForecastDayReadModel(
     decimal TemperatureDayC,
     decimal TemperatureMinC,
     decimal TemperatureMaxC,
+    decimal? VisibilityKm,
     decimal WindSpeedMs,
     decimal? WindGustMs,
     short? WindDirectionDeg,

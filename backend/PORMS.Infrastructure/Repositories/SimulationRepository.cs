@@ -166,7 +166,9 @@ public sealed class SimulationRepository
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
         const string sql = """
-            SELECT z.id,
+            SELECT p.id,
+                   p.code,
+                   z.id,
                    CONCAT(p.code, ' - ', z.name) AS zone_name,
                    COALESCE(z.latitude, p.latitude, 16.0678) AS latitude,
                    COALESCE(z.longitude, p.longitude, 108.2208) AS longitude,
@@ -188,9 +190,11 @@ public sealed class SimulationRepository
             results.Add(new SimulationMapPointReadModel(
                 reader.GetGuid(0),
                 reader.GetString(1),
-                reader.GetDecimal(2),
-                reader.GetDecimal(3),
-                reader.GetString(4)));
+                reader.GetGuid(2),
+                reader.GetString(3),
+                reader.GetDecimal(4),
+                reader.GetDecimal(5),
+                reader.GetString(6)));
         }
 
         return results;
@@ -553,6 +557,8 @@ public sealed class SimulationRepository
         var mapPoints = new List<SimulationMapPointReadModel>();
         const string mapSql = """
             SELECT DISTINCT ON (z.id)
+                   p.id,
+                   p.code,
                    z.id,
                    z.name,
                    COALESCE(z.latitude, p.latitude, 16.0678),
@@ -570,7 +576,7 @@ public sealed class SimulationRepository
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                mapPoints.Add(new SimulationMapPointReadModel(reader.GetGuid(0), reader.GetString(1), reader.GetDecimal(2), reader.GetDecimal(3), reader.GetString(4)));
+                mapPoints.Add(new SimulationMapPointReadModel(reader.GetGuid(0), reader.GetString(1), reader.GetGuid(2), reader.GetString(3), reader.GetDecimal(4), reader.GetDecimal(5), reader.GetString(6)));
             }
         }
 
@@ -837,14 +843,25 @@ public sealed class SimulationRepository
                    COALESCE(s.progress_percent, 0),
                    COALESCE(s.generated_alert_count, 0),
                    COALESCE(s.mode_change_count, 0),
-                   p.current_risk_level,
-                   p.current_operation_mode,
+                   COALESCE(s.peak_risk_level::text, 'LOW'),
+                   COALESCE(m.new_mode::text, CASE s.peak_risk_level
+                       WHEN 'CRITICAL' THEN 'STOP'
+                       WHEN 'HIGH' THEN 'LIMITED'
+                       ELSE 'NORMAL'
+                   END),
                    COALESCE(w.wind_speed_ms, 0),
                    COALESCE(w.beaufort_number, 0),
                    COALESCE(w.rainfall_1h_mm, 0),
                    COALESCE(w.visibility_km, 0)
             FROM operational.simulation_sessions s
             JOIN operational.ports p ON p.id = s.port_id
+            LEFT JOIN LATERAL (
+                SELECT oml.new_mode
+                FROM operational.operation_mode_logs oml
+                WHERE oml.simulation_session_id = s.id
+                ORDER BY oml.changed_at DESC
+                LIMIT 1
+            ) m ON TRUE
             LEFT JOIN LATERAL (
                 SELECT *
                 FROM operational.weather_readings wr
@@ -1998,6 +2015,8 @@ public sealed record SimulationResultReadModel(
     IReadOnlyList<SimulationGeneratedTaskReadModel> Tasks);
 
 public sealed record SimulationMapPointReadModel(
+    Guid PortId,
+    string PortCode,
     Guid ZoneId,
     string ZoneName,
     decimal Latitude,
