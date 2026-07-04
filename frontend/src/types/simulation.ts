@@ -20,3 +20,88 @@ export type SimulationSnapshot = {
   visibilityKm: number;
   windSpeedMs: number;
 };
+
+export type SimulationDatasetSummary = {
+  datasetId: string;
+  description: string | null;
+  name: string;
+  portCode: string;
+  snapshotCount: number;
+};
+
+export type ForecastHorizonDays = 5;
+
+export type ForecastPlanItem = {
+  operationPlan: string;
+  plannedAt: string;
+  rainRiskLevel: RiskLevel;
+  riskLevel: RiskLevel;
+  summary: string;
+  visibilityRiskLevel: RiskLevel;
+  windRiskLevel: RiskLevel;
+};
+
+export type ForecastPlan = {
+  dataset: SimulationDatasetSummary;
+  generatedAt: string;
+  horizonDays: ForecastHorizonDays;
+  items: ForecastPlanItem[];
+  sourceObservedAt: string | null;
+};
+
+export type SimulationDatasetDetail = SimulationDatasetSummary & {
+  snapshots: CreateSimulationSnapshotInput[];
+};
+
+export type CreateSimulationSnapshotInput = {
+  beaufortNumber: number;
+  rainfall1hMm: number;
+  snapshotNumber: number;
+  visibilityKm: number;
+  windSpeedMs: number;
+  zoneId?: string | null;
+};
+
+export type CreateSimulationDatasetInput = {
+  description?: string | null;
+  name: string;
+  portCode: string;
+  snapshots: CreateSimulationSnapshotInput[];
+};
+
+export type SimulationRunResult = {
+  finalRiskLevel: RiskLevel;
+  generatedTaskCount: number;
+  sessionId: string;
+};
+
+export type SimulationMapPoint = {
+  latitude: number;
+  longitude: number;
+  portCode?: string;
+  portId?: string;
+  riskLevel: RiskLevel;
+  zoneId: string;
+  zoneName: string;
+};
+
+export type SimulationDangerousZone = {
+  reason?: string | null;
+  riskLevel: RiskLevel;
+  zoneId: string;
+  zoneName: string;
+};
+
+export type SimulationGeneratedTask = {
+  priority: string;
+  taskCode: string;
+  title: string;
+  zoneName?: string | null;
+};
+
+export type SimulationResult = {
+  dangerousZones: SimulationDangerousZone[];
+  mapPoints: SimulationMapPoint[];
+  sessionId: string;
+  tasks: SimulationGeneratedTask[];
+};

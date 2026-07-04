@@ -30,7 +30,7 @@ export function PortTable({ ports }: { ports: PortSummary[] }) {
             <tr key={port.portId}>
               <td><strong>{port.portCode}</strong></td>
               <td>{port.portName}</td>
-              <td><Badge tone={port.isActive ? "success" : "gray"}>{port.isActive ? "Hoạt động" : "Tạm ngưng"}</Badge></td>
+              <td><Badge tone={port.isActive ? "success" : "muted"}>{port.isActive ? "Hoạt động" : "Tạm ngưng"}</Badge></td>
               <td><Badge tone={riskTone(port.currentRiskLevel)}>{port.currentRiskLevel}</Badge></td>
               <td>{port.currentOperationMode}</td>
               <td>{port.activeAlertCount}</td>

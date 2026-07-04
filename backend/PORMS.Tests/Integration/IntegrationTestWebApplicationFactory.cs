@@ -77,6 +77,30 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         return (reader.GetGuid(0), reader.GetString(1));
     }
 
+    public async Task<(Guid ZoneId, string ZoneName)> GetFirstZoneAsync(Guid portId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            SELECT id, name
+            FROM operational.zones
+            WHERE port_id = @portId
+              AND deleted_at IS NULL
+            ORDER BY display_order, name
+            LIMIT 1;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("portId", portId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException($"No active test zone exists for port {portId}.");
+        }
+
+        return (reader.GetGuid(0), reader.GetString(1));
+    }
+
     public async Task SeedAlertAsync(Guid alertId, CancellationToken cancellationToken = default)
     {
         var port = await GetPrimaryPortAsync(cancellationToken);
@@ -91,7 +115,9 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                 title,
                 message,
                 context,
-                expires_at
+                expires_at,
+                created_at,
+                updated_at
             )
             VALUES (
                 @id,
@@ -101,15 +127,20 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                 'Seeded smoke alert',
                 'Created by integration test.',
                 '{"source":"integration-test"}'::jsonb,
-                NOW() + INTERVAL '1 day'
+                NOW() + INTERVAL '1 day',
+                NOW(),
+                NOW()
             )
             ON CONFLICT (id) DO UPDATE
             SET port_id = EXCLUDED.port_id,
-                event_type = EXCLUDED.event_type,
-                entity_type = EXCLUDED.entity_type,
-                summary = EXCLUDED.summary,
-                payload = EXCLUDED.payload,
-                occurred_at = EXCLUDED.occurred_at;
+                alert_type = EXCLUDED.alert_type,
+                severity = EXCLUDED.severity,
+                title = EXCLUDED.title,
+                message = EXCLUDED.message,
+                context = EXCLUDED.context,
+                expires_at = EXCLUDED.expires_at,
+                created_at = EXCLUDED.created_at,
+                updated_at = NOW();
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
@@ -151,6 +182,136 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task SeedSimulationOperationEventAsync(Guid operationEventId, Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        var port = await GetPrimaryPortAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+            INSERT INTO operational.simulation_datasets (
+                id,
+                name,
+                description,
+                snapshot_count
+            )
+            VALUES (
+                @datasetId,
+                'Operation log simulation dataset',
+                'Integration test dataset',
+                1
+            )
+            ON CONFLICT (id) DO NOTHING;
+
+            INSERT INTO operational.simulation_sessions (
+                id,
+                dataset_id,
+                port_id,
+                started_by_user_id,
+                status,
+                progress_percent,
+                current_snapshot_number,
+                peak_risk_level,
+                started_at
+            )
+            SELECT
+                @sessionId,
+                @datasetId,
+                @portId,
+                id,
+                'COMPLETED',
+                100,
+                1,
+                'CRITICAL',
+                NOW()
+            FROM operational.users
+            ORDER BY created_at
+            LIMIT 1
+            ON CONFLICT (id) DO NOTHING;
+
+            INSERT INTO operational.operation_events (
+                id,
+                event_type,
+                port_id,
+                entity_type,
+                summary,
+                payload,
+                simulation_session_id,
+                occurred_at
+            )
+            VALUES (
+                @id,
+                'SIMULATION_STEP',
+                @portId,
+                'simulation',
+                'Simulation smoke event',
+                '{"source":"integration-test"}'::jsonb,
+                @sessionId,
+                NOW()
+            )
+            ON CONFLICT (id) DO NOTHING;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("id", operationEventId);
+        command.Parameters.AddWithValue("datasetId", Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1"));
+        command.Parameters.AddWithValue("sessionId", sessionId);
+        command.Parameters.AddWithValue("portId", port.PortId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task SeedForecastWeatherAsync(Guid weatherReadingId, CancellationToken cancellationToken = default)
+    {
+        var port = await GetPrimaryPortAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+            INSERT INTO operational.weather_readings (
+                id,
+                port_id,
+                wind_speed_ms,
+                beaufort_number,
+                rainfall_1h_mm,
+                temperature_c,
+                humidity_pct,
+                visibility_km,
+                weather_description,
+                observed_at,
+                recorded_at,
+                data_source,
+                source_record_key,
+                raw_payload,
+                is_simulation
+            )
+            VALUES (
+                @id,
+                @portId,
+                8.5,
+                5,
+                6,
+                28,
+                74,
+                12,
+                'Forecast planning seed',
+                NOW(),
+                NOW(),
+                'OPENWEATHER_API',
+                @sourceRecordKey,
+                '{"source":"integration-test"}'::jsonb,
+                FALSE
+            )
+            ON CONFLICT (id) DO UPDATE
+            SET port_id = EXCLUDED.port_id,
+                observed_at = EXCLUDED.observed_at,
+                recorded_at = EXCLUDED.recorded_at;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("id", weatherReadingId);
+        command.Parameters.AddWithValue("portId", port.PortId);
+        command.Parameters.AddWithValue("sourceRecordKey", $"forecast-plan-test:{weatherReadingId}");
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task HideAllPortsAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
@@ -185,11 +346,240 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
             SET current_risk_level = 'LOW',
                 current_operation_mode = 'NORMAL'
             WHERE id = @portId;
+
+            UPDATE operational.zones
+            SET current_risk_level = 'LOW',
+                is_restricted = FALSE,
+                restriction_reason = NULL
+            WHERE port_id = @portId
+              AND deleted_at IS NULL;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("portId", port.PortId);
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task SeedDashboardRiskIsolationAsync(CancellationToken cancellationToken = default)
+    {
+        var port = await GetPrimaryPortAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            DELETE FROM operational.risk_assessments
+                WHERE id IN (
+                    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'::uuid,
+                    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'::uuid
+                );
+                DELETE FROM operational.weather_readings
+                WHERE id IN (
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid,
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid
+                );
+                DELETE FROM operational.simulation_sessions
+                WHERE id = 'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid;
+                DELETE FROM operational.simulation_datasets
+                WHERE id = 'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid;
+
+            INSERT INTO operational.simulation_datasets (
+                    id,
+                    name,
+                    description,
+                    snapshot_count
+                )
+                VALUES (
+                    'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid,
+                    'Dashboard risk isolation',
+                    'Integration test dataset',
+                    1
+                );
+
+            INSERT INTO operational.simulation_sessions (
+                    id,
+                    dataset_id,
+                    port_id,
+                    started_by_user_id,
+                    status,
+                    progress_percent,
+                    current_snapshot_number,
+                    peak_risk_level,
+                    started_at
+                )
+                SELECT
+                    'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid,
+                    'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid,
+                    @portId,
+                    id,
+                    'COMPLETED',
+                    100,
+                    1,
+                    'CRITICAL',
+                    NOW()
+                FROM operational.users
+                ORDER BY created_at
+                LIMIT 1;
+
+            INSERT INTO operational.weather_readings (
+                    id,
+                    port_id,
+                    wind_speed_ms,
+                    beaufort_number,
+                    rainfall_1h_mm,
+                    temperature_c,
+                    humidity_pct,
+                    visibility_km,
+                    weather_description,
+                    observed_at,
+                    recorded_at,
+                    data_source,
+                    is_simulation
+                )
+                VALUES (
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid,
+                    @portId,
+                    2.5,
+                    2,
+                    0,
+                    27,
+                    70,
+                    10,
+                    'OpenWeather low risk',
+                    NOW() + INTERVAL '10 minutes',
+                    NOW() + INTERVAL '11 minutes',
+                    'OPENWEATHER_API',
+                    FALSE
+                );
+
+            INSERT INTO operational.risk_assessments (
+                    id,
+                    weather_reading_id,
+                    port_id,
+                    wind_risk_level,
+                    rain_risk_level,
+                    visibility_risk_level,
+                    final_risk_level,
+                    previous_risk_level,
+                    level_changed,
+                    dominant_factor,
+                    assessment_summary,
+                    evaluated_at,
+                    is_simulation
+                )
+                VALUES (
+                    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'::uuid,
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid,
+                    @portId,
+                    'LOW',
+                    'LOW',
+                    'LOW',
+                    'LOW',
+                    'LOW',
+                    FALSE,
+                    'WIND',
+                    'OpenWeather should drive dashboard risk.',
+                    NOW() + INTERVAL '12 minutes',
+                    FALSE
+                );
+
+            INSERT INTO operational.weather_readings (
+                    id,
+                    port_id,
+                    simulation_session_id,
+                    wind_speed_ms,
+                    beaufort_number,
+                    rainfall_1h_mm,
+                    temperature_c,
+                    humidity_pct,
+                    visibility_km,
+                    weather_description,
+                    observed_at,
+                    recorded_at,
+                    data_source,
+                    is_simulation
+                )
+                VALUES (
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid,
+                    @portId,
+                    'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid,
+                    27.4,
+                    10,
+                    60,
+                    27,
+                    90,
+                    0.8,
+                    'Simulation critical risk',
+                    NOW() + INTERVAL '20 minutes',
+                    NOW() + INTERVAL '21 minutes',
+                    'SIMULATION_DEMO',
+                    TRUE
+                );
+
+            INSERT INTO operational.risk_assessments (
+                    id,
+                    weather_reading_id,
+                    port_id,
+                    simulation_session_id,
+                    wind_risk_level,
+                    rain_risk_level,
+                    visibility_risk_level,
+                    final_risk_level,
+                    previous_risk_level,
+                    level_changed,
+                    dominant_factor,
+                    assessment_summary,
+                    evaluated_at,
+                    is_simulation
+                )
+                VALUES (
+                    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'::uuid,
+                    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid,
+                    @portId,
+                    'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid,
+                    'CRITICAL',
+                    'CRITICAL',
+                    'CRITICAL',
+                    'CRITICAL',
+                    'LOW',
+                    TRUE,
+                    'WIND',
+                    'Simulation must not drive dashboard risk.',
+                    NOW() + INTERVAL '22 minutes',
+                    TRUE
+                );
+
+            UPDATE operational.ports
+                SET current_risk_level = 'CRITICAL',
+                    current_operation_mode = 'STOP'
+                WHERE id = @portId;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("portId", port.PortId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task CleanupDashboardRiskIsolationAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            DELETE FROM operational.risk_assessments
+            WHERE id IN (
+                'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'::uuid,
+                'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'::uuid
+            );
+            DELETE FROM operational.weather_readings
+            WHERE id IN (
+                'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid,
+                'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid
+            );
+            DELETE FROM operational.simulation_sessions
+            WHERE id = 'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid;
+            DELETE FROM operational.simulation_datasets
+            WHERE id = 'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        await ResetPrimaryPortStateAsync(cancellationToken);
     }
 
     public async Task<SimulationSessionSnapshot> GetSimulationSessionSnapshotAsync(
@@ -206,8 +596,18 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                    s.peak_risk_level,
                    s.generated_alert_count,
                    s.mode_change_count,
-                   p.current_risk_level,
-                   p.current_operation_mode,
+                   COALESCE(s.peak_risk_level::text, 'LOW') AS current_risk_level,
+                   COALESCE((
+                       SELECT m.new_mode::text
+                       FROM operational.operation_mode_logs m
+                       WHERE m.simulation_session_id = s.id
+                       ORDER BY m.changed_at DESC
+                       LIMIT 1
+                   ), CASE s.peak_risk_level
+                       WHEN 'CRITICAL' THEN 'STOP'
+                       WHEN 'HIGH' THEN 'LIMITED'
+                       ELSE 'NORMAL'
+                   END) AS current_operation_mode,
                    COALESCE((
                        SELECT COUNT(*)
                        FROM operational.weather_readings w
@@ -265,6 +665,40 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
             reader.GetInt64(14));
     }
 
+    public async Task<AlertSnapshot> GetLatestAlertForSessionAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            SELECT id,
+                   zone_id,
+                   title,
+                   message,
+                   created_at
+            FROM operational.alerts
+            WHERE simulation_session_id = @sessionId
+            ORDER BY created_at DESC
+            LIMIT 1;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("sessionId", sessionId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException($"No alert exists for simulation session {sessionId}.");
+        }
+
+        return new AlertSnapshot(
+            reader.GetGuid(0),
+            reader.IsDBNull(1) ? null : reader.GetGuid(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetFieldValue<DateTimeOffset>(4));
+    }
+
     private async Task<NpgsqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = new NpgsqlConnection(GetConnectionString());
@@ -289,3 +723,10 @@ public sealed record SimulationSessionSnapshot(
     long AlertCount,
     long ModeLogCount,
     long OperationEventCount);
+
+public sealed record AlertSnapshot(
+    Guid AlertId,
+    Guid? ZoneId,
+    string Title,
+    string Message,
+    DateTimeOffset CreatedAt);

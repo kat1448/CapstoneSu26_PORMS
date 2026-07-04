@@ -3,8 +3,17 @@ import {
   resetDemoData,
   runDemoStepSequence
 } from "../mock/demoData";
-import { requestJson, withMockFallback } from "./api";
-import type { SimulationSnapshot } from "../types/simulation";
+import { requestJson, requestVoid, withMockFallback } from "./api";
+import type {
+  CreateSimulationDatasetInput,
+  ForecastPlan,
+  ForecastHorizonDays,
+  SimulationDatasetDetail,
+  SimulationDatasetSummary,
+  SimulationResult,
+  SimulationRunResult,
+  SimulationSnapshot
+} from "../types/simulation";
 
 export async function getSimulationSnapshot(): Promise<SimulationSnapshot> {
   return withMockFallback(
@@ -38,4 +47,64 @@ export async function restartDemoSimulation(): Promise<void> {
       await runDemoStepSequence();
     }
   );
+}
+
+export function getSimulationDatasets(): Promise<SimulationDatasetSummary[]> {
+  return requestJson<SimulationDatasetSummary[]>("/api/simulation/datasets");
+}
+
+export function getSimulationDataset(datasetId: string): Promise<SimulationDatasetDetail> {
+  return requestJson<SimulationDatasetDetail>(`/api/simulation/datasets/${datasetId}`);
+}
+
+export function getSimulationMapPoints(): Promise<SimulationResult["mapPoints"]> {
+  return requestJson<SimulationResult["mapPoints"]>("/api/simulation/map-points");
+}
+
+export function createSimulationDataset(input: CreateSimulationDatasetInput): Promise<SimulationDatasetSummary> {
+  return requestJson<SimulationDatasetSummary>("/api/simulation/datasets", {
+    body: JSON.stringify(toDatasetPayload(input)),
+    method: "POST"
+  });
+}
+
+export function updateSimulationDataset(datasetId: string, input: CreateSimulationDatasetInput): Promise<SimulationDatasetSummary> {
+  return requestJson<SimulationDatasetSummary>(`/api/simulation/datasets/${datasetId}`, {
+    body: JSON.stringify(toDatasetPayload(input)),
+    method: "PUT"
+  });
+}
+
+export function deleteSimulationDataset(datasetId: string): Promise<void> {
+  return requestVoid(`/api/simulation/datasets/${datasetId}`, { method: "DELETE" });
+}
+
+export function createForecastPlan(input: { horizonDays: ForecastHorizonDays; portCode: string }): Promise<ForecastPlan> {
+  return requestJson<ForecastPlan>("/api/simulation/forecast-plan", {
+    body: JSON.stringify(input),
+    method: "POST"
+  });
+}
+
+function toDatasetPayload(input: CreateSimulationDatasetInput): CreateSimulationDatasetInput {
+  const payload: CreateSimulationDatasetInput = {
+    ...input,
+    snapshots: input.snapshots.map((snapshot) => ({
+      ...snapshot,
+      zoneId: snapshot.zoneId?.trim() ? snapshot.zoneId.trim() : null
+    }))
+  };
+
+  return payload;
+}
+
+export function runSimulationDataset(datasetId: string): Promise<SimulationRunResult> {
+  return requestJson<SimulationRunResult>("/api/simulation/run", {
+    body: JSON.stringify({ datasetId }),
+    method: "POST"
+  });
+}
+
+export function getSimulationResult(sessionId: string): Promise<SimulationResult> {
+  return requestJson<SimulationResult>(`/api/simulation/${sessionId}/result`);
 }

@@ -9,11 +9,11 @@ describe("Sidebar", () => {
       <MemoryRouter initialEntries={["/dashboard"]}>
         <Sidebar
           currentUser={{
-            email: "operator@porms.vn",
+            email: "standard@porms.vn",
             initials: "MD",
-            name: "Phạm Minh Đức",
+            name: "Pham Minh Duc",
             portName: "Cảng Tiên Sa",
-            role: "OPERATOR"
+            role: "STANDARD_USER"
           }}
           isOpen={false}
           onClose={() => undefined}
@@ -22,10 +22,12 @@ describe("Sidebar", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("Nhật ký nhiệm vụ")).toBeInTheDocument();
+    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Mô phỏng")).toBeInTheDocument();
+    expect(screen.queryByText("Nhật ký nhiệm vụ")).not.toBeInTheDocument();
     expect(screen.queryByText("Người dùng")).not.toBeInTheDocument();
     expect(screen.queryByText("Ngưỡng rủi ro")).not.toBeInTheDocument();
-    expect(screen.getByText("Phạm Minh Đức")).toBeInTheDocument();
+    expect(screen.getByText("Pham Minh Duc")).toBeInTheDocument();
     expect(screen.getByLabelText("3 cảnh báo chưa đọc")).toBeInTheDocument();
   });
 });

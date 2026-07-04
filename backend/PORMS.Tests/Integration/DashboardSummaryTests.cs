@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using PORMS.API.Contracts;
 using Xunit;
 
 namespace PORMS.Tests.Integration;
@@ -42,6 +43,31 @@ public sealed class DashboardSummaryTests
         finally
         {
             await _factory.RestoreAllPortsAsync();
+        }
+    }
+
+    [Fact]
+    public async Task DashboardSummary_UsesLatestNonSimulationRiskAssessment()
+    {
+        await _factory.SeedDashboardRiskIsolationAsync();
+
+        try
+        {
+            var client = _factory.CreateClient();
+            var response = await client.GetAsync("/api/dashboard/summary");
+
+            response.EnsureSuccessStatusCode();
+
+            var payload = await response.Content.ReadFromJsonAsync<DashboardSummaryResponse>();
+            Assert.NotNull(payload);
+            Assert.Equal("LOW", payload!.CurrentRiskLevel);
+            Assert.Equal((short?)2, payload.BeaufortNumber);
+            Assert.Equal((decimal?)0, payload.Rainfall1hMm);
+            Assert.Equal((decimal?)10, payload.VisibilityKm);
+        }
+        finally
+        {
+            await _factory.CleanupDashboardRiskIsolationAsync();
         }
     }
 

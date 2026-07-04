@@ -1,6 +1,8 @@
 # Claude Code
 CLAUDE.md
 .superpowers/
+docs/superpowers/
+
 
 # Docs folder (nội dung nội bộ, không push lên git)
 docs/docs/
@@ -38,3 +40,4 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+.tmp-build/

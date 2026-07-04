@@ -81,10 +81,10 @@ END $$;
 
 -- Vai trò người dùng — RBAC
 -- ADMIN         : Toàn quyền hệ thống (thêm port, cấu hình threshold, quản lý user)
--- COMPANY_ADMIN : Quản lý cảng được phân công (xem tất cả, sửa SOP, override mode)
--- OPERATOR      : Nhân viên vận hành (chỉ xem dashboard, đọc alert, mark alert as read)
+-- ADMIN         : Cấu hình ngưỡng/SOP dữ liệu thật và tạo task vận hành
+-- STANDARD_USER : Xem dữ liệu và chạy mô phỏng
 DO $$ BEGIN
-    CREATE TYPE operational.user_role_enum AS ENUM ('ADMIN', 'COMPANY_ADMIN', 'OPERATOR');
+    CREATE TYPE operational.user_role_enum AS ENUM ('SUPER_ADMIN', 'ADMIN', 'STANDARD_USER');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -285,13 +285,13 @@ CREATE TABLE IF NOT EXISTS operational.users (
     password_hash       VARCHAR(255)    NOT NULL,
 
     -- Vai trò — quyết định access control
-    role                operational.user_role_enum NOT NULL DEFAULT 'OPERATOR',
+    role                operational.user_role_enum NOT NULL DEFAULT 'STANDARD_USER',
 
     -- Trạng thái tài khoản
     status              operational.user_status_enum NOT NULL DEFAULT 'ACTIVE',
 
     -- Port mà user này phụ trách (NULL cho ADMIN — quản lý tất cả)
-    -- COMPANY_ADMIN và OPERATOR chỉ xem được data của port_id này
+    -- ADMIN và STANDARD_USER chỉ xem được data của port_id này
     assigned_port_id    UUID
                             REFERENCES operational.ports(id)
                             ON DELETE SET NULL,
@@ -328,7 +328,7 @@ CREATE TABLE IF NOT EXISTS operational.users (
                             ON DELETE SET NULL
 );
 
-COMMENT ON TABLE  operational.users                      IS 'Tài khoản người dùng — RBAC: ADMIN/COMPANY_ADMIN/OPERATOR';
+COMMENT ON TABLE  operational.users                      IS 'Tài khoản người dùng — RBAC: SUPER_ADMIN/ADMIN/STANDARD_USER';
 COMMENT ON COLUMN operational.users.password_hash        IS 'bcrypt hash với cost=12. KHÔNG return qua API, KHÔNG log';
 COMMENT ON COLUMN operational.users.assigned_port_id     IS 'Port phụ trách. NULL = ADMIN (xem tất cả port)';
 COMMENT ON COLUMN operational.users.refresh_token_hash   IS 'Hash của refresh token để validate. NULL = logged out';
@@ -1167,7 +1167,7 @@ $$;
 CREATE OR REPLACE FUNCTION operational.sync_port_risk_level()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF NEW.level_changed = TRUE THEN
+    IF NEW.is_simulation = FALSE AND NEW.level_changed = TRUE THEN
         UPDATE operational.ports
         SET    current_risk_level = NEW.final_risk_level,
                updated_at         = NOW()
@@ -1189,6 +1189,10 @@ COMMENT ON FUNCTION operational.sync_port_risk_level() IS
 CREATE OR REPLACE FUNCTION operational.sync_port_mode()
 RETURNS TRIGGER AS $$
 BEGIN
+    IF NEW.is_simulation = TRUE THEN
+        RETURN NEW;
+    END IF;
+
     UPDATE operational.ports
     SET    current_mode = NEW.new_mode,
            updated_at   = NOW()
@@ -1437,6 +1441,24 @@ CROSS JOIN (VALUES
 WHERE p.code = 'DNTSA'
 ON CONFLICT DO NOTHING;
 
+UPDATE operational.zones z
+SET latitude = coords.latitude,
+    longitude = coords.longitude
+FROM operational.ports p
+CROSS JOIN (
+    VALUES
+        (1, 16.124000, 108.214000),
+        (2, 16.124500, 108.214500),
+        (3, 16.123000, 108.216000),
+        (4, 16.122000, 108.217000),
+        (5, 16.125000, 108.213000),
+        (6, 16.121000, 108.215000)
+) AS coords(display_order, latitude, longitude)
+WHERE z.port_id = p.id
+  AND p.code = 'DNTSA'
+  AND z.display_order = coords.display_order
+  AND (z.latitude IS NULL OR z.longitude IS NULL);
+
 -- ── 7.6 Admin user mặc định ────────────────────────────────────────────────
 -- Password mặc định: Admin@2026! — BẮT BUỘC đổi trước khi deploy production
 -- Hash: bcrypt('Admin@2026!', 12) — tạo bằng lệnh:
@@ -1449,7 +1471,7 @@ VALUES
         'System Administrator',
         -- bcrypt hash placeholder — PHẢI chạy lại với hash thật trước khi deploy
         '$2a$12$EiOVbgHA01dPxu209RTJUOsJ4I7jDrQiXeIEAGG.iXmqYpBl2vSmG',
-        'ADMIN',
+        'SUPER_ADMIN',
         'ACTIVE'
     )
 ON CONFLICT (email) DO NOTHING;

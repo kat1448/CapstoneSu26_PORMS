@@ -1,48 +1,223 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardPage } from "./DashboardPage";
+
+const serviceMocks = vi.hoisted(() => ({
+  getAlerts: vi.fn(),
+  getDashboardSummary: vi.fn(),
+  getPorts: vi.fn(),
+  getPortZones: vi.fn(),
+  getRiskTrend: vi.fn(),
+  getWeatherSnapshot: vi.fn()
+}));
 
 vi.mock("../hooks/useDemoRefresh", () => ({ useDemoRefresh: () => 0 }));
 vi.mock("../services/dashboardService", () => ({
-  getDashboardSummary: async () => ({
-    activeAlertCount: 1, beaufortNumber: 8, currentOperationMode: "LIMITED",
-    currentRiskLevel: "HIGH", portCode: "DNTSA", portId: "port-1",
-    portName: "Cảng Tiên Sa", rainfall1hMm: 28.5, visibilityKm: 4.2, windSpeedMs: 18.4
-  }),
-  getRiskTrend: async () => [
-    { hourLabel: "00:00", riskScore: 1 }, { hourLabel: "06:00", riskScore: 2 },
-    { hourLabel: "12:00", riskScore: 3 }, { hourLabel: "18:00", riskScore: 4 }
-  ],
-  getWeatherSnapshot: async () => ({
-    humidityPct: 82, rainfall1hMm: 28.5, temperatureC: 29, visibilityKm: 4.2, windSpeedMs: 18.4
-  })
+  getDashboardSummary: serviceMocks.getDashboardSummary,
+  getRiskTrend: serviceMocks.getRiskTrend,
+  getWeatherSnapshot: serviceMocks.getWeatherSnapshot
 }));
 vi.mock("../services/alertService", () => ({
-  getAlerts: async () => [{
-    alertId: "a1", alertType: "WEATHER", createdAt: "2 phút trước", message: "Gió mạnh",
-    portCode: "DNTSA", portId: "port-1", portName: "Cảng Tiên Sa", read: false,
-    severity: "HIGH", title: "Cảnh báo gió mạnh", zoneName: "Bến số 1"
-  }]
+  getAlerts: serviceMocks.getAlerts
 }));
 vi.mock("../services/portService", () => ({
-  getPortZones: async () => [{
-    capacityLabel: "2 tàu", currentRiskLevel: "HIGH", displayOrder: 1, isActive: true,
-    isRestricted: true, overrideEnabled: false, portId: "port-1", restrictionReason: "Gió mạnh",
-    statusLabel: "Hạn chế", zoneId: "z1", zoneName: "Bến số 1", zoneType: "DOCK"
-  }]
+  getPorts: serviceMocks.getPorts,
+  getPortZones: serviceMocks.getPortZones
 }));
-vi.mock("../services/simulationService", () => ({ runDemoSimulation: async () => undefined }));
+vi.mock("../components/dashboard/GisMapCard", () => ({
+  GisMapCard: ({
+    onSelectPort,
+    ports,
+    portName,
+    selectedPortId,
+    zones
+  }: {
+    onSelectPort: (portId: string) => void;
+    ports: Array<{ latitude?: number | null; longitude?: number | null; portId: string; portName: string }>;
+    portName: string;
+    selectedPortId: string;
+    zones: Array<{ latitude?: number | null; longitude?: number | null; zoneName: string }>;
+  }) => (
+    <article>
+      <h3>Ban do GIS {portName}</h3>
+      <div>Selected {selectedPortId}</div>
+      {ports.map((port) => (
+        <button key={port.portId} onClick={() => onSelectPort(port.portId)} type="button">
+          {port.portName} {port.latitude}, {port.longitude}
+        </button>
+      ))}
+      {zones.map((zone) => (
+        <div key={zone.zoneName}>
+          {zone.zoneName} {zone.latitude}, {zone.longitude}
+        </div>
+      ))}
+    </article>
+  )
+}));
+
+function mockDashboardServices() {
+  serviceMocks.getDashboardSummary.mockResolvedValue({
+    activeAlertCount: 1,
+    beaufortNumber: 8,
+    currentOperationMode: "LIMITED",
+    currentRiskLevel: "HIGH",
+    portCode: "DNTSA",
+    portId: "port-1",
+    portName: "Cang Tien Sa",
+    rainfall1hMm: 28.5,
+    visibilityKm: 4.2,
+    windSpeedMs: 18.4
+  });
+  serviceMocks.getPorts.mockResolvedValue([
+    {
+      activeAlertCount: 1,
+      currentOperationMode: "LIMITED",
+      currentRiskLevel: "HIGH",
+      isActive: true,
+      latitude: 16.124,
+      longitude: 108.214,
+      portCode: "DNTSA",
+      portId: "port-1",
+      portName: "Cang Tien Sa",
+      updatedAtLabel: "Vua cap nhat"
+    },
+    {
+      activeAlertCount: 0,
+      currentOperationMode: "NORMAL",
+      currentRiskLevel: "LOW",
+      isActive: true,
+      latitude: 16.165,
+      longitude: 108.1915,
+      portCode: "DNLH",
+      portId: "port-2",
+      portName: "Cang Lien Chieu",
+      updatedAtLabel: "5 phut truoc"
+    }
+  ]);
+  serviceMocks.getRiskTrend.mockResolvedValue([
+    { hourLabel: "00:00", riskScore: 1 },
+    { hourLabel: "06:00", riskScore: 2 },
+    { hourLabel: "12:00", riskScore: 3 },
+    { hourLabel: "18:00", riskScore: 4 }
+  ]);
+  serviceMocks.getWeatherSnapshot.mockResolvedValue({
+    beaufortNumber: 8,
+    dataSource: "OPENWEATHER_API",
+    humidityPct: 82,
+    observedAt: "2026-06-26T03:10:00Z",
+    pressureHpa: 1008,
+    rainfall1hMm: 28.5,
+    recordedAt: "2026-06-26T03:11:30Z",
+    temperatureC: 29,
+    visibilityKm: 4.2,
+    weatherCode: 500,
+    weatherDescription: "moderate rain",
+    windDirectionDeg: 110,
+    windGustMs: 22.4,
+    windSpeedMs: 18.4
+  });
+  serviceMocks.getAlerts.mockResolvedValue([
+    {
+      alertId: "a1",
+      alertType: "WEATHER",
+      createdAt: "2 phut truoc",
+      message: "Gio manh",
+      portCode: "DNTSA",
+      portId: "port-1",
+      portName: "Cang Tien Sa",
+      read: false,
+      severity: "HIGH",
+      title: "Canh bao gio manh",
+      zoneName: "Ben so 1"
+    }
+  ]);
+  serviceMocks.getPortZones.mockResolvedValue([
+    {
+      capacityLabel: "2 tau",
+      currentRiskLevel: "HIGH",
+      displayOrder: 1,
+      isActive: true,
+      isRestricted: true,
+      latitude: 16.124,
+      longitude: 108.214,
+      overrideEnabled: false,
+      portId: "port-1",
+      restrictionReason: "Gio manh",
+      statusLabel: "Han che",
+      zoneId: "z1",
+      zoneName: "Ben so 1",
+      zoneType: "DOCK"
+    }
+  ]);
+}
+
+async function flushDashboardLoad() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
 
 describe("DashboardPage", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+    mockDashboardServices();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("matches the prototype section composition", async () => {
-    render(<MemoryRouter><DashboardPage refreshKey={0} /></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <DashboardPage refreshKey={0} />
+      </MemoryRouter>
+    );
 
     expect(await screen.findByRole("heading", { name: "Trung tâm điều hành" })).toBeInTheDocument();
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Mức rủi ro hiện tại");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Trạng thái khu vực");
-    expect(screen.getByTestId("dashboard-right")).toHaveTextContent("Thời tiết hiện tại");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ban do GIS Tất cả cảng");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Dữ liệu thời tiết theo cảng và khu vực");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("OPENWEATHER_API");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("moderate rain");
+    expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Xu hướng rủi ro 24 giờ");
+    expect(screen.getByTestId("dashboard-right")).not.toHaveTextContent("Thời tiết hiện tại");
+    expect(screen.getByTestId("dashboard-right")).not.toHaveTextContent("Dữ liệu thời tiết theo cảng và khu vực");
+    expect(screen.queryByRole("button", { name: /Chạy mô phỏng demo|Đang chạy mô phỏng/ })).not.toBeInTheDocument();
     expect(screen.getByTestId("dashboard-right")).toHaveTextContent("Cảnh báo đang hoạt động");
     expect(screen.queryByText("Nhật ký gần đây")).not.toBeInTheDocument();
+    expect(serviceMocks.getRiskTrend).not.toHaveBeenCalled();
+  });
+
+  it("refreshes dashboard data every 10 minutes", async () => {
+    vi.useFakeTimers();
+    render(
+      <MemoryRouter>
+        <DashboardPage refreshKey={0} />
+      </MemoryRouter>
+    );
+
+    await flushDashboardLoad();
+    expect(serviceMocks.getDashboardSummary).toHaveBeenCalledTimes(1);
+    expect(serviceMocks.getWeatherSnapshot).toHaveBeenCalledTimes(1);
+    expect(serviceMocks.getRiskTrend).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(600_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(serviceMocks.getDashboardSummary).toHaveBeenCalledTimes(2);
+    expect(serviceMocks.getWeatherSnapshot).toHaveBeenCalledTimes(2);
+    expect(serviceMocks.getRiskTrend).not.toHaveBeenCalled();
+    expect(serviceMocks.getPorts).toHaveBeenCalledTimes(2);
+    expect(serviceMocks.getPortZones).not.toHaveBeenCalledTimes(2);
   });
 });

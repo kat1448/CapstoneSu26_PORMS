@@ -12,11 +12,20 @@ type TopbarProps = {
 };
 
 const pageTitles: Record<string, string> = {
-  "/alerts": "Cảnh báo", "/analytics": "Phân tích BI", "/change-password": "Đổi mật khẩu",
-  "/dashboard": "Dashboard", "/operation-log": "Nhật ký vận hành", "/ports": "Cảng & khu vực",
-  "/profile": "Thông tin cá nhân", "/risk-config": "Cấu hình ngưỡng rủi ro",
-  "/simulation": "Chế độ mô phỏng", "/simulation-results": "Kết quả mô phỏng",
-  "/sop-rules": "Quy tắc SOP", "/tasks": "Nhật ký nhiệm vụ", "/users": "Người dùng"
+  "/alerts": "Cảnh báo",
+  "/analytics": "Phân tích BI",
+  "/change-password": "Đổi mật khẩu",
+  "/dashboard": "Dashboard",
+  "/forecast-planning": "Dự báo vận hành",
+  "/operation-log": "Nhật ký vận hành",
+  "/ports": "Cảng & khu vực",
+  "/profile": "Thông tin cá nhân",
+  "/risk-config": "Cấu hình ngưỡng rủi ro",
+  "/simulation": "Chế độ mô phỏng",
+  "/simulation-results": "Kết quả mô phỏng",
+  "/sop-rules": "Quy tắc SOP",
+  "/tasks": "Nhật ký nhiệm vụ",
+  "/users": "Người dùng"
 };
 
 function formatClock(date: Date) {
@@ -36,14 +45,18 @@ function formatClock(date: Date) {
 }
 
 const roleLabels: Record<DemoUser["role"], string> = {
-  ADMIN: "Quản trị hệ thống",
-  PORT_MANAGER: "Quản lý cảng",
-  OPERATOR: "Nhân viên vận hành"
+  SUPER_ADMIN: "Super Admin",
+  ADMIN: "Admin",
+  STANDARD_USER: "Standard User"
 };
 
 export function Topbar({ currentUser, onLogout, onMenuToggle, onRefresh, unreadAlertCount }: TopbarProps) {
   const location = useLocation();
-  const path = location.pathname.startsWith("/ports/") ? "/ports" : location.pathname;
+  const path = location.pathname.startsWith("/ports/")
+    ? "/ports"
+    : location.pathname.startsWith("/users/")
+      ? "/users"
+      : location.pathname;
   const [clock, setClock] = useState(() => formatClock(new Date()));
   const [isAccountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);

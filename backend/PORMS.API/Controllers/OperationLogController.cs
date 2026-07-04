@@ -10,10 +10,12 @@ public sealed class OperationLogController : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<OperationEventResponse>>> GetOperationEvents(
+        [FromQuery] string? scope,
         [FromServices] OperationEventRepository repository,
         CancellationToken cancellationToken)
     {
-        var events = await repository.GetOperationEventsAsync(cancellationToken);
+        var simulationOnly = string.Equals(scope, "simulation", StringComparison.OrdinalIgnoreCase);
+        var events = await repository.GetOperationEventsAsync(simulationOnly, cancellationToken);
 
         return Ok(events.Select(operationEvent => new OperationEventResponse
         {
@@ -30,6 +32,8 @@ public sealed class OperationLogController : ControllerBase
             EntityId = operationEvent.EntityId,
             Summary = operationEvent.Summary,
             OccurredAt = operationEvent.OccurredAt,
+            SimulationSessionId = operationEvent.SimulationSessionId,
+            IsSimulation = operationEvent.SimulationSessionId.HasValue,
             Tone = GetTone(operationEvent.EventType)
         }).ToList());
     }
