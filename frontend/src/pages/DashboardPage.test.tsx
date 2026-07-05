@@ -132,24 +132,75 @@ function mockDashboardServices() {
       zoneName: "Ben so 1"
     }
   ]);
-  serviceMocks.getPortZones.mockResolvedValue([
-    {
-      capacityLabel: "2 tau",
-      currentRiskLevel: "HIGH",
-      displayOrder: 1,
-      isActive: true,
-      isRestricted: true,
-      latitude: 16.124,
-      longitude: 108.214,
-      overrideEnabled: false,
-      portId: "port-1",
-      restrictionReason: "Gio manh",
-      statusLabel: "Han che",
-      zoneId: "z1",
-      zoneName: "Ben so 1",
-      zoneType: "DOCK"
-    }
-  ]);
+  serviceMocks.getPortZones.mockImplementation((portId: string) => Promise.resolve(portId === "port-1"
+    ? [
+        {
+          capacityLabel: "2 tau",
+          currentRiskLevel: "HIGH",
+          displayOrder: 1,
+          isActive: true,
+          isRestricted: true,
+          latitude: 16.124,
+          longitude: 108.214,
+          overrideEnabled: false,
+          portId: "port-1",
+          restrictionReason: "Gio manh",
+          statusLabel: "Han che",
+          zoneId: "z1",
+          zoneName: "Ben so 1",
+          zoneType: "DOCK"
+        },
+        {
+          capacityLabel: "1 cong",
+          currentRiskLevel: "LOW",
+          displayOrder: 2,
+          isActive: true,
+          isRestricted: false,
+          latitude: 16.126,
+          longitude: 108.216,
+          overrideEnabled: false,
+          portId: "port-1",
+          restrictionReason: null,
+          statusLabel: "Binh thuong",
+          zoneId: "z2",
+          zoneName: "Cong A",
+          zoneType: "GATE"
+        }
+      ]
+    : [
+        {
+          capacityLabel: "3 tau",
+          currentRiskLevel: "MEDIUM",
+          displayOrder: 1,
+          isActive: true,
+          isRestricted: false,
+          latitude: 16.165,
+          longitude: 108.1915,
+          overrideEnabled: false,
+          portId: "port-2",
+          restrictionReason: null,
+          statusLabel: "Giam sat",
+          zoneId: "z3",
+          zoneName: "Ben so 2",
+          zoneType: "DOCK"
+        },
+        {
+          capacityLabel: "1 bai",
+          currentRiskLevel: "CRITICAL",
+          displayOrder: 2,
+          isActive: true,
+          isRestricted: true,
+          latitude: 16.167,
+          longitude: 108.193,
+          overrideEnabled: false,
+          portId: "port-2",
+          restrictionReason: "Mua lon",
+          statusLabel: "Dung",
+          zoneId: "z4",
+          zoneName: "Bai C",
+          zoneType: "YARD"
+        }
+      ]));
 }
 
 async function flushDashboardLoad() {
@@ -178,7 +229,18 @@ describe("DashboardPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Trung tâm điều hành" })).toBeInTheDocument();
-    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Mức rủi ro hiện tại");
+    expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Mức rủi ro hiện tại");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Tổng quan rủi ro khu vực");
+    expect(screen.getByLabelText("LOW zones")).toHaveTextContent("1");
+    expect(screen.getByLabelText("MEDIUM zones")).toHaveTextContent("1");
+    expect(screen.getByLabelText("HIGH zones")).toHaveTextContent("1");
+    expect(screen.getByLabelText("CRITICAL zones")).toHaveTextContent("1");
+    expect(screen.getByLabelText("LOW zones")).not.toHaveTextContent("25%");
+    expect(screen.getByLabelText("MEDIUM zones")).not.toHaveTextContent("25%");
+    expect(screen.getByLabelText("HIGH zones")).not.toHaveTextContent("25%");
+    expect(screen.getByLabelText("CRITICAL zones")).not.toHaveTextContent("25%");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cáº£nh bÃ¡o Ä‘ang hoáº¡t Ä‘á»™ng");
+    expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Cháº¿ Ä‘á»™ váº­n hÃ nh");
     expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Trạng thái khu vực");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ban do GIS Tất cả cảng");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
@@ -218,6 +280,6 @@ describe("DashboardPage", () => {
     expect(serviceMocks.getWeatherSnapshot).toHaveBeenCalledTimes(2);
     expect(serviceMocks.getRiskTrend).not.toHaveBeenCalled();
     expect(serviceMocks.getPorts).toHaveBeenCalledTimes(2);
-    expect(serviceMocks.getPortZones).not.toHaveBeenCalledTimes(2);
+    expect(serviceMocks.getPortZones).toHaveBeenCalledTimes(4);
   });
 });
