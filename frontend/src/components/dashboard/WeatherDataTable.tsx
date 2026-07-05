@@ -1,8 +1,11 @@
+import { useEffect, useMemo, useState } from "react";
 import type { WeatherSnapshot } from "../../types/dashboard";
 
 type WeatherDataTableProps = {
   weather: WeatherSnapshot;
 };
+
+const PAGE_SIZE = 5;
 
 function formatNumber(value: number | null | undefined, suffix: string, digits = 1) {
   if (value === null || value === undefined) return "Chưa có dữ liệu";
@@ -46,6 +49,7 @@ function formatCoordinate(latitude: number | null | undefined, longitude: number
 }
 
 export function WeatherDataTable({ weather }: WeatherDataTableProps) {
+  const [currentPage, setCurrentPage] = useState(1);
   const points = weather.dataPoints?.length ? weather.dataPoints : [{
     beaufortNumber: weather.beaufortNumber ?? 0,
     dataSource: weather.dataSource,
@@ -63,6 +67,15 @@ export function WeatherDataTable({ weather }: WeatherDataTableProps) {
     windSpeedMs: weather.windSpeedMs,
     zoneName: "Toàn cảng"
   }];
+  const totalPages = Math.max(1, Math.ceil(points.length / PAGE_SIZE));
+  const visiblePoints = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return points.slice(start, start + PAGE_SIZE);
+  }, [currentPage, points]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   return (
     <article className="card card-pad weather-data-card">
@@ -92,7 +105,7 @@ export function WeatherDataTable({ weather }: WeatherDataTableProps) {
             </tr>
           </thead>
           <tbody>
-            {points.map((point) => (
+            {visiblePoints.map((point) => (
               <tr key={`${point.portCode}-${point.zoneName ?? "port"}-${point.observedAt ?? ""}`}>
                 <td>
                   <strong>{point.portName}</strong>
@@ -117,6 +130,27 @@ export function WeatherDataTable({ weather }: WeatherDataTableProps) {
           </tbody>
         </table>
       </div>
+      {totalPages > 1 ? (
+        <div className="table-pagination" aria-label="Phân trang dữ liệu thời tiết">
+          <button
+            className="button button-secondary button-small"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            type="button"
+          >
+            Trước
+          </button>
+          <span>Trang {currentPage}/{totalPages}</span>
+          <button
+            className="button button-secondary button-small"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+            type="button"
+          >
+            Sau
+          </button>
+        </div>
+      ) : null}
     </article>
   );
 }

@@ -28,6 +28,8 @@ const tonePriority: Record<OperationEvent["tone"], number> = {
   info: 1
 };
 
+const PAGE_SIZE = 15;
+
 function badgeTone(tone: OperationEvent["tone"]): "danger" | "info" | "success" | "warning" {
   if (tone === "danger") return "danger";
   if (tone === "warning") return "warning";
@@ -83,15 +85,26 @@ export function LogPage({ refreshKey }: LogPageProps) {
   useDemoRefresh();
   const [events, setEvents] = useState<OperationEvent[]>([]);
   const [scope, setScope] = useState<LogScope>("live");
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedRunKey, setSelectedRunKey] = useState<string | null>(null);
 
   useEffect(() => {
+    setCurrentPage(1);
     setSelectedRunKey(null);
     void getOperationEvents(scope).then(setEvents);
   }, [refreshKey, scope]);
 
   const runs = useMemo(() => groupOperationRuns(events), [events]);
+  const totalPages = Math.max(1, Math.ceil(runs.length / PAGE_SIZE));
+  const visibleRuns = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return runs.slice(start, start + PAGE_SIZE);
+  }, [currentPage, runs]);
   const selectedRun = runs.find((run) => run.groupKey === selectedRunKey) ?? null;
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   return (
     <section className="page-grid">
@@ -130,7 +143,7 @@ export function LogPage({ refreshKey }: LogPageProps) {
               <span>{scope === "simulation" ? "Chạy mô phỏng để xem sự kiện riêng." : "Chưa có sự kiện vận hành thật."}</span>
             </div>
           ) : null}
-          {runs.map((run) => (
+          {visibleRuns.map((run) => (
             <div className={`timeline-item tone-${run.riskTone}`} key={run.groupKey}>
               <div className="timeline-header">
                 <strong>{run.portCode}</strong>
@@ -146,6 +159,27 @@ export function LogPage({ refreshKey }: LogPageProps) {
               </div>
             </div>
           ))}
+          {totalPages > 1 ? (
+            <div className="table-pagination" aria-label="Phân trang nhật ký vận hành">
+              <button
+                className="button button-secondary button-small"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                type="button"
+              >
+                Trước
+              </button>
+              <span>Trang {currentPage}/{totalPages}</span>
+              <button
+                className="button button-secondary button-small"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                type="button"
+              >
+                Sau
+              </button>
+            </div>
+          ) : null}
         </article>
       ) : (
         <section className="simulation-results-page">

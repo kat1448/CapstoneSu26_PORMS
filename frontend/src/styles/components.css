@@ -315,6 +315,21 @@
   line-height: 1.45;
   margin-top: 3px;
 }
+
+.table-pagination {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.table-pagination span {
+  color: var(--text);
+  font-weight: 700;
+}
+
 .zone-grid { display: grid; gap: 10px; grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 12px; }
 .zone-card { align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 8px; display: flex; gap: 10px; padding: 12px; }
 .zone-icon { background: #edf4fa; border-radius: 8px; color: var(--blue); display: grid; flex: none; height: 34px; place-items: center; width: 34px; }
