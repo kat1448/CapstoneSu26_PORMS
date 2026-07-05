@@ -67,6 +67,26 @@ const events: OperationEvent[] = [
   }
 ];
 
+function makeRunEvent(index: number): OperationEvent {
+  return {
+    actorName: "SYSTEM",
+    entityType: "operation",
+    eventType: "MODE_CHANGED",
+    isSimulation: false,
+    occurredAt: `04/07/2026 15:${String(index).padStart(2, "0")}:00`,
+    occurredAtRaw: `2026-07-04T15:${String(index).padStart(2, "0")}:00Z`,
+    operationEventId: `run-event-${index}`,
+    portCode: `P${String(index).padStart(2, "0")}`,
+    portId: `port-${index}`,
+    portName: `Port ${index}`,
+    simulationSessionId: null,
+    summary: `Run event ${index}`,
+    tone: "info",
+    zoneId: null,
+    zoneName: null
+  };
+}
+
 describe("LogPage", () => {
   beforeEach(() => {
     vi.mocked(getOperationEvents).mockResolvedValue(events);
@@ -89,5 +109,23 @@ describe("LogPage", () => {
     expect(within(table).getAllByRole("row")).toHaveLength(4);
     expect(within(table).getByText("Simulation started")).toBeInTheDocument();
     expect(within(table).getByText("Bến số 1")).toBeInTheDocument();
+  });
+
+  it("paginates grouped operation runs fifteen at a time", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getOperationEvents).mockResolvedValue(Array.from({ length: 16 }, (_, index) => makeRunEvent(index + 1)));
+
+    render(<LogPage refreshKey={0} />);
+
+    expect(await screen.findByText("Trang 1/2")).toBeInTheDocument();
+    expect(screen.getByText("P16")).toBeInTheDocument();
+    expect(screen.getByText("P02")).toBeInTheDocument();
+    expect(screen.queryByText("P01")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Sau" }));
+
+    expect(screen.getByText("Trang 2/2")).toBeInTheDocument();
+    expect(screen.queryByText("P16")).not.toBeInTheDocument();
+    expect(screen.getByText("P01")).toBeInTheDocument();
   });
 });

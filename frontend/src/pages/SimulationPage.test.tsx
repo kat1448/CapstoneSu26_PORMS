@@ -223,14 +223,17 @@ describe("SimulationPage", () => {
     await user.click(screen.getByRole("button", { name: "Tạo dữ liệu mô phỏng" }));
 
     expect(screen.getByRole("dialog", { name: "Tạo dữ liệu mô phỏng" })).toBeInTheDocument();
+    const portSelect = screen.getByRole("combobox", { name: "Mã cảng" });
+    expect(portSelect).toHaveDisplayValue("DNTSA - Cang Tien Sa");
+    expect(screen.queryByRole("textbox", { name: "Mã cảng" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Beaufort")).not.toBeInTheDocument();
-    expect(await screen.findByRole("combobox", { name: "Zone ID" })).toHaveTextContent("Ben so 1");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Zone ID" }), "zone-dock-1");
+    const zoneSelect = await screen.findByRole("combobox", { name: "Zone ID" });
+    expect(zoneSelect).toHaveDisplayValue("Ben so 1");
     await user.type(screen.getByLabelText("Tên kịch bản"), "Kich ban moi");
     await user.click(screen.getByRole("button", { name: "Lưu dữ liệu" }));
 
     expect(createSimulationDataset).toHaveBeenCalledWith(expect.objectContaining({
-      snapshots: [expect.objectContaining({ windSpeedMs: 18 })]
+      snapshots: [expect.objectContaining({ windSpeedMs: 18, zoneId: "zone-dock-1" })]
     }));
     expect(await screen.findByText("Đã lưu dữ liệu mô phỏng")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Kich ban moi/ })).toBeChecked();
