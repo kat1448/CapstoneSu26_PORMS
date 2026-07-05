@@ -111,7 +111,6 @@ export function SopRulesPage() {
 
       return {
         activeCount: groupRules.filter((rule) => rule.isActive).length,
-        executionCount: groupRules.reduce((total, rule) => total + rule.executionCount, 0),
         riskLevel,
         rules: groupRules,
         topAction
@@ -183,7 +182,6 @@ export function SopRulesPage() {
   const kpis = [
     { label: "Tổng quy tắc", value: summary.totalRules, foot: "Quy tắc trong database" },
     { label: "Đang bật", value: summary.activeRules, foot: "Sẵn sàng kích hoạt" },
-    { label: "Lần kích hoạt", value: summary.recentExecutions, foot: "30 ngày gần nhất" },
     { label: "Nhiệm vụ tự động", value: summary.automatedTasks, foot: "Action CREATE_TASK" }
   ];
 
@@ -258,7 +256,6 @@ export function SopRulesPage() {
                 <Badge tone={riskTone(group.riskLevel)}>{group.riskLevel}</Badge>
               </div>
               <div className="sop-risk-metrics">
-                <span><strong>{group.executionCount}</strong><small>lần chạy</small></span>
                 <span><strong>{group.topAction}</strong><small>action nổi bật</small></span>
               </div>
               <button className="button button-secondary" onClick={() => setSelectedRisk(group.riskLevel)} type="button">Chi tiết</button>
@@ -293,8 +290,6 @@ export function SopRulesPage() {
                   <p>{rule.actionType}</p>
                 </div>
                 <div className="sop-stats">
-                  <strong>{rule.executionCount}</strong>
-                  <small>lần chạy</small>
                   <button className="button button-secondary button-small" onClick={() => openEditForm(rule)} type="button">Chỉnh sửa</button>
                   <button className="button button-secondary button-small" onClick={() => handleDelete(rule)} type="button">Xóa</button>
                 </div>
