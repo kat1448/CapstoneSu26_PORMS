@@ -61,6 +61,8 @@ describe("SopRulesPage", () => {
       expect(within(riskGrid).getByRole("heading", { name: risk })).toBeInTheDocument();
     }
     expect(screen.queryByText("Kích hoạt gần đây")).not.toBeInTheDocument();
+    expect(screen.queryByText(/L.+n k.+ch ho.+t/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/l.+n ch.+y/i)).not.toBeInTheDocument();
     expect(screen.queryByText("SOP-HIGH-YARD-01")).not.toBeInTheDocument();
 
     const highCard = within(riskGrid).getByRole("heading", { name: "HIGH" }).closest("article");
@@ -69,6 +71,7 @@ describe("SopRulesPage", () => {
 
     expect(screen.getByRole("heading", { name: "Danh sách quy tắc HIGH" })).toBeInTheDocument();
     expect(screen.getByText("SOP-HIGH-YARD-01")).toBeInTheDocument();
+    expect(screen.queryByText(/l.+n ch.+y/i)).not.toBeInTheDocument();
     expect(screen.queryByText("SOP-CRITICAL-01")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Quay lại tổng quan" }));
