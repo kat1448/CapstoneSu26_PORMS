@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { WeatherDataTable } from "./WeatherDataTable";
 import type { WeatherSnapshot } from "../../types/dashboard";
@@ -66,5 +67,29 @@ describe("WeatherDataTable", () => {
 
     expect(screen.getAllByText("Chưa có dữ liệu").length).toBeGreaterThanOrEqual(4);
     expect(screen.getByText("Toàn cảng")).toBeInTheDocument();
+  });
+
+  it("paginates weather points five rows at a time", async () => {
+    const user = userEvent.setup();
+    const points = Array.from({ length: 6 }, (_, index) => ({
+      ...weather.dataPoints![0],
+      observedAt: `2026-06-26T03:${String(index).padStart(2, "0")}:00Z`,
+      portCode: `PORT${index + 1}`,
+      portName: `Cang ${index + 1}`,
+      zoneName: `Khu vuc ${index + 1}`
+    }));
+
+    render(<WeatherDataTable weather={{ ...weather, dataPoints: points }} />);
+
+    expect(screen.getByText("Trang 1/2")).toBeInTheDocument();
+    expect(screen.getByText("Khu vuc 1")).toBeInTheDocument();
+    expect(screen.getByText("Khu vuc 5")).toBeInTheDocument();
+    expect(screen.queryByText("Khu vuc 6")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Sau" }));
+
+    expect(screen.getByText("Trang 2/2")).toBeInTheDocument();
+    expect(screen.queryByText("Khu vuc 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Khu vuc 6")).toBeInTheDocument();
   });
 });

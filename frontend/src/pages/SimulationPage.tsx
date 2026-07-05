@@ -150,7 +150,19 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
         return getPortZones(selectedPort.portId);
       })
       .then((zones) => {
-        if (active) setFormZones(zones);
+        if (!active) return;
+        setFormZones(zones);
+        setDatasetForm((value) => {
+          const currentSnapshot = value.snapshots[0];
+          if (!zones[0] || currentSnapshot.zoneId) {
+            return value;
+          }
+
+          return {
+            ...value,
+            snapshots: [{ ...currentSnapshot, zoneId: zones[0].zoneId }]
+          };
+        });
       })
       .catch(() => {
         if (active) setFormZones([]);
@@ -489,12 +501,16 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
               </label>
               <label>
                 <span>Mã cảng</span>
-                <input
+                <select
                   aria-label="Mã cảng"
                   onChange={(event) => setDatasetForm((value) => ({ ...value, portCode: event.target.value, snapshots: [{ ...firstSnapshot, zoneId: null }] }))}
                   required
                   value={datasetForm.portCode}
-                />
+                >
+                  {portsForMap.map((port) => (
+                    <option key={port.portId} value={port.portCode}>{port.portCode} - {port.portName}</option>
+                  ))}
+                </select>
               </label>
               <label className="wide-field">
                 <span>Mô tả</span>
