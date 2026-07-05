@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertListCard } from "../components/dashboard/AlertListCard";
 import { GisMapCard } from "../components/dashboard/GisMapCard";
-import { ModeCard } from "../components/dashboard/ModeCard";
-import { RiskHeroCard } from "../components/dashboard/RiskHeroCard";
 import { WeatherDataTable } from "../components/dashboard/WeatherDataTable";
+import { ZoneRiskOverviewCard } from "../components/dashboard/ZoneRiskOverviewCard";
 import { useDemoRefresh } from "../hooks/useDemoRefresh";
 import { getAlerts } from "../services/alertService";
 import { getDashboardSummary, getWeatherSnapshot } from "../services/dashboardService";
@@ -22,6 +21,7 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
   const selectedPortIdRef = useRef("");
   const showAllPortsRef = useRef(true);
   const [zones, setZones] = useState<PortZone[]>([]);
+  const [riskOverviewZones, setRiskOverviewZones] = useState<PortZone[]>([]);
 
   const loadDashboard = useCallback(async () => {
     const [nextSummary, nextWeather, nextAlerts, nextPorts] = await Promise.all([
@@ -31,6 +31,7 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
       getPorts()
     ]);
     const availablePortIds = new Set(nextPorts.map((port) => port.portId));
+    const zoneGroups = await Promise.all(nextPorts.map((port) => getPortZones(port.portId)));
     let nextSelectedPortId = selectedPortIdRef.current && availablePortIds.has(selectedPortIdRef.current)
       ? selectedPortIdRef.current
       : "";
@@ -40,13 +41,15 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
       nextSelectedPortId = "";
       nextZones = [];
     } else if (nextSelectedPortId) {
-      nextZones = await getPortZones(nextSelectedPortId);
+      const selectedPortIndex = nextPorts.findIndex((port) => port.portId === nextSelectedPortId);
+      nextZones = selectedPortIndex >= 0 ? zoneGroups[selectedPortIndex] : [];
     }
 
     setSummary(nextSummary);
     setWeather(nextWeather);
     setAlerts(nextAlerts);
     setPorts(nextPorts);
+    setRiskOverviewZones(zoneGroups.flat());
     selectedPortIdRef.current = nextSelectedPortId;
     setSelectedPortId(nextSelectedPortId);
     setZones(nextZones);
@@ -89,10 +92,10 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
         </div>
       </div>
       <div className="dashboard-grid">
-        <div className="dashboard-main" data-testid="dashboard-left">
+        <div className="dashboard-main dashboard-main-full" data-testid="dashboard-left">
           <div className="hero-grid">
-            <RiskHeroCard summary={summary} weather={weather} />
-            <ModeCard operationMode={summary.currentOperationMode} />
+            <ZoneRiskOverviewCard zones={riskOverviewZones} />
+            <AlertListCard alerts={alerts} />
           </div>
           <GisMapCard
             onSelectPort={(portId) => { void handleSelectPort(portId); }}
@@ -103,9 +106,6 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
             zones={zones}
           />
           <WeatherDataTable weather={weather} />
-        </div>
-        <div className="dashboard-side" data-testid="dashboard-right">
-          <AlertListCard alerts={alerts} />
         </div>
       </div>
     </section>
