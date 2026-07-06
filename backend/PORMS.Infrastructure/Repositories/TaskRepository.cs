@@ -224,6 +224,7 @@ public sealed class TaskRepository
                t.status::text AS status,
                t.assigned_user_id,
                u.full_name AS assigned_user_name,
+               u.email AS assigned_user_email,
                t.assigned_team,
                t.acknowledged_by_user_id,
                t.acknowledged_at,
@@ -271,16 +272,17 @@ public sealed class TaskRepository
             reader.IsDBNull(12) ? null : reader.GetGuid(12),
             reader.IsDBNull(13) ? null : reader.GetString(13),
             reader.IsDBNull(14) ? null : reader.GetString(14),
-            reader.IsDBNull(15) ? null : reader.GetGuid(15),
-            reader.IsDBNull(16) ? null : reader.GetFieldValue<DateTimeOffset>(16),
+            reader.IsDBNull(15) ? null : reader.GetString(15),
+            reader.IsDBNull(16) ? null : reader.GetGuid(16),
             reader.IsDBNull(17) ? null : reader.GetFieldValue<DateTimeOffset>(17),
-            reader.IsDBNull(18) ? null : reader.GetGuid(18),
-            reader.IsDBNull(19) ? null : reader.GetFieldValue<DateTimeOffset>(19),
-            reader.IsDBNull(20) ? null : reader.GetString(20),
-            reader.IsDBNull(21) ? null : reader.GetFieldValue<DateTimeOffset>(21),
-            reader.IsDBNull(22) ? null : reader.GetGuid(22),
-            reader.GetFieldValue<DateTimeOffset>(23),
-            reader.GetFieldValue<DateTimeOffset>(24));
+            reader.IsDBNull(18) ? null : reader.GetFieldValue<DateTimeOffset>(18),
+            reader.IsDBNull(19) ? null : reader.GetGuid(19),
+            reader.IsDBNull(20) ? null : reader.GetFieldValue<DateTimeOffset>(20),
+            reader.IsDBNull(21) ? null : reader.GetString(21),
+            reader.IsDBNull(22) ? null : reader.GetFieldValue<DateTimeOffset>(22),
+            reader.IsDBNull(23) ? null : reader.GetGuid(23),
+            reader.GetFieldValue<DateTimeOffset>(24),
+            reader.GetFieldValue<DateTimeOffset>(25));
 
     private static void AddNullableGuid(NpgsqlCommand command, string parameterName, Guid? value)
     {
@@ -314,6 +316,7 @@ public sealed record TaskLogReadModel(
     string Status,
     Guid? AssignedUserId,
     string? AssignedUserName,
+    string? AssignedUserEmail,
     string? AssignedTeam,
     Guid? AcknowledgedByUserId,
     DateTimeOffset? AcknowledgedAt,

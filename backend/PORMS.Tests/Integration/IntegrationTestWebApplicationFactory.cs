@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using PORMS.API.Services;
 
 namespace PORMS.Tests.Integration;
 
@@ -32,6 +35,12 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
                 ["ConnectionStrings:DefaultConnection"] = connectionString,
                 ["Database:ConnectionString"] = connectionString
             });
+        });
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddSingleton<FakeTaskAssignmentEmailNotifier>();
+            services.AddSingleton<ITaskAssignmentEmailNotifier>(sp =>
+                sp.GetRequiredService<FakeTaskAssignmentEmailNotifier>());
         });
     }
 
@@ -101,11 +110,11 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         return (reader.GetGuid(0), reader.GetString(1));
     }
 
-    public async Task<(Guid UserId, string FullName)> GetFirstActiveUserAsync(CancellationToken cancellationToken = default)
+    public async Task<(Guid UserId, string FullName, string Email)> GetFirstActiveUserAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
         const string sql = """
-            SELECT id, full_name
+            SELECT id, full_name, email
             FROM operational.users
             WHERE deleted_at IS NULL
               AND status = 'ACTIVE'
@@ -121,7 +130,7 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
             throw new InvalidOperationException("No active test user exists.");
         }
 
-        return (reader.GetGuid(0), reader.GetString(1));
+        return (reader.GetGuid(0), reader.GetString(1), reader.GetString(2));
     }
 
     public async Task SeedAlertAsync(Guid alertId, CancellationToken cancellationToken = default)
