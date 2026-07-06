@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "../components/common/Badge";
 import { useDemoRefresh } from "../hooks/useDemoRefresh";
 import { getAlerts } from "../services/alertService";
@@ -30,6 +31,12 @@ function parseAlertDate(value: string) {
   }
 
   return value.slice(0, 10);
+}
+
+function badgeTone(level: string) {
+  if (level === "CRITICAL") return "danger";
+  if (level === "HIGH") return "warning";
+  return "info";
 }
 
 export function AlertPage({ refreshKey }: AlertPageProps) {
@@ -152,18 +159,19 @@ export function AlertPage({ refreshKey }: AlertPageProps) {
               <th>Loại</th>
               <th>Khu vực</th>
               <th>Thời gian</th>
+              <th>Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {visibleAlerts.length === 0 ? (
               <tr>
-                <td colSpan={6}>Không có cảnh báo phù hợp.</td>
+                <td colSpan={7}>Không có cảnh báo phù hợp.</td>
               </tr>
             ) : null}
             {visibleAlerts.map((alert) => (
               <tr key={alert.alertId}>
                 <td>
-                  <Badge tone={alert.severity === "CRITICAL" ? "danger" : alert.severity === "HIGH" ? "warning" : "info"}>
+                  <Badge tone={badgeTone(alert.severity)}>
                     {alert.severity}
                   </Badge>
                 </td>
@@ -175,6 +183,11 @@ export function AlertPage({ refreshKey }: AlertPageProps) {
                 <td>{alert.alertType}</td>
                 <td>{alert.zoneName}</td>
                 <td>{alert.createdAt}</td>
+                <td>
+                  <Link className="button button-secondary button-small" to={`/alerts/${alert.alertId}`}>
+                    Chi tiết
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>
