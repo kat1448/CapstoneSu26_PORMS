@@ -101,6 +101,29 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         return (reader.GetGuid(0), reader.GetString(1));
     }
 
+    public async Task<(Guid UserId, string FullName)> GetFirstActiveUserAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            SELECT id, full_name
+            FROM operational.users
+            WHERE deleted_at IS NULL
+              AND status = 'ACTIVE'
+            ORDER BY created_at, full_name
+            LIMIT 1;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException("No active test user exists.");
+        }
+
+        return (reader.GetGuid(0), reader.GetString(1));
+    }
+
     public async Task SeedAlertAsync(Guid alertId, CancellationToken cancellationToken = default)
     {
         var port = await GetPrimaryPortAsync(cancellationToken);
@@ -223,6 +246,94 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task<Guid> SeedAlertTaskAsync(Guid alertId, string taskCode, CancellationToken cancellationToken = default)
+    {
+        var port = await GetPrimaryPortAsync(cancellationToken);
+        var zone = await GetFirstZoneAsync(port.PortId, cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+            INSERT INTO operational.alerts (
+                id,
+                port_id,
+                zone_id,
+                alert_type,
+                severity,
+                title,
+                message,
+                context,
+                expires_at,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                @alertId,
+                @portId,
+                @zoneId,
+                'SYSTEM',
+                'HIGH',
+                'Seeded alert workflow',
+                'Created by alert task integration test.',
+                '{"source":"integration-test"}'::jsonb,
+                NOW() + INTERVAL '1 day',
+                NOW(),
+                NOW()
+            )
+            ON CONFLICT (id) DO UPDATE
+            SET port_id = EXCLUDED.port_id,
+                zone_id = EXCLUDED.zone_id,
+                updated_at = NOW();
+
+            INSERT INTO operational.tasks (
+                task_code,
+                alert_id,
+                port_id,
+                zone_id,
+                title,
+                description,
+                priority,
+                status,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                @taskCode,
+                @alertId,
+                @portId,
+                @zoneId,
+                'Alert workflow integration task',
+                'Created by integration test.',
+                'HIGH',
+                'NEW',
+                NOW(),
+                NOW()
+            )
+            ON CONFLICT (task_code) DO UPDATE
+            SET alert_id = EXCLUDED.alert_id,
+                port_id = EXCLUDED.port_id,
+                zone_id = EXCLUDED.zone_id,
+                status = 'NEW',
+                assigned_user_id = NULL,
+                assigned_team = NULL,
+                acknowledged_by_user_id = NULL,
+                acknowledged_at = NULL,
+                started_at = NULL,
+                completed_by_user_id = NULL,
+                completed_at = NULL,
+                completion_note = NULL,
+                updated_at = NOW()
+            RETURNING id;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("alertId", alertId);
+        command.Parameters.AddWithValue("taskCode", taskCode);
+        command.Parameters.AddWithValue("portId", port.PortId);
+        command.Parameters.AddWithValue("zoneId", zone.ZoneId);
+        return (Guid)(await command.ExecuteScalarAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Failed to seed alert task."));
+    }
+
     public async Task DeleteTaskByCodeAsync(string taskCode, CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
@@ -233,6 +344,22 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
 
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("taskCode", taskCode);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task DeleteAlertAsync(Guid alertId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            DELETE FROM operational.alert_receipts
+            WHERE alert_id = @alertId;
+
+            DELETE FROM operational.alerts
+            WHERE id = @alertId;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("alertId", alertId);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 

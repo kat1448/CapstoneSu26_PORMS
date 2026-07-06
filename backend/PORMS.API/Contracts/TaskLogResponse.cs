@@ -4,6 +4,7 @@ public sealed class TaskLogResponse
 {
     public Guid TaskId { get; set; }
     public string TaskCode { get; set; } = string.Empty;
+    public Guid? AlertId { get; set; }
     public Guid PortId { get; set; }
     public string PortCode { get; set; } = string.Empty;
     public string PortName { get; set; } = string.Empty;
@@ -16,6 +17,12 @@ public sealed class TaskLogResponse
     public Guid? AssignedUserId { get; set; }
     public string? AssignedUserName { get; set; }
     public string? AssignedTeam { get; set; }
+    public Guid? AcknowledgedByUserId { get; set; }
+    public DateTimeOffset? AcknowledgedAt { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
+    public Guid? CompletedByUserId { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public string? CompletionNote { get; set; }
     public DateTimeOffset? DueAt { get; set; }
     public Guid? SimulationSessionId { get; set; }
     public bool IsSimulation { get; set; }

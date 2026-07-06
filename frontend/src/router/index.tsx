@@ -2,6 +2,7 @@ import { Navigate, Outlet, createBrowserRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import type { DemoUser } from "../App";
 import { AppShell } from "../components/layout/AppShell";
+import { AlertDetailPage } from "../pages/AlertDetailPage";
 import { AlertPage } from "../pages/AlertPage";
 import { AnalyticsPage } from "../pages/AnalyticsPage";
 import { ChangePasswordPage } from "../pages/ChangePasswordPage";
@@ -69,6 +70,7 @@ export function buildRouter(context: RouterContext) {
         { index: true, element: <Navigate to="/dashboard" replace /> },
         { path: "dashboard", element: <DashboardPage refreshKey={context.refreshKey} /> },
         { path: "alerts", element: <AlertPage refreshKey={context.refreshKey} /> },
+        { path: "alerts/:alertId", element: <AlertDetailPage /> },
         { path: "tasks", element: guarded("/tasks", <TasksPage />) },
         { path: "operation-log", element: guarded("/operation-log", <LogPage refreshKey={context.refreshKey} />) },
         { path: "ports", element: <PortManagementPage refreshKey={context.refreshKey} /> },
