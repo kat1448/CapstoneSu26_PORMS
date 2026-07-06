@@ -519,8 +519,10 @@ CREATE TABLE IF NOT EXISTS operational.tasks (
     assigned_team            VARCHAR(120),
     acknowledged_by_user_id  UUID REFERENCES operational.users(id) ON DELETE SET NULL,
     acknowledged_at          TIMESTAMPTZ,
+    started_at               TIMESTAMPTZ,
     completed_by_user_id     UUID REFERENCES operational.users(id) ON DELETE SET NULL,
     completed_at             TIMESTAMPTZ,
+    completion_note          TEXT,
     due_at                   TIMESTAMPTZ,
     simulation_session_id    UUID REFERENCES operational.simulation_sessions(id) ON DELETE CASCADE,
     created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -547,6 +549,9 @@ CREATE TABLE IF NOT EXISTS operational.alerts (
     created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE operational.tasks
+    ADD COLUMN IF NOT EXISTS alert_id UUID REFERENCES operational.alerts(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS operational.alert_receipts (
     id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -820,6 +825,9 @@ CREATE INDEX IF NOT EXISTS idx_tasks_open
     WHERE status IN ('NEW', 'ACKNOWLEDGED', 'IN_PROGRESS');
 CREATE INDEX IF NOT EXISTS idx_tasks_zone_history
     ON operational.tasks (zone_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_alert
+    ON operational.tasks (alert_id, created_at DESC)
+    WHERE alert_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_alerts_port_history
     ON operational.alerts (port_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alert_receipts_unread
