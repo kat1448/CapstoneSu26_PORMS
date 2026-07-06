@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
+using PORMS.API.Services;
 using PORMS.Infrastructure.Repositories;
 
 namespace PORMS.API.Controllers;
@@ -44,6 +45,7 @@ public sealed class TaskController : ControllerBase
         Guid taskId,
         [FromBody] AssignTaskRequest request,
         [FromServices] TaskRepository repository,
+        [FromServices] ITaskAssignmentEmailNotifier emailNotifier,
         CancellationToken cancellationToken)
     {
         var task = await repository.AssignTaskAsync(
@@ -53,7 +55,13 @@ public sealed class TaskController : ControllerBase
             request.DueAt,
             cancellationToken);
 
-        return task is null ? NotFound() : Ok(ToResponse(task));
+        if (task is null)
+        {
+            return NotFound();
+        }
+
+        await emailNotifier.SendAssignedTaskEmailAsync(task, cancellationToken);
+        return Ok(ToResponse(task));
     }
 
     [HttpPatch("{taskId:guid}/acknowledge")]

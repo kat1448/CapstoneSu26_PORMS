@@ -5,8 +5,11 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using PORMS.API.Contracts;
+using PORMS.API.Services;
+using PORMS.Infrastructure.Repositories;
 using Xunit;
 
 namespace PORMS.Tests.Integration;
@@ -156,6 +159,8 @@ public sealed class ReadApiSmokeTests
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Bearer",
                 CreateToken("ADMIN"));
+            var notifier = _factory.Services.GetRequiredService<FakeTaskAssignmentEmailNotifier>();
+            notifier.Clear();
 
             var response = await client.GetAsync("/api/tasks");
 
@@ -191,6 +196,8 @@ public sealed class ReadApiSmokeTests
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Bearer",
                 CreateToken("ADMIN"));
+            var notifier = _factory.Services.GetRequiredService<FakeTaskAssignmentEmailNotifier>();
+            notifier.Clear();
 
             var tasksResponse = await client.GetAsync($"/api/alerts/{alertId}/tasks");
 
@@ -211,6 +218,10 @@ public sealed class ReadApiSmokeTests
             using var assignedPayload = JsonDocument.Parse(await assignResponse.Content.ReadAsStringAsync());
             Assert.Equal(assignee.UserId, assignedPayload.RootElement.GetProperty("assignedUserId").GetGuid());
             Assert.Equal(assignee.FullName, assignedPayload.RootElement.GetProperty("assignedUserName").GetString());
+            var notification = Assert.Single(notifier.SentNotifications);
+            Assert.Equal(assignee.Email, notification.ToEmail);
+            Assert.Equal(assignee.FullName, notification.ToName);
+            Assert.Equal(taskCode, notification.TaskCode);
 
             var acknowledgeResponse = await client.PatchAsync($"/api/tasks/{taskId}/acknowledge", null);
             Assert.Equal(HttpStatusCode.OK, acknowledgeResponse.StatusCode);
@@ -294,3 +305,26 @@ public sealed class ReadApiSmokeTests
         Assert.Equal(simulationSessionId, simulationEvent.SimulationSessionId);
     }
 }
+
+public sealed class FakeTaskAssignmentEmailNotifier : ITaskAssignmentEmailNotifier
+{
+    private readonly List<TaskAssignmentEmailNotification> _sentNotifications = [];
+
+    public IReadOnlyList<TaskAssignmentEmailNotification> SentNotifications => _sentNotifications;
+
+    public void Clear() => _sentNotifications.Clear();
+
+    public Task SendAssignedTaskEmailAsync(TaskLogReadModel task, CancellationToken cancellationToken)
+    {
+        _sentNotifications.Add(new TaskAssignmentEmailNotification(
+            task.AssignedUserEmail ?? string.Empty,
+            task.AssignedUserName ?? string.Empty,
+            task.TaskCode));
+        return Task.CompletedTask;
+    }
+}
+
+public sealed record TaskAssignmentEmailNotification(
+    string ToEmail,
+    string ToName,
+    string TaskCode);
