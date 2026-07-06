@@ -241,6 +241,15 @@ services:
       # OpenWeather (dùng cho manual fetch endpoint)
       OpenWeather__ApiKey:        ${OPENWEATHER_API_KEY}
       OpenWeather__BaseUrl:       https://api.openweathermap.org/data/2.5
+      # SMTP email notification khi phan cong nhiem vu
+      Email__Smtp__Enabled:        ${SMTP_ENABLED:-false}
+      Email__Smtp__Host:           ${SMTP_HOST:-}
+      Email__Smtp__Port:           ${SMTP_PORT:-587}
+      Email__Smtp__EnableSsl:      ${SMTP_ENABLE_SSL:-true}
+      Email__Smtp__Username:       ${SMTP_USERNAME:-}
+      Email__Smtp__Password:       ${SMTP_PASSWORD:-}
+      Email__Smtp__FromEmail:      ${SMTP_FROM_EMAIL:-}
+      Email__Smtp__FromName:       ${SMTP_FROM_NAME:-PORMS}
       # Internal API key — Prefect worker dùng để gọi trigger endpoint
       InternalApi__Key:           ${INTERNAL_API_KEY}
       TZ:                         Asia/Ho_Chi_Minh
