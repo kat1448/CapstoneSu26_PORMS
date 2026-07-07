@@ -5,8 +5,11 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using PORMS.API.Contracts;
+using PORMS.API.Services;
+using PORMS.Infrastructure.Repositories;
 using Xunit;
 
 namespace PORMS.Tests.Integration;
@@ -156,6 +159,8 @@ public sealed class ReadApiSmokeTests
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Bearer",
                 CreateToken("ADMIN"));
+            var notifier = _factory.Services.GetRequiredService<FakeTaskAssignmentEmailNotifier>();
+            notifier.Clear();
 
             var response = await client.GetAsync("/api/tasks");
 
@@ -174,6 +179,82 @@ public sealed class ReadApiSmokeTests
         finally
         {
             await _factory.DeleteTaskByCodeAsync(taskCode);
+        }
+    }
+
+    [Fact]
+    public async Task AlertTasks_ReturnTasksAndAllowTaskWorkflow()
+    {
+        var alertId = Guid.NewGuid();
+        var taskCode = $"TASK-ALERT-{Guid.NewGuid():N}"[..24];
+        Guid? taskId = null;
+        try
+        {
+            taskId = await _factory.SeedAlertTaskAsync(alertId, taskCode);
+            var assignee = await _factory.GetFirstActiveUserAsync();
+            var client = _factory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                CreateToken("ADMIN"));
+            var notifier = _factory.Services.GetRequiredService<FakeTaskAssignmentEmailNotifier>();
+            notifier.Clear();
+
+            var tasksResponse = await client.GetAsync($"/api/alerts/{alertId}/tasks");
+
+            Assert.Equal(HttpStatusCode.OK, tasksResponse.StatusCode);
+            using var tasksPayload = JsonDocument.Parse(await tasksResponse.Content.ReadAsStringAsync());
+            var task = Assert.Single(tasksPayload.RootElement.EnumerateArray());
+            Assert.Equal(alertId, task.GetProperty("alertId").GetGuid());
+            Assert.Equal(taskCode, task.GetProperty("taskCode").GetString());
+            Assert.Equal("NEW", task.GetProperty("status").GetString());
+
+            var assignResponse = await client.PatchAsJsonAsync($"/api/tasks/{taskId}/assignment", new
+            {
+                assignedUserId = assignee.UserId,
+                dueAt = DateTimeOffset.UtcNow.AddHours(2)
+            });
+
+            Assert.Equal(HttpStatusCode.OK, assignResponse.StatusCode);
+            using var assignedPayload = JsonDocument.Parse(await assignResponse.Content.ReadAsStringAsync());
+            Assert.Equal(assignee.UserId, assignedPayload.RootElement.GetProperty("assignedUserId").GetGuid());
+            Assert.Equal(assignee.FullName, assignedPayload.RootElement.GetProperty("assignedUserName").GetString());
+            var notification = Assert.Single(notifier.SentNotifications);
+            Assert.Equal(assignee.Email, notification.ToEmail);
+            Assert.Equal(assignee.FullName, notification.ToName);
+            Assert.Equal(taskCode, notification.TaskCode);
+
+            var acknowledgeResponse = await client.PatchAsync($"/api/tasks/{taskId}/acknowledge", null);
+            Assert.Equal(HttpStatusCode.OK, acknowledgeResponse.StatusCode);
+            using var acknowledgedPayload = JsonDocument.Parse(await acknowledgeResponse.Content.ReadAsStringAsync());
+            Assert.Equal("ACKNOWLEDGED", acknowledgedPayload.RootElement.GetProperty("status").GetString());
+            Assert.True(acknowledgedPayload.RootElement.TryGetProperty("acknowledgedAt", out var acknowledgedAt));
+            Assert.Equal(JsonValueKind.String, acknowledgedAt.ValueKind);
+
+            var startResponse = await client.PatchAsync($"/api/tasks/{taskId}/start", null);
+            Assert.Equal(HttpStatusCode.OK, startResponse.StatusCode);
+            using var startedPayload = JsonDocument.Parse(await startResponse.Content.ReadAsStringAsync());
+            Assert.Equal("IN_PROGRESS", startedPayload.RootElement.GetProperty("status").GetString());
+            Assert.True(startedPayload.RootElement.TryGetProperty("startedAt", out var startedAt));
+            Assert.Equal(JsonValueKind.String, startedAt.ValueKind);
+
+            var completeResponse = await client.PatchAsJsonAsync($"/api/tasks/{taskId}/complete", new
+            {
+                completionNote = "Đã hoàn tất kiểm tra hiện trường."
+            });
+
+            Assert.Equal(HttpStatusCode.OK, completeResponse.StatusCode);
+            using var completedPayload = JsonDocument.Parse(await completeResponse.Content.ReadAsStringAsync());
+            Assert.Equal("COMPLETED", completedPayload.RootElement.GetProperty("status").GetString());
+            Assert.Equal("Đã hoàn tất kiểm tra hiện trường.", completedPayload.RootElement.GetProperty("completionNote").GetString());
+        }
+        finally
+        {
+            if (taskId is not null)
+            {
+                await _factory.DeleteTaskByCodeAsync(taskCode);
+            }
+
+            await _factory.DeleteAlertAsync(alertId);
         }
     }
 
@@ -224,3 +305,26 @@ public sealed class ReadApiSmokeTests
         Assert.Equal(simulationSessionId, simulationEvent.SimulationSessionId);
     }
 }
+
+public sealed class FakeTaskAssignmentEmailNotifier : ITaskAssignmentEmailNotifier
+{
+    private readonly List<TaskAssignmentEmailNotification> _sentNotifications = [];
+
+    public IReadOnlyList<TaskAssignmentEmailNotification> SentNotifications => _sentNotifications;
+
+    public void Clear() => _sentNotifications.Clear();
+
+    public Task SendAssignedTaskEmailAsync(TaskLogReadModel task, CancellationToken cancellationToken)
+    {
+        _sentNotifications.Add(new TaskAssignmentEmailNotification(
+            task.AssignedUserEmail ?? string.Empty,
+            task.AssignedUserName ?? string.Empty,
+            task.TaskCode));
+        return Task.CompletedTask;
+    }
+}
+
+public sealed record TaskAssignmentEmailNotification(
+    string ToEmail,
+    string ToName,
+    string TaskCode);

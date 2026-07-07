@@ -1,6 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AlertPage } from "./AlertPage";
 import { getAlerts } from "../services/alertService";
 import type { AlertItem } from "../types/alert";
@@ -29,7 +30,24 @@ function makeAlert(index: number): AlertItem {
   };
 }
 
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <AlertPage refreshKey={0} />
+    </MemoryRouter>
+  );
+}
+
 describe("AlertPage", () => {
+  beforeEach(() => {
+    vi.mocked(getAlerts).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
   it("renders alert time and operational information in Vietnamese", async () => {
     vi.mocked(getAlerts).mockResolvedValue([
       {
@@ -47,9 +65,11 @@ describe("AlertPage", () => {
       }
     ]);
 
-    render(<AlertPage refreshKey={0} />);
+    renderPage();
 
     expect(await screen.findByText("Cảnh báo")).toBeInTheDocument();
+    const headers = screen.getAllByRole("columnheader").map((header) => header.textContent);
+    expect(headers).toEqual(["Thời gian", "Cảng", "Khu vực", "Mức độ", "Loại", "Nội dung", "Thao tác"]);
     expect(screen.getByText("Theo dõi và xác nhận các cảnh báo vận hành")).toBeInTheDocument();
     expect(screen.getAllByText("Cảng").length).toBeGreaterThan(0);
     expect(screen.getAllByText("AB - Cảng A").length).toBeGreaterThan(0);
@@ -62,7 +82,7 @@ describe("AlertPage", () => {
     const user = userEvent.setup();
     vi.mocked(getAlerts).mockResolvedValue(Array.from({ length: 16 }, (_, index) => makeAlert(index + 1)));
 
-    render(<AlertPage refreshKey={0} />);
+    renderPage();
 
     expect(await screen.findByText("Trang 1/2")).toBeInTheDocument();
     expect(screen.getByText("Canh bao 1")).toBeInTheDocument();
@@ -136,7 +156,7 @@ describe("AlertPage", () => {
       }
     ]);
 
-    const { container } = render(<AlertPage refreshKey={0} />);
+    const { container } = renderPage();
     const view = within(container);
 
     expect(await view.findByText("Canh bao dung bo loc")).toBeInTheDocument();
@@ -153,5 +173,22 @@ describe("AlertPage", () => {
     expect(view.queryByText("Canh bao sai muc do")).not.toBeInTheDocument();
     expect(view.queryByText("Canh bao sai ngay")).not.toBeInTheDocument();
     expect(view.queryByText("Trang 1/")).not.toBeInTheDocument();
+  });
+
+  it("links alert detail to a separate page instead of opening an inline task panel", async () => {
+    vi.mocked(getAlerts).mockResolvedValue([{
+      ...makeAlert(1),
+      alertId: "alert-1",
+      portCode: "DNTSA",
+      portName: "Cảng Tiên Sa",
+      title: "Cảnh báo khu vực bến số 1",
+      zoneName: "Bến số 1"
+    }]);
+
+    renderPage();
+
+    const detailLink = await screen.findByRole("link", { name: "Chi tiết" });
+    expect(detailLink).toHaveAttribute("href", "/alerts/alert-1");
+    expect(screen.queryByText("Nhiệm vụ cần thực hiện")).not.toBeInTheDocument();
   });
 });
