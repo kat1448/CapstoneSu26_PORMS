@@ -35,4 +35,48 @@ public sealed class AlertController : ControllerBase
             Read = alert.RecipientCount > 0 && alert.ReadCount >= alert.RecipientCount
         }).ToList());
     }
+
+    [HttpGet("{alertId:guid}")]
+    public async Task<ActionResult<AlertResponse>> GetAlert(
+        Guid alertId,
+        [FromServices] AlertRepository repository,
+        CancellationToken cancellationToken)
+    {
+        var alerts = await repository.GetAlertsAsync(cancellationToken);
+        var alert = alerts.SingleOrDefault(item => item.AlertId == alertId);
+        return alert is null
+            ? NotFound()
+            : Ok(ToResponse(alert));
+    }
+
+    [HttpGet("{alertId:guid}/tasks")]
+    public async Task<ActionResult<IReadOnlyList<TaskLogResponse>>> GetAlertTasks(
+        Guid alertId,
+        [FromServices] TaskRepository repository,
+        CancellationToken cancellationToken)
+    {
+        var tasks = await repository.GetTasksByAlertAsync(alertId, cancellationToken);
+        return Ok(tasks.Select(TaskController.ToResponse).ToList());
+    }
+
+    private static AlertResponse ToResponse(AlertReadModel alert) =>
+        new()
+        {
+            AlertId = alert.AlertId,
+            PortId = alert.PortId,
+            PortCode = alert.PortCode,
+            PortName = alert.PortName,
+            ZoneId = alert.ZoneId,
+            ZoneName = alert.ZoneName,
+            AlertType = alert.AlertType,
+            Severity = alert.Severity,
+            Title = alert.Title,
+            Message = alert.Message,
+            CreatedAt = alert.CreatedAt,
+            ExpiresAt = alert.ExpiresAt,
+            RecipientCount = alert.RecipientCount,
+            ReadCount = alert.ReadCount,
+            AcknowledgedCount = alert.AcknowledgedCount,
+            Read = alert.RecipientCount > 0 && alert.ReadCount >= alert.RecipientCount
+        };
 }

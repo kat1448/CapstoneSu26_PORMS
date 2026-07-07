@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+﻿import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardPage } from "./DashboardPage";
@@ -239,8 +239,8 @@ describe("DashboardPage", () => {
     expect(screen.getByLabelText("MEDIUM zones")).not.toHaveTextContent("25%");
     expect(screen.getByLabelText("HIGH zones")).not.toHaveTextContent("25%");
     expect(screen.getByLabelText("CRITICAL zones")).not.toHaveTextContent("25%");
-    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cáº£nh bÃ¡o Ä‘ang hoáº¡t Ä‘á»™ng");
-    expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Cháº¿ Ä‘á»™ váº­n hÃ nh");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cảnh báo đang hoạt động");
+    expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Chế độ vận hành");
     expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Trạng thái khu vực");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ban do GIS Tất cả cảng");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
@@ -249,11 +249,11 @@ describe("DashboardPage", () => {
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("OPENWEATHER_API");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("moderate rain");
     expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Xu hướng rủi ro 24 giờ");
-    expect(screen.getByTestId("dashboard-right")).not.toHaveTextContent("Thời tiết hiện tại");
-    expect(screen.getByTestId("dashboard-right")).not.toHaveTextContent("Dữ liệu thời tiết theo cảng và khu vực");
+    expect(screen.queryByTestId("dashboard-right")).not.toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Thời tiết hiện tại");
     expect(screen.queryByRole("button", { name: /Chạy mô phỏng demo|Đang chạy mô phỏng/ })).not.toBeInTheDocument();
-    expect(screen.getByTestId("dashboard-right")).toHaveTextContent("Cảnh báo đang hoạt động");
-    expect(screen.queryByText("Nhật ký gần đây")).not.toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cảnh báo đang hoạt động");
+    expect(screen.queryByText("Nháº­t kÃ½ gáº§n Ä‘Ã¢y")).not.toBeInTheDocument();
     expect(serviceMocks.getRiskTrend).not.toHaveBeenCalled();
   });
 
