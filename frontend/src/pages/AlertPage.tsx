@@ -153,12 +153,12 @@ export function AlertPage({ refreshKey }: AlertPageProps) {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Mức độ</th>
-              <th>Nội dung</th>
-              <th>Cảng</th>
-              <th>Loại</th>
-              <th>Khu vực</th>
               <th>Thời gian</th>
+              <th>Cảng</th>
+              <th>Khu vực</th>
+              <th>Mức độ</th>
+              <th>Loại</th>
+              <th>Nội dung</th>
               <th>Thao tác</th>
             </tr>
           </thead>
@@ -170,19 +170,19 @@ export function AlertPage({ refreshKey }: AlertPageProps) {
             ) : null}
             {visibleAlerts.map((alert) => (
               <tr key={alert.alertId}>
+                <td>{alert.createdAt}</td>
+                <td>{alert.portCode} - {alert.portName}</td>
+                <td>{alert.zoneName}</td>
                 <td>
                   <Badge tone={badgeTone(alert.severity)}>
                     {alert.severity}
                   </Badge>
                 </td>
+                <td>{alert.alertType}</td>
                 <td>
                   <strong>{alert.title}</strong>
                   <p>{alert.message}</p>
                 </td>
-                <td>{alert.portCode} - {alert.portName}</td>
-                <td>{alert.alertType}</td>
-                <td>{alert.zoneName}</td>
-                <td>{alert.createdAt}</td>
                 <td>
                   <Link className="button button-secondary button-small" to={`/alerts/${alert.alertId}`}>
                     Chi tiết

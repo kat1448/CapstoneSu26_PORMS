@@ -68,6 +68,8 @@ describe("AlertPage", () => {
     renderPage();
 
     expect(await screen.findByText("Cảnh báo")).toBeInTheDocument();
+    const headers = screen.getAllByRole("columnheader").map((header) => header.textContent);
+    expect(headers).toEqual(["Thời gian", "Cảng", "Khu vực", "Mức độ", "Loại", "Nội dung", "Thao tác"]);
     expect(screen.getByText("Theo dõi và xác nhận các cảnh báo vận hành")).toBeInTheDocument();
     expect(screen.getAllByText("Cảng").length).toBeGreaterThan(0);
     expect(screen.getAllByText("AB - Cảng A").length).toBeGreaterThan(0);
