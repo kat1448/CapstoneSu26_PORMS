@@ -116,7 +116,65 @@ describe("ForecastPlanningPage", () => {
 
     expect(createForecastPlan).toHaveBeenCalledWith({ horizonDays: 5, portCode: "DNTSA" });
     expect(await screen.findByText("Kế hoạch dự báo DNTSA")).toBeInTheDocument();
-    expect(screen.getByText("Lập lịch linh hoạt")).toBeInTheDocument();
+    expect(screen.getByText("LIMITED")).toBeInTheDocument();
+  });
+
+  it("shows a five-day operation timeline and risk chart from forecast plan items", async () => {
+    const user = userEvent.setup();
+    vi.mocked(createForecastPlan).mockResolvedValue({
+      dataset: {
+        datasetId: "forecast-1",
+        description: "Du bao 5 ngay",
+        name: "Ke hoach du bao DNTSA",
+        portCode: "DNTSA",
+        snapshotCount: 5
+      },
+      generatedAt: "2026-07-02T00:00:00Z",
+      horizonDays: 5,
+      items: [
+        {
+          operationPlan: "NORMAL",
+          plannedAt: "2026-07-03T00:00:00Z",
+          rainRiskLevel: "LOW",
+          riskLevel: "LOW",
+          summary: "Troi quang, gio nhe",
+          visibilityRiskLevel: "LOW",
+          windRiskLevel: "LOW"
+        },
+        {
+          operationPlan: "LIMITED",
+          plannedAt: "2026-07-04T00:00:00Z",
+          rainRiskLevel: "MEDIUM",
+          riskLevel: "HIGH",
+          summary: "Gio manh va mua",
+          visibilityRiskLevel: "LOW",
+          windRiskLevel: "HIGH"
+        },
+        {
+          operationPlan: "STOP",
+          plannedAt: "2026-07-05T00:00:00Z",
+          rainRiskLevel: "CRITICAL",
+          riskLevel: "CRITICAL",
+          summary: "Mua lon, tam nhin giam",
+          visibilityRiskLevel: "CRITICAL",
+          windRiskLevel: "HIGH"
+        }
+      ],
+      sourceObservedAt: "2026-07-02T00:00:00Z"
+    });
+
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /Cập nhật kế hoạch từ OpenWeather/i }));
+
+    expect(await screen.findByLabelText("Timeline dự báo vận hành 5 ngày")).toBeInTheDocument();
+    expect(screen.getByLabelText("Biểu đồ rủi ro dự báo 5 ngày")).toBeInTheDocument();
+    expect(screen.getByText("Troi quang, gio nhe")).toBeInTheDocument();
+    expect(screen.getByText("Gio manh va mua")).toBeInTheDocument();
+    expect(screen.getByText("Mua lon, tam nhin giam")).toBeInTheDocument();
+    expect(screen.getByText("NORMAL")).toBeInTheDocument();
+    expect(screen.getByText("LIMITED")).toBeInTheDocument();
+    expect(screen.getByText("STOP")).toBeInTheDocument();
   });
 
   it("reloads the five-day forecast manually", async () => {

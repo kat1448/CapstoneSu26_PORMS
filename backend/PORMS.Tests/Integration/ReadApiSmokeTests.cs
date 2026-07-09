@@ -303,6 +303,7 @@ public sealed class ReadApiSmokeTests
         var simulationEvent = Assert.Single(simulationEvents!, item => item.OperationEventId == simulationEventId);
         Assert.True(simulationEvent.IsSimulation);
         Assert.Equal(simulationSessionId, simulationEvent.SimulationSessionId);
+        Assert.Equal("Operation log simulation dataset", simulationEvent.SimulationDatasetName);
     }
 }
 
