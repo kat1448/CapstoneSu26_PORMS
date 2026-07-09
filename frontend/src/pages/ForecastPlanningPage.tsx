@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { LineChart } from "@mui/x-charts";
 import { Link } from "react-router-dom";
 import { Badge } from "../components/common/Badge";
 import { getPorts } from "../services/portService";
@@ -18,6 +19,21 @@ function riskTone(riskLevel: string): "danger" | "info" | "warning" {
 
 function formatDateTime(value: Date) {
   return value.toLocaleString("vi-VN");
+}
+
+const riskScores = {
+  CRITICAL: 4,
+  HIGH: 3,
+  LOW: 1,
+  MEDIUM: 2
+};
+
+const riskLabels = ["", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
+
+function operationRecommendation(riskLevel: string) {
+  if (riskLevel === "CRITICAL") return "STOP";
+  if (riskLevel === "HIGH" || riskLevel === "MEDIUM") return "LIMITED";
+  return "NORMAL";
 }
 
 export function ForecastPlanningPage() {
@@ -95,6 +111,11 @@ export function ForecastPlanningPage() {
     }
   }
 
+  const planChartData = plan?.items.map((item) => ({
+    date: new Date(item.plannedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
+    riskScore: riskScores[item.riskLevel] ?? 1
+  })) ?? [];
+
   return (
     <section className="page-grid simulation-page">
       <div className="section-heading">
@@ -159,17 +180,61 @@ export function ForecastPlanningPage() {
               <span>{plan.dataset.description}</span>
               <small>{plan.dataset.snapshotCount} điểm dự báo · {plan.dataset.portCode}</small>
             </div>
-            <div className="simulation-forecast-list">
-              {plan.items.map((item) => (
-                <div className="simulation-forecast-row" key={item.plannedAt}>
-                  <div>
-                    <strong>{new Date(item.plannedAt).toLocaleDateString("vi-VN")}</strong>
-                    <small>{item.summary}</small>
+            <div className="forecast-plan-visual-grid">
+              <div aria-label="Timeline dự báo vận hành 5 ngày" className="forecast-plan-timeline">
+                {plan.items.map((item) => (
+                  <div className={`forecast-plan-timeline-item risk-${item.riskLevel.toLowerCase()}`} key={item.plannedAt}>
+                    <div className="forecast-plan-time-marker">
+                      <span />
+                    </div>
+                    <div className="forecast-plan-timeline-content">
+                      <div className="forecast-plan-timeline-head">
+                        <strong>{new Date(item.plannedAt).toLocaleDateString("vi-VN")}</strong>
+                        <Badge tone={riskTone(item.riskLevel)}>{item.riskLevel}</Badge>
+                      </div>
+                      <p>{item.summary}</p>
+                      <div className="forecast-plan-metrics">
+                        <small>Gió: {item.windRiskLevel}</small>
+                        <small>Mưa: {item.rainRiskLevel}</small>
+                        <small>Tầm nhìn: {item.visibilityRiskLevel}</small>
+                      </div>
+                      <div className="forecast-plan-operation">
+                        <span>Khuyến nghị vận hành</span>
+                        <strong>{operationRecommendation(item.riskLevel)}</strong>
+                      </div>
+                    </div>
                   </div>
-                  <Badge tone={riskTone(item.riskLevel)}>{item.riskLevel}</Badge>
-                  <span>{item.operationPlan}</span>
+                ))}
+              </div>
+              <div aria-label="Biểu đồ rủi ro dự báo 5 ngày" className="forecast-plan-chart">
+                <div className="card-head">
+                  <div>
+                    <h3>Biểu đồ rủi ro 5 ngày</h3>
+                    <p>Đường xu hướng đánh giá rủi ro vận hành từ dữ liệu dự báo.</p>
+                  </div>
                 </div>
-              ))}
+                <LineChart
+                  height={280}
+                  margin={{ bottom: 36, left: 48, right: 20, top: 20 }}
+                  series={[{
+                    area: true,
+                    color: "#0f766e",
+                    curve: "linear",
+                    data: planChartData.map((item) => item.riskScore),
+                    label: "Mức rủi ro"
+                  }]}
+                  xAxis={[{
+                    data: planChartData.map((item) => item.date),
+                    scaleType: "point"
+                  }]}
+                  yAxis={[{
+                    max: 4,
+                    min: 1,
+                    tickMinStep: 1,
+                    valueFormatter: (value: number) => riskLabels[Number(value)] ?? ""
+                  }]}
+                />
+              </div>
             </div>
           </>
         ) : (
