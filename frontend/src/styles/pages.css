@@ -596,6 +596,163 @@
   margin-top: 14px;
 }
 
+.forecast-plan-visual-grid {
+  align-items: stretch;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(320px, 1fr) minmax(360px, 1fr);
+  margin-top: 14px;
+  min-width: 0;
+}
+
+.forecast-plan-timeline,
+.forecast-plan-chart {
+  background: #fff;
+  border: 1px solid #e8eef4;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.forecast-plan-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.forecast-plan-timeline-item {
+  --risk-color: #22c55e;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.forecast-plan-timeline-item.risk-medium {
+  --risk-color: #f59e0b;
+}
+
+.forecast-plan-timeline-item.risk-high {
+  --risk-color: #f97316;
+}
+
+.forecast-plan-timeline-item.risk-critical {
+  --risk-color: #dc2626;
+}
+
+.forecast-plan-time-marker {
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.forecast-plan-time-marker::after {
+  background: #dbe5ee;
+  bottom: -18px;
+  content: "";
+  position: absolute;
+  top: 20px;
+  width: 2px;
+}
+
+.forecast-plan-timeline-item:last-child .forecast-plan-time-marker::after {
+  display: none;
+}
+
+.forecast-plan-time-marker span {
+  background: var(--risk-color);
+  border: 3px solid #fff;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--risk-color) 22%, transparent);
+  height: 12px;
+  margin-top: 5px;
+  width: 12px;
+  z-index: 1;
+}
+
+.forecast-plan-timeline-content {
+  background: #f8fbfd;
+  border: 1px solid #e8eef4;
+  border-left: 4px solid var(--risk-color);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.forecast-plan-timeline-head,
+.forecast-plan-metrics,
+.forecast-plan-operation {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.forecast-plan-timeline-head strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.forecast-plan-timeline-content p {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.forecast-plan-metrics {
+  justify-content: flex-start;
+}
+
+.forecast-plan-metrics small {
+  background: #fff;
+  border: 1px solid #e1eaf1;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 8px;
+}
+
+.forecast-plan-operation {
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.forecast-plan-operation span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.forecast-plan-operation strong {
+  color: var(--risk-color);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.forecast-plan-chart {
+  display: grid;
+  gap: 8px;
+}
+
+.forecast-plan-chart .card-head {
+  margin-bottom: 0;
+}
+
+.forecast-plan-chart .MuiChartsAxis-tickLabel,
+.forecast-plan-chart .MuiChartsAxis-label {
+  fill: #53687b;
+  font-family: inherit;
+  font-size: 11px;
+}
+
 .simulation-forecast-row {
   align-items: center;
   background: #f6f9fb;
@@ -924,6 +1081,7 @@
   font-size: 12px;
   line-height: 1.45;
   padding: 14px 18px;
+  text-align: left;
   vertical-align: middle;
 }
 
@@ -1863,6 +2021,7 @@
 
 @media (max-width: 1100px) {
   .bi-filter-bar,
+  .forecast-plan-visual-grid,
   .bi-kpi-grid,
   .bi-main-grid,
   .bi-ops-grid,
