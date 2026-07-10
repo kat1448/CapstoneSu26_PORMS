@@ -241,6 +241,11 @@ services:
       # OpenWeather (dùng cho manual fetch endpoint)
       OpenWeather__ApiKey:        ${OPENWEATHER_API_KEY}
       OpenWeather__BaseUrl:       https://api.openweathermap.org/data/2.5
+      # LLM analysis for operation planning
+      LLM__Provider:              ${LLM_PROVIDER:-Gemini}
+      LLM__ApiKey:                ${LLM_API_KEY:-}
+      LLM__Model:                 ${LLM_MODEL:-gemini-flash-latest}
+      LLM__BaseUrl:               ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
       # SMTP email notification khi phan cong nhiem vu
       Email__Smtp__Enabled:        ${SMTP_ENABLED:-false}
       Email__Smtp__Host:           ${SMTP_HOST:-}

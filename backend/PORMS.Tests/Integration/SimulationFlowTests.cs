@@ -283,4 +283,120 @@ public sealed class SimulationFlowTests
             Assert.Contains(item.RiskLevel, new[] { "LOW", "MEDIUM", "HIGH", "CRITICAL" });
         });
     }
+
+    [Fact]
+    public async Task AnalyzeForecastRisk_ReturnsPcaKMeansOperationalClusters()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/ml/forecast-risk-analysis",
+            new
+            {
+                portCode = "DNTSA",
+                items = new[]
+                {
+                    new
+                    {
+                        plannedAt = DateTimeOffset.UtcNow.AddDays(1),
+                        ruleRiskLevel = "LOW",
+                        windRiskLevel = "LOW",
+                        rainRiskLevel = "LOW",
+                        visibilityRiskLevel = "LOW",
+                        windSpeedMs = 3.2,
+                        rainfallMm = 0.4,
+                        visibilityKm = 10.0,
+                        humidityPct = 70,
+                        pressureHpa = 1009,
+                        temperatureC = 29
+                    },
+                    new
+                    {
+                        plannedAt = DateTimeOffset.UtcNow.AddDays(2),
+                        ruleRiskLevel = "HIGH",
+                        windRiskLevel = "HIGH",
+                        rainRiskLevel = "MEDIUM",
+                        visibilityRiskLevel = "MEDIUM",
+                        windSpeedMs = 14.5,
+                        rainfallMm = 18.0,
+                        visibilityKm = 3.2,
+                        humidityPct = 86,
+                        pressureHpa = 1000,
+                        temperatureC = 27
+                    },
+                    new
+                    {
+                        plannedAt = DateTimeOffset.UtcNow.AddDays(3),
+                        ruleRiskLevel = "CRITICAL",
+                        windRiskLevel = "HIGH",
+                        rainRiskLevel = "CRITICAL",
+                        visibilityRiskLevel = "CRITICAL",
+                        windSpeedMs = 22.4,
+                        rainfallMm = 46.0,
+                        visibilityKm = 0.8,
+                        humidityPct = 94,
+                        pressureHpa = 992,
+                        temperatureC = 25
+                    }
+                }
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = payload.RootElement;
+        Assert.Equal("DNTSA", root.GetProperty("portCode").GetString());
+        Assert.Equal("pca-kmeans-v1", root.GetProperty("modelVersion").GetString());
+        Assert.Equal(3, root.GetProperty("items").GetArrayLength());
+        Assert.Contains("SEVERE_OPERATION_RISK", root.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("clusterLabel").GetString()));
+        Assert.All(root.GetProperty("items").EnumerateArray(), item =>
+        {
+            Assert.InRange(item.GetProperty("pcaRiskScore").GetInt32(), 0, 100);
+            Assert.Contains(item.GetProperty("mlRecommendation").GetString(), new[] { "NORMAL", "LIMITED", "STOP" });
+            Assert.True(item.GetProperty("dominantFactors").GetArrayLength() > 0);
+        });
+        var plan = root.GetProperty("llmPlanAnalysis");
+        Assert.Equal("DNTSA", plan.GetProperty("portCode").GetString());
+        Assert.True(plan.GetProperty("items").GetArrayLength() >= 3);
+        Assert.Contains("LIMITED", plan.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("operationMode").GetString()));
+        Assert.Contains("STOP", plan.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("operationMode").GetString()));
+    }
+
+    [Fact]
+    public async Task AnalyzeForecastRisk_MediumRiskRecommendationIsNormal()
+    {
+        using var factory = new IntegrationTestWebApplicationFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/ml/forecast-risk-analysis",
+            new
+            {
+                portCode = "DNTSA",
+                items = new[]
+                {
+                    new
+                    {
+                        plannedAt = DateTimeOffset.UtcNow.AddDays(1),
+                        ruleRiskLevel = "MEDIUM",
+                        windRiskLevel = "MEDIUM",
+                        rainRiskLevel = "LOW",
+                        visibilityRiskLevel = "LOW",
+                        windSpeedMs = 8.0,
+                        rainfallMm = 2.0,
+                        visibilityKm = 10.0,
+                        humidityPct = 76,
+                        pressureHpa = 1008,
+                        temperatureC = 29
+                    }
+                }
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var item = payload.RootElement.GetProperty("items")[0];
+        Assert.Equal("MEDIUM", item.GetProperty("ruleRiskLevel").GetString());
+        Assert.Equal("NORMAL", item.GetProperty("mlRecommendation").GetString());
+    }
 }

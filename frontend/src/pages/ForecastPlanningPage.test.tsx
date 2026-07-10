@@ -6,6 +6,7 @@ import { ForecastPlanningPage } from "./ForecastPlanningPage";
 import { createForecastPlan } from "../services/simulationService";
 import { getPorts } from "../services/portService";
 import { getOpenWeatherForecast } from "../services/weatherService";
+import { analyzeForecastRisk } from "../services/mlService";
 import type { OpenWeatherForecast } from "../types/weather";
 
 vi.mock("../services/simulationService", () => ({
@@ -18,6 +19,10 @@ vi.mock("../services/weatherService", () => ({
 
 vi.mock("../services/portService", () => ({
   getPorts: vi.fn()
+}));
+
+vi.mock("../services/mlService", () => ({
+  analyzeForecastRisk: vi.fn()
 }));
 
 const forecast: OpenWeatherForecast = {
@@ -67,6 +72,34 @@ beforeEach(() => {
     }
   ]);
   vi.mocked(getOpenWeatherForecast).mockResolvedValue(forecast);
+  vi.mocked(analyzeForecastRisk).mockResolvedValue({
+    items: [{
+      clusterId: 2,
+      clusterLabel: "WIND_RISK",
+      dominantFactors: ["WIND", "VISIBILITY"],
+      mlRecommendation: "LIMITED",
+      pcaRiskScore: 74,
+      plannedAt: "2026-07-03T00:00:00Z",
+      ruleRiskLevel: "MEDIUM"
+    }],
+    llmPlanAnalysis: {
+      isConfigured: false,
+      items: [{
+        affectedOperations: ["Giám sát cầu bến"],
+        operationMode: "NORMAL",
+        planChange: "Ngày 1 vận hành bình thường, tăng giám sát gió.",
+        plannedAt: "2026-07-03T00:00:00Z",
+        reason: "Điểm AI ở mức HIGH nhưng chưa tới ngưỡng dừng.",
+        recommendedActions: ["Theo dõi gió mỗi ca", "Chuẩn bị phương án hạn chế bốc xếp"]
+      }],
+      model: "local-operation-planner",
+      portCode: "DNTSA",
+      provider: "LOCAL_RULE_FALLBACK",
+      summary: "Kế hoạch vận hành thay đổi theo xu hướng thời tiết."
+    },
+    modelVersion: "pca-kmeans-v1",
+    portCode: "DNTSA"
+  });
 });
 
 function renderPage() {
@@ -116,7 +149,8 @@ describe("ForecastPlanningPage", () => {
 
     expect(createForecastPlan).toHaveBeenCalledWith({ horizonDays: 5, portCode: "DNTSA" });
     expect(await screen.findByText("Kế hoạch dự báo DNTSA")).toBeInTheDocument();
-    expect(screen.getByText("LIMITED")).toBeInTheDocument();
+    expect(screen.getByText("NORMAL")).toBeInTheDocument();
+    expect(screen.getAllByText("LIMITED").length).toBeGreaterThan(0);
   });
 
   it("shows a five-day operation timeline and risk chart from forecast plan items", async () => {
@@ -169,11 +203,27 @@ describe("ForecastPlanningPage", () => {
 
     expect(await screen.findByLabelText("Timeline dự báo vận hành 5 ngày")).toBeInTheDocument();
     expect(screen.getByLabelText("Biểu đồ rủi ro dự báo 5 ngày")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Phân tích ML PCA K-Means dự báo 5 ngày")).toBeInTheDocument();
+    expect(screen.getByLabelText("Biểu đồ AI PCA score 5 ngày")).toBeInTheDocument();
+    expect(screen.getByText("0-24 LOW")).toBeInTheDocument();
+    expect(screen.getByText("25-49 MEDIUM")).toBeInTheDocument();
+    expect(screen.getByText("50-74 HIGH")).toBeInTheDocument();
+    expect(screen.getByText("75-100 CRITICAL")).toBeInTheDocument();
+    expect(screen.getByText("WIND_RISK")).toBeInTheDocument();
+    expect(screen.getByText("ML Score 74")).toBeInTheDocument();
+    expect(screen.getByText("AI Risk HIGH")).toBeInTheDocument();
+    expect(screen.getByText("Rule MEDIUM")).toBeInTheDocument();
+    expect(screen.getByText("Phân tích kế hoạch vận hành bằng LLM")).toBeInTheDocument();
+    expect(screen.getByText("Ngày 1 vận hành bình thường, tăng giám sát gió.")).toBeInTheDocument();
+    expect(screen.getByText("Chuẩn bị phương án hạn chế bốc xếp")).toBeInTheDocument();
+    expect(analyzeForecastRisk).toHaveBeenCalledWith(expect.objectContaining({
+      portCode: "DNTSA"
+    }));
     expect(screen.getByText("Troi quang, gio nhe")).toBeInTheDocument();
     expect(screen.getByText("Gio manh va mua")).toBeInTheDocument();
     expect(screen.getByText("Mua lon, tam nhin giam")).toBeInTheDocument();
     expect(screen.getByText("NORMAL")).toBeInTheDocument();
-    expect(screen.getByText("LIMITED")).toBeInTheDocument();
+    expect(screen.getAllByText("LIMITED").length).toBeGreaterThan(0);
     expect(screen.getByText("STOP")).toBeInTheDocument();
   });
 
