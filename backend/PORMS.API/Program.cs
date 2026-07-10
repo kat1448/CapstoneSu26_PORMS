@@ -20,6 +20,8 @@ builder.Services.Configure<OpenWeatherOptions>(
     builder.Configuration.GetSection(OpenWeatherOptions.SectionName));
 builder.Services.Configure<EmailOptions>(
     builder.Configuration.GetSection(EmailOptions.SectionName));
+builder.Services.Configure<LlmOptions>(
+    builder.Configuration.GetSection(LlmOptions.SectionName));
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
@@ -64,8 +66,10 @@ builder.Services.AddScoped<RiskRepository>();
 builder.Services.AddScoped<SopRuleRepository>();
 builder.Services.AddScoped<TaskRepository>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddSingleton<ForecastRiskMlService>();
 builder.Services.AddScoped<ITaskAssignmentEmailNotifier, SmtpTaskAssignmentEmailNotifier>();
 builder.Services.AddHttpClient<OpenWeatherService>();
+builder.Services.AddHttpClient<OperationPlanLlmService>();
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("Missing JWT configuration.");
 builder.Services
