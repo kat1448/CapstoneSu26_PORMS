@@ -12,6 +12,41 @@ import type { OpenWeatherForecast } from "../types/weather";
 import type { ForecastRiskAnalysis } from "../types/ml";
 
 const FORECAST_AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
+const ANALYSIS_STEP_DELAY_MS = 180;
+
+type ForecastProcessingStep = "forecast" | "gemini" | "kmeans" | "pca" | null;
+
+const forecastProcessingSteps: Array<{
+  description: string;
+  key: Exclude<ForecastProcessingStep, null>;
+  label: string;
+  progress: number;
+}> = [
+  {
+    description: "Lấy dữ liệu OpenWeather và tạo kế hoạch 5 ngày",
+    key: "forecast",
+    label: "Dữ liệu dự báo",
+    progress: 25
+  },
+  {
+    description: "Chuẩn hóa chỉ số thời tiết thành vector phân tích",
+    key: "pca",
+    label: "PCA",
+    progress: 52
+  },
+  {
+    description: "Phân cụm trạng thái thời tiết và rủi ro vận hành",
+    key: "kmeans",
+    label: "K-Means",
+    progress: 74
+  },
+  {
+    description: "Gemini phân tích kế hoạch vận hành theo kết quả AI",
+    key: "gemini",
+    label: "Gemini",
+    progress: 94
+  }
+];
 
 function riskTone(riskLevel: string): "danger" | "info" | "warning" {
   if (riskLevel === "CRITICAL") return "danger";
@@ -55,6 +90,14 @@ function aiRiskLevelFromScore(score: number) {
   return "LOW";
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function processingStepIndex(step: ForecastProcessingStep) {
+  return Math.max(0, forecastProcessingSteps.findIndex((item) => item.key === step));
+}
+
 export function ForecastPlanningPage() {
   const [ports, setPorts] = useState<PortSummary[]>([]);
   const [portCode, setPortCode] = useState("DNTSA");
@@ -70,6 +113,7 @@ export function ForecastPlanningPage() {
   const [lastForecastUpdatedAt, setLastForecastUpdatedAt] = useState<Date | null>(null);
   const [message, setMessage] = useState("");
   const [nextForecastRefreshAt, setNextForecastRefreshAt] = useState<Date | null>(null);
+  const [processingStep, setProcessingStep] = useState<ForecastProcessingStep>(null);
 
   useEffect(() => {
     let active = true;
@@ -116,6 +160,7 @@ export function ForecastPlanningPage() {
 
   async function handleCreateForecastPlan() {
     setLoading(true);
+    setProcessingStep("forecast");
     setError("");
     setMlError("");
     setMessage("");
@@ -125,7 +170,7 @@ export function ForecastPlanningPage() {
         portCode: portCode.trim() || "DNTSA"
       });
       setPlan(nextPlan);
-      setMlAnalysis(await analyzeForecastRisk({
+      const analysisInput = {
         portCode: nextPlan.dataset.portCode,
         items: nextPlan.items.map((item) => {
           const forecastDay = forecast?.days.find((day) => sameDate(day.date, item.plannedAt));
@@ -143,7 +188,13 @@ export function ForecastPlanningPage() {
             windSpeedMs: forecastDay?.windSpeedMs ?? null
           };
         })
-      }));
+      };
+      setProcessingStep("pca");
+      await delay(ANALYSIS_STEP_DELAY_MS);
+      setProcessingStep("kmeans");
+      await delay(ANALYSIS_STEP_DELAY_MS);
+      setProcessingStep("gemini");
+      setMlAnalysis(await analyzeForecastRisk(analysisInput));
       setMessage("Đã cập nhật kế hoạch dự báo từ OpenWeather");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Không tạo được kế hoạch dự báo");
@@ -151,6 +202,7 @@ export function ForecastPlanningPage() {
       setMlError(requestError instanceof Error ? requestError.message : "Không phân tích được dữ liệu ML");
     } finally {
       setLoading(false);
+      setProcessingStep(null);
     }
   }
 
@@ -162,6 +214,9 @@ export function ForecastPlanningPage() {
     date: new Date(item.plannedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
     score: item.pcaRiskScore
   })) ?? [];
+  const currentProcessingIndex = processingStepIndex(processingStep);
+  const currentProcessingStep = forecastProcessingSteps[currentProcessingIndex] ?? forecastProcessingSteps[0];
+  const processingProgress = processingStep ? currentProcessingStep.progress : 0;
 
   return (
     <section className="page-grid simulation-page">
@@ -219,6 +274,35 @@ export function ForecastPlanningPage() {
 
         {message ? <p className="form-success">{message}</p> : null}
         {error ? <p className="form-error">{error}</p> : null}
+        {loading && processingStep ? (
+          <div aria-label="Tiến trình phân tích PCA K-Means Gemini" className="forecast-analysis-loader">
+            <div className="forecast-analysis-loader-head">
+              <div>
+                <strong>{currentProcessingStep.label}</strong>
+                <span>{currentProcessingStep.description}</span>
+              </div>
+              <b>{processingProgress}%</b>
+            </div>
+            <div className="forecast-analysis-track">
+              <span style={{ width: `${processingProgress}%` }} />
+            </div>
+            <div className="forecast-analysis-steps">
+              {forecastProcessingSteps.map((step, index) => (
+                <div
+                  className={[
+                    "forecast-analysis-step",
+                    index < currentProcessingIndex ? "is-done" : "",
+                    index === currentProcessingIndex ? "is-active" : ""
+                  ].filter(Boolean).join(" ")}
+                  key={step.key}
+                >
+                  <i />
+                  <span>{step.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {plan ? (
           <>

@@ -149,6 +149,9 @@ describe("ForecastPlanningPage", () => {
 
     expect(createForecastPlan).toHaveBeenCalledWith({ horizonDays: 5, portCode: "DNTSA" });
     expect(await screen.findByText("Kế hoạch dự báo DNTSA")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tiến trình phân tích PCA K-Means Gemini")).toBeInTheDocument();
+    await waitFor(() => expect(analyzeForecastRisk).toHaveBeenCalled(), { timeout: 3000 });
+    expect(await screen.findByText("ML Score 74", {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByText("NORMAL")).toBeInTheDocument();
     expect(screen.getAllByText("LIMITED").length).toBeGreaterThan(0);
   });

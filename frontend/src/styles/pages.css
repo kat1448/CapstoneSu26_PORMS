@@ -596,6 +596,115 @@
   margin-top: 14px;
 }
 
+.forecast-analysis-loader {
+  background: #f8fbfd;
+  border: 1px solid #dce7ef;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.forecast-analysis-loader-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.forecast-analysis-loader-head div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.forecast-analysis-loader-head strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.forecast-analysis-loader-head span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.forecast-analysis-loader-head b {
+  color: #245b8a;
+  flex: none;
+  font-size: 13px;
+}
+
+.forecast-analysis-track {
+  background: #dfe9f1;
+  border-radius: 999px;
+  height: 9px;
+  overflow: hidden;
+}
+
+.forecast-analysis-track span {
+  background: linear-gradient(90deg, #2f6fab, #0f766e);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 220ms ease;
+}
+
+.forecast-analysis-steps {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.forecast-analysis-step {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 10px;
+  font-weight: 800;
+  gap: 7px;
+  min-width: 0;
+}
+
+.forecast-analysis-step i {
+  background: #cfdbe5;
+  border-radius: 999px;
+  flex: none;
+  height: 9px;
+  width: 9px;
+}
+
+.forecast-analysis-step span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forecast-analysis-step.is-done,
+.forecast-analysis-step.is-active {
+  color: var(--text);
+}
+
+.forecast-analysis-step.is-done i {
+  background: #0f766e;
+}
+
+.forecast-analysis-step.is-active i {
+  animation: forecast-step-pulse 1.1s infinite;
+  background: #2f6fab;
+}
+
+@keyframes forecast-step-pulse {
+  70% {
+    box-shadow: 0 0 0 7px rgba(47, 111, 171, 0);
+  }
+}
+
 .forecast-plan-visual-grid {
   align-items: stretch;
   display: grid;
@@ -2302,6 +2411,7 @@
 
 @media (max-width: 1100px) {
   .bi-filter-bar,
+  .forecast-analysis-steps,
   .forecast-plan-visual-grid,
   .forecast-ml-grid,
   .forecast-llm-grid,
