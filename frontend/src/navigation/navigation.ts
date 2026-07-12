@@ -1,4 +1,4 @@
-import type { DemoUserRole } from "../App";
+﻿import type { DemoUserRole } from "../App";
 
 export type IconName =
   | "alert"
@@ -57,6 +57,7 @@ export const navigationGroups: NavigationGroup[] = [
     items: [
       { icon: "play", label: "Mô phỏng", path: "/simulation", roles: allRoles },
       { icon: "chart", label: "Dự báo vận hành", path: "/forecast-planning", roles: adminRoles },
+      { icon: "chart", label: "Thống kê và đánh giá", path: "/forecast-evaluation", roles: adminRoles },
       { icon: "chart", label: "Phân tích BI", path: "/analytics", roles: adminRoles }
     ]
   }
@@ -90,3 +91,4 @@ export function isRouteAllowed(role: DemoUserRole, pathname: string): boolean {
     .flatMap((group) => group.items)
     .some((item) => item.path === normalizedPath && item.roles.includes(role));
 }
+

@@ -2129,14 +2129,19 @@
   font-weight: 650;
 }
 
+.bi-filter-bar input,
 .bi-filter-bar select {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--text);
   height: 40px;
-  padding: 0 42px 0 18px;
+  padding: 0 18px;
   width: 100%;
+}
+
+.bi-filter-bar select {
+  padding-right: 42px;
 }
 
 .bi-filter-status {
@@ -2407,6 +2412,55 @@
 
 .bi-table tbody tr:hover {
   background: #fbfdff;
+}
+
+.forecast-evaluation-page {
+  gap: 16px;
+}
+
+.forecast-evaluation-page .bi-table-head {
+  align-items: center;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef6fc 100%);
+  border: 1px solid #dbe8f3;
+  border-radius: 8px;
+  box-shadow: inset 4px 0 0 #2f80c2;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 16px 18px;
+}
+
+.forecast-evaluation-page .bi-table-head h3 {
+  color: #102a43;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.forecast-evaluation-page .bi-table-head p {
+  color: #52677a;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 6px 0 0;
+  max-width: 760px;
+}
+
+.forecast-evaluation-page .bi-table-head .badge {
+  flex: 0 0 auto;
+}
+
+.forecast-evaluation-table td strong,
+.forecast-evaluation-table td small {
+  display: block;
+}
+
+.forecast-evaluation-table td small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+  margin-top: 4px;
 }
 
 @media (max-width: 1100px) {
