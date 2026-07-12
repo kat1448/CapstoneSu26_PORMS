@@ -128,15 +128,24 @@ public sealed class OperationPlanLlmService
         var json = ExtractJsonObject(text);
         using var payload = JsonDocument.Parse(json);
         var root = payload.RootElement;
+        var sourceItems = request.Items.Take(5).ToList();
         var items = root.GetProperty("items").EnumerateArray()
-            .Select(item => new OperationPlanAnalysisItemResponse
+            .Select((item, index) =>
             {
-                PlannedAt = DateTimeOffset.Parse(item.GetProperty("plannedAt").GetString() ?? DateTimeOffset.UtcNow.ToString("O")),
-                OperationMode = NormalizeMode(item.GetProperty("operationMode").GetString()),
-                PlanChange = RequiredText(item, "planChange"),
-                Reason = RequiredText(item, "reason"),
-                RecommendedActions = ReadStringArray(item, "recommendedActions"),
-                AffectedOperations = ReadStringArray(item, "affectedOperations")
+                var mlItem = mlAnalysis.Items.ElementAtOrDefault(index);
+                var requestItem = index < sourceItems.Count ? sourceItems[index] : null;
+                var requestedMode = NormalizeMode(item.GetProperty("operationMode").GetString());
+                var operationMode = mlItem is null ? requestedMode : EnforceMinimumMode(requestedMode, mlItem);
+                var wasCorrected = requestedMode != operationMode && mlItem is not null;
+                return new OperationPlanAnalysisItemResponse
+                {
+                    PlannedAt = DateTimeOffset.Parse(item.GetProperty("plannedAt").GetString() ?? DateTimeOffset.UtcNow.ToString("O")),
+                    OperationMode = operationMode,
+                    PlanChange = wasCorrected ? PlanChange(index + 1, operationMode, mlItem!, requestItem) : RequiredText(item, "planChange"),
+                    Reason = AddModeCorrectionReason(RequiredText(item, "reason"), requestedMode, operationMode, mlItem),
+                    RecommendedActions = wasCorrected ? RecommendedActions(operationMode, mlItem!, requestItem) : ReadStringArray(item, "recommendedActions"),
+                    AffectedOperations = wasCorrected ? AffectedOperations(operationMode, mlItem!, requestItem) : ReadStringArray(item, "affectedOperations")
+                };
             })
             .ToList();
 
@@ -239,7 +248,7 @@ public sealed class OperationPlanLlmService
             }
           ]
         }
-        Quy tắc nghiệp vụ: LOW/MEDIUM vận hành NORMAL; HIGH vận hành LIMITED; CRITICAL vận hành STOP.
+        Quy tắc nghiệp vụ bắt buộc: LOW/MEDIUM vận hành NORMAL; HIGH hoặc PCA score 50-74 phải là LIMITED; CRITICAL hoặc PCA score từ 75 phải là STOP. Không được hạ operationMode thấp hơn rule/PCA.
         Cảng: {{mlAnalysis.PortCode}}
         Dữ liệu: {{JsonSerializer.Serialize(rows, JsonOptions)}}
         """;
@@ -251,6 +260,37 @@ public sealed class OperationPlanLlmService
         if (normalized == "CRITICAL" || score >= 75) return "STOP";
         if (normalized == "HIGH" || score >= 50) return "LIMITED";
         return "NORMAL";
+    }
+
+    private static string EnforceMinimumMode(string requestedMode, ForecastRiskAnalysisItemResponse item)
+    {
+        var minimumMode = ModeFromScoreAndRisk(item.PcaRiskScore, item.RuleRiskLevel);
+        return ModeSeverity(requestedMode) >= ModeSeverity(minimumMode) ? requestedMode : minimumMode;
+    }
+
+    private static int ModeSeverity(string mode)
+    {
+        return NormalizeMode(mode) switch
+        {
+            "STOP" => 3,
+            "LIMITED" => 2,
+            _ => 1
+        };
+    }
+
+    private static string AddModeCorrectionReason(
+        string reason,
+        string requestedMode,
+        string operationMode,
+        ForecastRiskAnalysisItemResponse? item)
+    {
+        if (item is null || requestedMode == operationMode)
+        {
+            return reason;
+        }
+
+        var suffix = $"He thong tu nang che do tu {requestedMode} len {operationMode} vi PCA score {item.PcaRiskScore} va rule risk {item.RuleRiskLevel}.";
+        return string.IsNullOrWhiteSpace(reason) ? suffix : $"{reason} {suffix}";
     }
 
     private static string PlanChange(int day, string mode, ForecastRiskAnalysisItemResponse item, ForecastRiskAnalysisItemRequest? requestItem)
