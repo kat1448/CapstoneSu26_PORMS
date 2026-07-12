@@ -8,6 +8,7 @@ import { AnalyticsPage } from "../pages/AnalyticsPage";
 import { ChangePasswordPage } from "../pages/ChangePasswordPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { ForecastPlanningPage } from "../pages/ForecastPlanningPage";
+import { ForecastEvaluationPage } from "../pages/ForecastEvaluationPage";
 import { LogPage } from "../pages/LogPage";
 import { LoginPage } from "../pages/LoginPage";
 import { PortCreatePage } from "../pages/PortCreatePage";
@@ -83,6 +84,7 @@ export function buildRouter(context: RouterContext) {
         { path: "sop-rules", element: guarded("/sop-rules", <SopRulesPage />) },
         { path: "simulation", element: guarded("/simulation", <SimulationPage refreshKey={context.refreshKey} />) },
         { path: "forecast-planning", element: guarded("/forecast-planning", <ForecastPlanningPage />) },
+        { path: "forecast-evaluation", element: guarded("/forecast-evaluation", <ForecastEvaluationPage />) },
         { path: "simulation-results", element: guarded("/simulation-results", <SimulationResultsPage refreshKey={context.refreshKey} />) },
         { path: "analytics", element: guarded("/analytics", <AnalyticsPage />) },
         { path: "profile", element: <ProfilePage currentUser={context.currentUser!} /> },

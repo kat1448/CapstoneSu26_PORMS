@@ -62,6 +62,7 @@ builder.Services.AddScoped<OperationEventRepository>();
 builder.Services.AddScoped<SimulationRepository>();
 builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<WeatherRepository>();
+builder.Services.AddScoped<ForecastEvaluationRepository>();
 builder.Services.AddScoped<RiskRepository>();
 builder.Services.AddScoped<SopRuleRepository>();
 builder.Services.AddScoped<TaskRepository>();
