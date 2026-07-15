@@ -4,7 +4,6 @@ import type { DemoUser } from "../App";
 import { AppShell } from "../components/layout/AppShell";
 import { AlertDetailPage } from "../pages/AlertDetailPage";
 import { AlertPage } from "../pages/AlertPage";
-import { AnalyticsPage } from "../pages/AnalyticsPage";
 import { ChangePasswordPage } from "../pages/ChangePasswordPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { ForecastPlanningPage } from "../pages/ForecastPlanningPage";
@@ -86,7 +85,6 @@ export function buildRouter(context: RouterContext) {
         { path: "forecast-planning", element: guarded("/forecast-planning", <ForecastPlanningPage />) },
         { path: "forecast-evaluation", element: guarded("/forecast-evaluation", <ForecastEvaluationPage />) },
         { path: "simulation-results", element: guarded("/simulation-results", <SimulationResultsPage refreshKey={context.refreshKey} />) },
-        { path: "analytics", element: guarded("/analytics", <AnalyticsPage />) },
         { path: "profile", element: <ProfilePage currentUser={context.currentUser!} /> },
         { path: "change-password", element: <ChangePasswordPage onChanged={context.onLogout} /> }
       ]

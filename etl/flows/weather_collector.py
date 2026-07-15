@@ -1,12 +1,11 @@
-import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
 import structlog
-from sqlalchemy import text
-from prefect import flow, task, get_run_logger
+from prefect import flow, get_run_logger, task
 from prefect.tasks import task_input_hash
+from sqlalchemy import text
 
 from config import settings
 from db.connection import get_operational_session
@@ -34,8 +33,7 @@ def task_load_active_ports() -> list[dict]:
         """))
         ports = [dict(row._mapping) for row in result.fetchall()]
 
-    logger.info("loaded_active_ports", count=len(ports),
-                codes=[p["code"] for p in ports])
+    logger.info("loaded_active_ports", count=len(ports), codes=[p["code"] for p in ports])
     return ports
 
 
@@ -46,7 +44,7 @@ def task_load_active_ports() -> list[dict]:
     timeout_seconds=15,
 )
 def task_fetch_from_openweather(port: dict) -> Optional[dict]:
-    """Gọi OpenWeather Current Weather API với retry/backoff."""
+    """Call OpenWeather Current Weather API with retry/backoff."""
     url = f"{settings.OW_BASE_URL}/weather"
     params = {
         "lat": port["latitude"],
@@ -64,9 +62,13 @@ def task_fetch_from_openweather(port: dict) -> Optional[dict]:
             logger.info("openweather_fetch_success", port_code=port["code"])
             return raw_data
 
-    except httpx.HTTPStatusError as e:
-        logger.error("openweather_http_error", port_code=port["code"],
-                     status_code=e.response.status_code, error=str(e))
+    except httpx.HTTPStatusError as error:
+        logger.error(
+            "openweather_http_error",
+            port_code=port["code"],
+            status_code=error.response.status_code,
+            error=str(error),
+        )
         raise
 
     except httpx.TimeoutException:
@@ -76,7 +78,7 @@ def task_fetch_from_openweather(port: dict) -> Optional[dict]:
 
 @task(name="normalize-weather")
 def task_normalize_weather(raw_json: dict, port_id: str) -> WeatherReadingModel:
-    """Chuyển đổi raw JSON từ OpenWeather sang WeatherReadingModel chuẩn."""
+    """Normalize OpenWeather JSON into the operational weather model."""
     wind_speed_ms = float(raw_json.get("wind", {}).get("speed", 0))
     beaufort = ms_to_beaufort(wind_speed_ms)
 
@@ -109,15 +111,20 @@ def task_normalize_weather(raw_json: dict, port_id: str) -> WeatherReadingModel:
         is_simulation=False,
     )
 
-    logger.info("weather_normalized", port_id=port_id,
-                wind_speed_ms=wind_speed_ms, beaufort=beaufort,
-                rainfall_1h=rainfall_1h, visibility_km=visibility_km)
+    logger.info(
+        "weather_normalized",
+        port_id=port_id,
+        wind_speed_ms=wind_speed_ms,
+        beaufort=beaufort,
+        rainfall_1h=rainfall_1h,
+        visibility_km=visibility_km,
+    )
     return model
 
 
 @task(name="save-weather-reading", retries=3, retry_delay_seconds=2)
 def task_save_weather_reading(model: WeatherReadingModel) -> Optional[str]:
-    """INSERT vào operational.weather_readings. IDEMPOTENT: ON CONFLICT DO NOTHING."""
+    """Insert into operational.weather_readings. Idempotent: ON CONFLICT DO NOTHING."""
     with get_operational_session() as session:
         result = session.execute(text("""
             INSERT INTO operational.weather_readings (
@@ -145,10 +152,7 @@ def task_save_weather_reading(model: WeatherReadingModel) -> Optional[str]:
 
 @task(name="trigger-risk-engine", retries=2, retry_delay_seconds=3)
 def task_trigger_risk_engine(port_id: str, reading_id: str) -> bool:
-    """
-    Trigger Risk Engine trên ASP.NET.
-    Không raise exception nếu fail — Risk Engine có BackgroundService backup.
-    """
+    """Trigger ASP.NET risk engine. Failure is logged but does not fail the collector."""
     if not reading_id:
         return False
 
@@ -162,9 +166,46 @@ def task_trigger_risk_engine(port_id: str, reading_id: str) -> bool:
             response.raise_for_status()
             logger.info("risk_engine_triggered", port_id=port_id, reading_id=reading_id)
             return True
-    except Exception as e:
-        logger.warning("risk_engine_trigger_failed", port_id=port_id, error=str(e))
+    except Exception as error:
+        logger.warning("risk_engine_trigger_failed", port_id=port_id, error=str(error))
         return False
+
+
+def build_operation_summary(results: dict) -> tuple[str, str]:
+    if results["failed"] == 0 and results["success"] == 0:
+        return (
+            "NORMAL_NO_CHANGE",
+            (
+                "Không thực hiện gì, hoạt động bình thường. "
+                f"Không có bản ghi thời tiết mới; {results['skipped']} bản ghi đã tồn tại."
+            ),
+        )
+
+    if results["failed"] == 0:
+        return (
+            "UPDATED",
+            (
+                f"Cập nhật thời tiết thành công: {results['success']} bản ghi mới, "
+                f"{results['skipped']} bản ghi đã tồn tại."
+            ),
+        )
+
+    return (
+        "PARTIAL_FAILURE",
+        (
+            f"Cập nhật thời tiết có lỗi: {results['success']} thành công, "
+            f"{results['failed']} lỗi, {results['skipped']} bỏ qua."
+        ),
+    )
+
+
+def build_port_operation_summary(port: dict, status: str, error: str | None = None) -> str:
+    port_code = port.get("code", "UNKNOWN")
+    if status == "NORMAL_NO_CHANGE":
+        return f"{port_code}: Không thực hiện gì, hoạt động bình thường. Không có bản ghi thời tiết mới."
+    if status == "UPDATED":
+        return f"{port_code}: Cập nhật thời tiết thành công."
+    return f"{port_code}: Cập nhật thời tiết có lỗi: {(error or 'Không rõ lỗi')[:180]}"
 
 
 @flow(
@@ -174,7 +215,7 @@ def task_trigger_risk_engine(port_id: str, reading_id: str) -> bool:
     log_prints=True,
 )
 def weather_collector_flow():
-    """Flow chính: chạy mỗi 15 phút."""
+    """Flow chính: chạy mỗi 10 phút."""
     try:
         flow_run_id = str(get_run_logger().extra.get("flow_run_id", "unknown"))
     except Exception:
@@ -190,35 +231,43 @@ def weather_collector_flow():
     results = {"success": 0, "failed": 0, "skipped": 0}
 
     for port in ports:
-        try:
-            port_id = port["id"]
+        port_id = port["id"]
+        port_result = {"success": 0, "failed": 0, "skipped": 0}
+        status = "NORMAL_NO_CHANGE"
+        error_message = None
 
+        try:
             raw_json = task_fetch_from_openweather(port)
             model = task_normalize_weather(raw_json, port_id)
             reading_id = task_save_weather_reading(model)
 
             if reading_id:
                 results["success"] += 1
+                port_result["success"] = 1
+                status = "UPDATED"
                 task_trigger_risk_engine(port_id, reading_id)
             else:
                 results["skipped"] += 1
+                port_result["skipped"] = 1
 
-        except Exception as e:
+        except Exception as error:
             results["failed"] += 1
-            logger.error("port_fetch_failed", port_code=port.get("code"), error=str(e))
+            port_result["failed"] = 1
+            status = "PARTIAL_FAILURE"
+            error_message = str(error)
+            logger.error("port_fetch_failed", port_code=port.get("code"), error=error_message)
 
-    log_operation_event(
-        event_type="WEATHER_FETCHED",
-        port_id=None,
-        payload={
-            "flow_run_id": flow_run_id,
-            "ports_processed": len(ports),
-            **results,
-        },
-        summary=(
-            f"Weather collected: {results['success']} success, "
-            f"{results['failed']} failed, {results['skipped']} skipped"
-        ),
-    )
+        log_operation_event(
+            event_type="WEATHER_FETCHED",
+            port_id=port_id,
+            payload={
+                "flow_run_id": flow_run_id,
+                "port_code": port.get("code"),
+                "status": status,
+                **port_result,
+            },
+            summary=build_port_operation_summary(port, status, error_message),
+        )
 
-    logger.info("weather_collector_completed", **results)
+    status, summary = build_operation_summary(results)
+    logger.info("weather_collector_completed", status=status, summary=summary, **results)

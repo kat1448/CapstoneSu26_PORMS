@@ -115,7 +115,7 @@ services:
   # Build từ etl/Dockerfile (Python 3.11 + requirements.txt)
   #
   # Flows:
-  #   - weather_collector   : fetch OpenWeather mỗi 15 phút/port
+  #   - weather_collector   : fetch OpenWeather mỗi 10 phút/port
   #   - weather_transformer : normalize m/s → Beaufort, m → km
   #   - dw_loader           : load operational → analytics schema (mỗi giờ)
   #   - historical_backfill : one-time backfill 30 ngày dữ liệu lịch sử
