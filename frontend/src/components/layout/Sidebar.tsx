@@ -11,9 +11,9 @@ type SidebarProps = {
 };
 
 const roleLabels = {
-  SUPER_ADMIN: "Super Admin",
-  ADMIN: "Admin",
-  STANDARD_USER: "Standard User"
+  ADMIN: "System Administrator",
+  PORT_MANAGER: "Port Operations Manager",
+  OPERATOR: "Port Operations Supervisor"
 } as const;
 
 export function Sidebar({ currentUser, isOpen, onClose, unreadAlertCount }: SidebarProps) {

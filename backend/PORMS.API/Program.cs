@@ -91,9 +91,9 @@ builder.Services
     });
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("SuperAdminOnly", policy => policy.RequireRole("SUPER_ADMIN"));
-    options.AddPolicy("AdminOrSuperAdmin", policy => policy.RequireRole("SUPER_ADMIN", "ADMIN"));
-    options.AddPolicy("AllAppUsers", policy => policy.RequireRole("SUPER_ADMIN", "ADMIN", "STANDARD_USER"));
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("ADMIN"));
+    options.AddPolicy("AdminOrPortManager", policy => policy.RequireRole("ADMIN", "PORT_MANAGER"));
+    options.AddPolicy("AllAppUsers", policy => policy.RequireRole("ADMIN", "PORT_MANAGER", "OPERATOR"));
 });
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

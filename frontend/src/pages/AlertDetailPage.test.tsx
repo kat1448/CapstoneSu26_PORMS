@@ -71,7 +71,7 @@ describe("AlertDetailPage", () => {
     vi.mocked(getTaskAssignees).mockResolvedValue([{
       email: "operator@porms.vn",
       fullName: "Nguyễn Văn A",
-      role: "STANDARD_USER",
+      role: "OPERATOR",
       userId: "user-1"
     }]);
     vi.mocked(assignTask).mockResolvedValue({
