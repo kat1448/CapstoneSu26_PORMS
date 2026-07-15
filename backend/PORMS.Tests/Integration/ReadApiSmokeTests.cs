@@ -82,7 +82,7 @@ public sealed class ReadApiSmokeTests
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            CreateToken("SUPER_ADMIN"));
+            CreateToken("ADMIN"));
         var port = await _factory.GetPrimaryPortAsync();
 
         var request = new UpdatePortRequest(

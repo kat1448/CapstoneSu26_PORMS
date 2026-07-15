@@ -18,7 +18,7 @@ const userRecords: UserRecord[] = [
     lastLoginLabel: "Vua xong",
     portId: "port-dntsa",
     portName: "Cang Tien Sa",
-    role: "ADMIN",
+    role: "PORT_MANAGER",
     status: "ACTIVE",
     userId: "user-1"
   },
@@ -28,7 +28,7 @@ const userRecords: UserRecord[] = [
     lastLoginLabel: "Chua dang nhap",
     portId: "port-dntsa",
     portName: "Cang Tien Sa",
-    role: "STANDARD_USER",
+    role: "OPERATOR",
     status: "LOCKED",
     userId: "user-2"
   }

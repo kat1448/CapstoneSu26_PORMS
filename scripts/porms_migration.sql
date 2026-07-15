@@ -80,11 +80,11 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Vai trò người dùng — RBAC
--- ADMIN         : Toàn quyền hệ thống (thêm port, cấu hình threshold, quản lý user)
--- ADMIN         : Cấu hình ngưỡng/SOP dữ liệu thật và tạo task vận hành
--- STANDARD_USER : Xem dữ liệu và chạy mô phỏng
+-- ADMIN         : Toàn quyền hệ thống, không gán cảng
+-- PORT_MANAGER  : Quản lý vận hành trong cảng được gán, không quản lý user
+-- OPERATOR      : Chỉ xem dữ liệu vận hành trong cảng được gán
 DO $$ BEGIN
-    CREATE TYPE operational.user_role_enum AS ENUM ('SUPER_ADMIN', 'ADMIN', 'STANDARD_USER');
+    CREATE TYPE operational.user_role_enum AS ENUM ('ADMIN', 'PORT_MANAGER', 'OPERATOR');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -285,13 +285,13 @@ CREATE TABLE IF NOT EXISTS operational.users (
     password_hash       VARCHAR(255)    NOT NULL,
 
     -- Vai trò — quyết định access control
-    role                operational.user_role_enum NOT NULL DEFAULT 'STANDARD_USER',
+    role                operational.user_role_enum NOT NULL DEFAULT 'OPERATOR',
 
     -- Trạng thái tài khoản
     status              operational.user_status_enum NOT NULL DEFAULT 'ACTIVE',
 
     -- Port mà user này phụ trách (NULL cho ADMIN — quản lý tất cả)
-    -- ADMIN và STANDARD_USER chỉ xem được data của port_id này
+    -- PORT_MANAGER và OPERATOR chỉ xem được data của port_id này
     assigned_port_id    UUID
                             REFERENCES operational.ports(id)
                             ON DELETE SET NULL,
@@ -325,10 +325,16 @@ CREATE TABLE IF NOT EXISTS operational.users (
     -- Người tạo tài khoản này (NULL nếu tự đăng ký hoặc seed)
     created_by_user_id  UUID
                             REFERENCES operational.users(id)
-                            ON DELETE SET NULL
+                            ON DELETE SET NULL,
+
+    CONSTRAINT users_role_port_assignment CHECK (
+        (role = 'ADMIN' AND assigned_port_id IS NULL)
+        OR
+        (role IN ('PORT_MANAGER', 'OPERATOR') AND assigned_port_id IS NOT NULL)
+    )
 );
 
-COMMENT ON TABLE  operational.users                      IS 'Tài khoản người dùng — RBAC: SUPER_ADMIN/ADMIN/STANDARD_USER';
+COMMENT ON TABLE  operational.users                      IS 'Tài khoản người dùng — RBAC: ADMIN/PORT_MANAGER/OPERATOR';
 COMMENT ON COLUMN operational.users.password_hash        IS 'bcrypt hash với cost=12. KHÔNG return qua API, KHÔNG log';
 COMMENT ON COLUMN operational.users.assigned_port_id     IS 'Port phụ trách. NULL = ADMIN (xem tất cả port)';
 COMMENT ON COLUMN operational.users.refresh_token_hash   IS 'Hash của refresh token để validate. NULL = logged out';
@@ -1471,7 +1477,7 @@ VALUES
         'System Administrator',
         -- bcrypt hash placeholder — PHẢI chạy lại với hash thật trước khi deploy
         '$2a$12$EiOVbgHA01dPxu209RTJUOsJ4I7jDrQiXeIEAGG.iXmqYpBl2vSmG',
-        'SUPER_ADMIN',
+        'ADMIN',
         'ACTIVE'
     )
 ON CONFLICT (email) DO NOTHING;
