@@ -11,8 +11,10 @@ describe("role navigation", () => {
       "Cấu hình",
       "Công cụ & báo cáo"
     ]);
-    expect(groups.flatMap((group) => group.items.map((item) => item.path))).toContain("/users");
-    expect(groups.flatMap((group) => group.items.map((item) => item.path))).toContain("/forecast-planning");
+    const paths = groups.flatMap((group) => group.items.map((item) => item.path));
+    expect(paths).toContain("/users");
+    expect(paths).toContain("/forecast-planning");
+    expect(paths).toContain("/forecast-evaluation");
   });
 
   it("allows ADMIN to configure real SOP data and tasks without user administration", () => {
@@ -44,6 +46,7 @@ describe("role navigation", () => {
     expect(isRouteAllowed("SUPER_ADMIN", "/users/new")).toBe(true);
     expect(isRouteAllowed("SUPER_ADMIN", "/users/user-1/edit")).toBe(true);
     expect(isRouteAllowed("ADMIN", "/forecast-planning")).toBe(true);
+    expect(isRouteAllowed("ADMIN", "/forecast-evaluation")).toBe(true);
     expect(isRouteAllowed("ADMIN", "/users/new")).toBe(false);
   });
 });

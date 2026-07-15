@@ -1,14 +1,52 @@
 import { useCallback, useEffect, useState } from "react";
+import { LineChart } from "@mui/x-charts";
 import { Link } from "react-router-dom";
 import { Badge } from "../components/common/Badge";
 import { getPorts } from "../services/portService";
 import { createForecastPlan } from "../services/simulationService";
 import { getOpenWeatherForecast } from "../services/weatherService";
+import { analyzeForecastRisk } from "../services/mlService";
 import type { PortSummary } from "../types/port";
 import type { ForecastHorizonDays, ForecastPlan } from "../types/simulation";
 import type { OpenWeatherForecast } from "../types/weather";
+import type { ForecastRiskAnalysis } from "../types/ml";
 
 const FORECAST_AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
+const ANALYSIS_STEP_DELAY_MS = 180;
+
+type ForecastProcessingStep = "forecast" | "gemini" | "kmeans" | "pca" | null;
+
+const forecastProcessingSteps: Array<{
+  description: string;
+  key: Exclude<ForecastProcessingStep, null>;
+  label: string;
+  progress: number;
+}> = [
+  {
+    description: "Lấy dữ liệu OpenWeather và tạo kế hoạch 5 ngày",
+    key: "forecast",
+    label: "Dữ liệu dự báo",
+    progress: 25
+  },
+  {
+    description: "Chuẩn hóa chỉ số thời tiết thành vector phân tích",
+    key: "pca",
+    label: "PCA",
+    progress: 52
+  },
+  {
+    description: "Phân cụm trạng thái thời tiết và rủi ro vận hành",
+    key: "kmeans",
+    label: "K-Means",
+    progress: 74
+  },
+  {
+    description: "Gemini phân tích kế hoạch vận hành theo kết quả AI",
+    key: "gemini",
+    label: "Gemini",
+    progress: 94
+  }
+];
 
 function riskTone(riskLevel: string): "danger" | "info" | "warning" {
   if (riskLevel === "CRITICAL") return "danger";
@@ -16,8 +54,48 @@ function riskTone(riskLevel: string): "danger" | "info" | "warning" {
   return "info";
 }
 
+function operationModeTone(mode: string): "danger" | "success" | "warning" {
+  if (mode === "STOP") return "danger";
+  if (mode === "LIMITED") return "warning";
+  return "success";
+}
+
 function formatDateTime(value: Date) {
   return value.toLocaleString("vi-VN");
+}
+
+const riskScores = {
+  CRITICAL: 4,
+  HIGH: 3,
+  LOW: 1,
+  MEDIUM: 2
+};
+
+const riskLabels = ["", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
+
+function operationRecommendation(riskLevel: string) {
+  if (riskLevel === "CRITICAL") return "STOP";
+  if (riskLevel === "HIGH") return "LIMITED";
+  return "NORMAL";
+}
+
+function sameDate(left: string, right: string) {
+  return new Date(left).toISOString().slice(0, 10) === new Date(right).toISOString().slice(0, 10);
+}
+
+function aiRiskLevelFromScore(score: number) {
+  if (score >= 75) return "CRITICAL";
+  if (score >= 50) return "HIGH";
+  if (score >= 25) return "MEDIUM";
+  return "LOW";
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function processingStepIndex(step: ForecastProcessingStep) {
+  return Math.max(0, forecastProcessingSteps.findIndex((item) => item.key === step));
 }
 
 export function ForecastPlanningPage() {
@@ -30,9 +108,12 @@ export function ForecastPlanningPage() {
   const [forecastLoading, setForecastLoading] = useState(false);
   const [error, setError] = useState("");
   const [forecastError, setForecastError] = useState("");
+  const [mlAnalysis, setMlAnalysis] = useState<ForecastRiskAnalysis | null>(null);
+  const [mlError, setMlError] = useState("");
   const [lastForecastUpdatedAt, setLastForecastUpdatedAt] = useState<Date | null>(null);
   const [message, setMessage] = useState("");
   const [nextForecastRefreshAt, setNextForecastRefreshAt] = useState<Date | null>(null);
+  const [processingStep, setProcessingStep] = useState<ForecastProcessingStep>(null);
 
   useEffect(() => {
     let active = true;
@@ -79,7 +160,9 @@ export function ForecastPlanningPage() {
 
   async function handleCreateForecastPlan() {
     setLoading(true);
+    setProcessingStep("forecast");
     setError("");
+    setMlError("");
     setMessage("");
     try {
       const nextPlan = await createForecastPlan({
@@ -87,13 +170,53 @@ export function ForecastPlanningPage() {
         portCode: portCode.trim() || "DNTSA"
       });
       setPlan(nextPlan);
+      const analysisInput = {
+        portCode: nextPlan.dataset.portCode,
+        items: nextPlan.items.map((item) => {
+          const forecastDay = forecast?.days.find((day) => sameDate(day.date, item.plannedAt));
+          return {
+            humidityPct: forecastDay?.humidityPct ?? null,
+            plannedAt: item.plannedAt,
+            pressureHpa: forecastDay?.pressureHpa ?? null,
+            rainRiskLevel: item.rainRiskLevel,
+            rainfallMm: forecastDay?.rainMm ?? null,
+            ruleRiskLevel: item.riskLevel,
+            temperatureC: forecastDay?.temperatureDayC ?? null,
+            visibilityKm: forecastDay?.visibilityKm ?? null,
+            visibilityRiskLevel: item.visibilityRiskLevel,
+            windRiskLevel: item.windRiskLevel,
+            windSpeedMs: forecastDay?.windSpeedMs ?? null
+          };
+        })
+      };
+      setProcessingStep("pca");
+      await delay(ANALYSIS_STEP_DELAY_MS);
+      setProcessingStep("kmeans");
+      await delay(ANALYSIS_STEP_DELAY_MS);
+      setProcessingStep("gemini");
+      setMlAnalysis(await analyzeForecastRisk(analysisInput));
       setMessage("Đã cập nhật kế hoạch dự báo từ OpenWeather");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Không tạo được kế hoạch dự báo");
+      setMlAnalysis(null);
+      setMlError(requestError instanceof Error ? requestError.message : "Không phân tích được dữ liệu ML");
     } finally {
       setLoading(false);
+      setProcessingStep(null);
     }
   }
+
+  const planChartData = plan?.items.map((item) => ({
+    date: new Date(item.plannedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
+    riskScore: riskScores[item.riskLevel] ?? 1
+  })) ?? [];
+  const mlChartData = mlAnalysis?.items.map((item) => ({
+    date: new Date(item.plannedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
+    score: item.pcaRiskScore
+  })) ?? [];
+  const currentProcessingIndex = processingStepIndex(processingStep);
+  const currentProcessingStep = forecastProcessingSteps[currentProcessingIndex] ?? forecastProcessingSteps[0];
+  const processingProgress = processingStep ? currentProcessingStep.progress : 0;
 
   return (
     <section className="page-grid simulation-page">
@@ -151,6 +274,35 @@ export function ForecastPlanningPage() {
 
         {message ? <p className="form-success">{message}</p> : null}
         {error ? <p className="form-error">{error}</p> : null}
+        {loading && processingStep ? (
+          <div aria-label="Tiến trình phân tích PCA K-Means Gemini" className="forecast-analysis-loader">
+            <div className="forecast-analysis-loader-head">
+              <div>
+                <strong>{currentProcessingStep.label}</strong>
+                <span>{currentProcessingStep.description}</span>
+              </div>
+              <b>{processingProgress}%</b>
+            </div>
+            <div className="forecast-analysis-track">
+              <span style={{ width: `${processingProgress}%` }} />
+            </div>
+            <div className="forecast-analysis-steps">
+              {forecastProcessingSteps.map((step, index) => (
+                <div
+                  className={[
+                    "forecast-analysis-step",
+                    index < currentProcessingIndex ? "is-done" : "",
+                    index === currentProcessingIndex ? "is-active" : ""
+                  ].filter(Boolean).join(" ")}
+                  key={step.key}
+                >
+                  <i />
+                  <span>{step.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {plan ? (
           <>
@@ -159,18 +311,162 @@ export function ForecastPlanningPage() {
               <span>{plan.dataset.description}</span>
               <small>{plan.dataset.snapshotCount} điểm dự báo · {plan.dataset.portCode}</small>
             </div>
-            <div className="simulation-forecast-list">
-              {plan.items.map((item) => (
-                <div className="simulation-forecast-row" key={item.plannedAt}>
-                  <div>
-                    <strong>{new Date(item.plannedAt).toLocaleDateString("vi-VN")}</strong>
-                    <small>{item.summary}</small>
+            <div className="forecast-plan-visual-grid">
+              <div aria-label="Timeline dự báo vận hành 5 ngày" className="forecast-plan-timeline">
+                {plan.items.map((item) => (
+                  <div className={`forecast-plan-timeline-item risk-${item.riskLevel.toLowerCase()}`} key={item.plannedAt}>
+                    <div className="forecast-plan-time-marker">
+                      <span />
+                    </div>
+                    <div className="forecast-plan-timeline-content">
+                      <div className="forecast-plan-timeline-head">
+                        <strong>{new Date(item.plannedAt).toLocaleDateString("vi-VN")}</strong>
+                        <Badge tone={riskTone(item.riskLevel)}>{item.riskLevel}</Badge>
+                      </div>
+                      <p>{item.summary}</p>
+                      <div className="forecast-plan-metrics">
+                        <small>Gió: {item.windRiskLevel}</small>
+                        <small>Mưa: {item.rainRiskLevel}</small>
+                        <small>Tầm nhìn: {item.visibilityRiskLevel}</small>
+                      </div>
+                      <div className="forecast-plan-operation">
+                        <span>Khuyến nghị vận hành</span>
+                        <strong>{operationRecommendation(item.riskLevel)}</strong>
+                      </div>
+                    </div>
                   </div>
-                  <Badge tone={riskTone(item.riskLevel)}>{item.riskLevel}</Badge>
-                  <span>{item.operationPlan}</span>
+                ))}
+              </div>
+              <div aria-label="Biểu đồ rủi ro dự báo 5 ngày" className="forecast-plan-chart">
+                <div className="card-head">
+                  <div>
+                    <h3>Biểu đồ rủi ro 5 ngày</h3>
+                    <p>Đường xu hướng đánh giá rủi ro vận hành từ dữ liệu dự báo.</p>
+                  </div>
                 </div>
-              ))}
+                <LineChart
+                  height={280}
+                  margin={{ bottom: 36, left: 48, right: 20, top: 20 }}
+                  series={[{
+                    area: true,
+                    color: "#0f766e",
+                    curve: "linear",
+                    data: planChartData.map((item) => item.riskScore),
+                    label: "Mức rủi ro"
+                  }]}
+                  xAxis={[{
+                    data: planChartData.map((item) => item.date),
+                    scaleType: "point"
+                  }]}
+                  yAxis={[{
+                    max: 4,
+                    min: 1,
+                    tickMinStep: 1,
+                    valueFormatter: (value: number) => riskLabels[Number(value)] ?? ""
+                  }]}
+                />
+              </div>
             </div>
+            {mlError ? <p className="form-error">{mlError}</p> : null}
+            {mlAnalysis ? (
+              <article aria-label="Phân tích ML PCA K-Means dự báo 5 ngày" className="forecast-ml-card">
+                <div className="card-head">
+                  <div>
+                    <h3>Phân tích ML PCA + K-Means</h3>
+                    <p>So sánh rule engine với điểm PCA và cụm trạng thái thời tiết từ K-Means.</p>
+                  </div>
+                  <Badge tone="info">{mlAnalysis.modelVersion}</Badge>
+                </div>
+                <div aria-label="Biểu đồ AI PCA score 5 ngày" className="forecast-ml-chart">
+                  <div className="forecast-ml-chart-body">
+                    <div className="forecast-ml-line">
+                      <LineChart
+                        height={240}
+                        margin={{ bottom: 36, left: 48, right: 20, top: 18 }}
+                        series={[{
+                          color: "#2563eb",
+                          curve: "linear",
+                          data: mlChartData.map((item) => item.score),
+                          showMark: true,
+                          label: "AI PCA score"
+                        }]}
+                        xAxis={[{
+                          data: mlChartData.map((item) => item.date),
+                          scaleType: "point"
+                        }]}
+                        yAxis={[{
+                          max: 100,
+                          min: 0,
+                          tickMinStep: 20
+                        }]}
+                      />
+                    </div>
+                    <div className="forecast-ml-legend" aria-label="Chú thích mức độ AI score">
+                      <span><i className="score-low" />0-24 LOW</span>
+                      <span><i className="score-medium" />25-49 MEDIUM</span>
+                      <span><i className="score-high" />50-74 HIGH</span>
+                      <span><i className="score-critical" />75-100 CRITICAL</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="forecast-ml-grid">
+                  {mlAnalysis.items.map((item) => {
+                    const aiRiskLevel = aiRiskLevelFromScore(item.pcaRiskScore);
+                    return (
+                      <div className={`forecast-ml-item risk-${aiRiskLevel.toLowerCase()}`} key={item.plannedAt}>
+                        <div>
+                          <strong>{new Date(item.plannedAt).toLocaleDateString("vi-VN")}</strong>
+                          <span>{item.clusterLabel}</span>
+                        </div>
+                        <Badge tone={riskTone(aiRiskLevel)}>AI Risk {aiRiskLevel}</Badge>
+                        <div className="forecast-ml-score">
+                          <span>ML Score {item.pcaRiskScore}</span>
+                          <strong>{item.mlRecommendation}</strong>
+                        </div>
+                        <small>Rule {item.ruleRiskLevel}</small>
+                        <small>{item.dominantFactors.join(" / ")}</small>
+                      </div>
+                    );
+                  })}
+                </div>
+                {mlAnalysis.llmPlanAnalysis ? (
+                  <section aria-label="Phân tích kế hoạch vận hành bằng LLM" className="forecast-llm-plan">
+                    <div className="forecast-llm-head">
+                      <div>
+                        <h3>Phân tích kế hoạch vận hành bằng LLM</h3>
+                        <p>{mlAnalysis.llmPlanAnalysis.summary}</p>
+                      </div>
+                      <Badge tone={mlAnalysis.llmPlanAnalysis.isConfigured ? "success" : "muted"}>
+                        {mlAnalysis.llmPlanAnalysis.provider} · {mlAnalysis.llmPlanAnalysis.model}
+                      </Badge>
+                    </div>
+                    <div className="forecast-llm-grid">
+                      {mlAnalysis.llmPlanAnalysis.items.map((item) => (
+                        <div className={`forecast-llm-item mode-${item.operationMode.toLowerCase()}`} key={`${item.plannedAt}-${item.operationMode}`}>
+                          <div className="forecast-llm-item-head">
+                            <strong>{new Date(item.plannedAt).toLocaleDateString("vi-VN")}</strong>
+                            <Badge tone={operationModeTone(item.operationMode)}>Chế độ {item.operationMode}</Badge>
+                          </div>
+                          <p>{item.planChange}</p>
+                          <small>{item.reason}</small>
+                          <div className="forecast-llm-actions">
+                            <span>Hành động</span>
+                            {item.recommendedActions.map((action) => (
+                              <strong key={action}>{action}</strong>
+                            ))}
+                          </div>
+                          <div className="forecast-llm-affected">
+                            {item.affectedOperations.map((operation) => (
+                              <span key={operation}>{operation}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+              </article>
+            ) : null}
           </>
         ) : (
           <div className="simulation-forecast-empty">

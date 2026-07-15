@@ -33,6 +33,7 @@ public sealed class OperationLogController : ControllerBase
             Summary = operationEvent.Summary,
             OccurredAt = operationEvent.OccurredAt,
             SimulationSessionId = operationEvent.SimulationSessionId,
+            SimulationDatasetName = operationEvent.SimulationDatasetName,
             IsSimulation = operationEvent.SimulationSessionId.HasValue,
             Tone = GetTone(operationEvent.EventType)
         }).ToList());
