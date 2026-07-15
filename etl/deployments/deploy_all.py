@@ -10,19 +10,19 @@ from flows.historical_backfill import historical_backfill_flow
 def deploy_all():
     """Tạo tất cả deployments vào Prefect Server."""
 
-    # Weather Collector: mỗi 15 phút
+    # Weather Collector: mỗi 10 phút
     collector_deployment = Deployment.build_from_flow(
         flow=weather_collector_flow,
         name="prod",
         version="1.0.0",
-        schedule=IntervalSchedule(interval=timedelta(minutes=15)),
+        schedule=IntervalSchedule(interval=timedelta(minutes=10)),
         work_pool_name="porms-pool",
         tags=["production", "weather", "real-time"],
-        description="Thu thập thời tiết mỗi 15 phút cho tất cả cảng active",
+        description="Thu thập thời tiết mỗi 10 phút cho tất cả cảng active",
         parameters={},
     )
     collector_deployment.apply()
-    print("✅ weather-collector deployed (every 15 min)")
+    print("✅ weather-collector deployed (every 10 min)")
 
     # DW Loader: mỗi giờ
     loader_deployment = Deployment.build_from_flow(

@@ -13,7 +13,6 @@ type TopbarProps = {
 
 const pageTitles: Record<string, string> = {
   "/alerts": "Cảnh báo",
-  "/analytics": "Phân tích BI",
   "/change-password": "Đổi mật khẩu",
   "/dashboard": "Dashboard",
   "/forecast-planning": "Dự báo vận hành",

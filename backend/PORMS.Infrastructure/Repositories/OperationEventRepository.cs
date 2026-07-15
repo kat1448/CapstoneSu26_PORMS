@@ -38,8 +38,15 @@ public sealed class OperationEventRepository
             LEFT JOIN operational.users u ON u.id = e.actor_user_id
             LEFT JOIN operational.simulation_sessions ss ON ss.id = e.simulation_session_id
             LEFT JOIN operational.simulation_datasets sd ON sd.id = ss.dataset_id
-            WHERE (@simulationOnly = TRUE AND e.simulation_session_id IS NOT NULL)
-               OR (@simulationOnly = FALSE AND e.simulation_session_id IS NULL)
+            WHERE (
+                    (@simulationOnly = TRUE AND e.simulation_session_id IS NOT NULL)
+                    OR (@simulationOnly = FALSE AND e.simulation_session_id IS NULL)
+                  )
+              AND NOT (
+                    @simulationOnly = FALSE
+                    AND e.event_type = 'WEATHER_FETCHED'
+                    AND e.port_id IS NULL
+                  )
             ORDER BY e.occurred_at DESC
             LIMIT 50;
             """;
