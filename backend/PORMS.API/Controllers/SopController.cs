@@ -7,7 +7,7 @@ using System.Text.Json;
 namespace PORMS.API.Controllers;
 
 [ApiController]
-[Authorize(Policy = "AdminOrSuperAdmin")]
+[Authorize(Policy = "AdminOrPortManager")]
 [Route("api/sop-rules")]
 public sealed class SopController : ControllerBase
 {

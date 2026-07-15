@@ -30,14 +30,14 @@ const emptyForm: UserFormState = {
   fullName: "",
   password: "",
   portId: "",
-  role: "STANDARD_USER",
+  role: "OPERATOR",
   status: "ACTIVE"
 };
 
 const roleOptions: Array<{ label: string; value: UserRole }> = [
-  { label: "Super Admin", value: "SUPER_ADMIN" },
-  { label: "Admin", value: "ADMIN" },
-  { label: "Standard User", value: "STANDARD_USER" }
+  { label: "ADMIN - System Administrator", value: "ADMIN" },
+  { label: "PORT MANAGER - Port Operations Manager", value: "PORT_MANAGER" },
+  { label: "OPERATOR - Port Operations Supervisor", value: "OPERATOR" }
 ];
 
 const statusOptions: Array<{ label: string; value: UserStatus }> = [
@@ -51,7 +51,7 @@ function toNullablePortId(portId: string) {
 }
 
 function nextPortForRole(role: UserRole, currentPortId: string, fallbackPortId: string) {
-  if (role === "SUPER_ADMIN") {
+  if (role === "ADMIN") {
     return "";
   }
 
@@ -64,7 +64,7 @@ function formFromUser(user: UserRecord, fallbackPortId: string): UserFormState {
     email: user.email,
     fullName: user.fullName,
     password: "",
-    portId: role === "SUPER_ADMIN" ? "" : user.portId ?? fallbackPortId,
+    portId: role === "ADMIN" ? "" : user.portId ?? fallbackPortId,
     role,
     status: user.status
   };
@@ -89,7 +89,7 @@ export function UserFormPage({ mode }: UserFormPageProps) {
         const options = ports.map((port) => ({ label: port.portName, value: port.portId }));
         setPortOptions(options);
         setForm((value) => {
-          if (value.role === "SUPER_ADMIN" || value.portId.trim() || options.length === 0) {
+          if (value.role === "ADMIN" || value.portId.trim() || options.length === 0) {
             return value;
           }
 
@@ -259,7 +259,7 @@ export function UserFormPage({ mode }: UserFormPageProps) {
               onChange={(event) => setForm((value) => ({ ...value, portId: event.target.value }))}
               value={form.portId}
             >
-              <option disabled={form.role !== "SUPER_ADMIN"} value="">Tất cả</option>
+              <option disabled={form.role !== "ADMIN"} value="">Tất cả</option>
               {portOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>

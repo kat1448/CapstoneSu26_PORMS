@@ -47,7 +47,7 @@ describe("taskService", () => {
     const response = [{
       email: "operator@porms.vn",
       fullName: "Operator",
-      role: "STANDARD_USER",
+      role: "OPERATOR",
       userId: "user-1"
     }];
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(response), { status: 200 }));

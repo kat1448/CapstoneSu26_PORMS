@@ -44,9 +44,9 @@ function formatClock(date: Date) {
 }
 
 const roleLabels: Record<DemoUser["role"], string> = {
-  SUPER_ADMIN: "Super Admin",
-  ADMIN: "Admin",
-  STANDARD_USER: "Standard User"
+  ADMIN: "System Administrator",
+  PORT_MANAGER: "Port Operations Manager",
+  OPERATOR: "Port Operations Supervisor"
 };
 
 export function Topbar({ currentUser, onLogout, onMenuToggle, onRefresh, unreadAlertCount }: TopbarProps) {

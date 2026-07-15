@@ -24,7 +24,7 @@ public sealed class RiskController : ControllerBase
     }
 
     [HttpGet("thresholds")]
-    [Authorize(Policy = "AdminOrSuperAdmin")]
+    [Authorize(Policy = "AdminOrPortManager")]
     public async Task<ActionResult<RiskConfigResponse>> GetThresholds(
         [FromServices] RiskRepository repository,
         CancellationToken cancellationToken)
@@ -34,7 +34,7 @@ public sealed class RiskController : ControllerBase
     }
 
     [HttpPut("thresholds")]
-    [Authorize(Policy = "AdminOrSuperAdmin")]
+    [Authorize(Policy = "AdminOrPortManager")]
     public async Task<ActionResult<RiskConfigResponse>> SaveThresholds(
         [FromServices] RiskRepository repository,
         [FromBody] SaveRiskThresholdsRequest request,
@@ -62,7 +62,7 @@ public sealed class RiskController : ControllerBase
     }
 
     [HttpPut("zones/{zoneId:guid}/threshold-overrides")]
-    [Authorize(Policy = "AdminOrSuperAdmin")]
+    [Authorize(Policy = "AdminOrPortManager")]
     public async Task<ActionResult<RiskConfigResponse>> SaveZoneThresholdOverrides(
         [FromServices] RiskRepository repository,
         Guid zoneId,
@@ -90,7 +90,7 @@ public sealed class RiskController : ControllerBase
     }
 
     [HttpDelete("zones/{zoneId:guid}/threshold-overrides/{overrideId:guid}")]
-    [Authorize(Policy = "AdminOrSuperAdmin")]
+    [Authorize(Policy = "AdminOrPortManager")]
     public async Task<IActionResult> DeleteZoneThresholdOverride(
         [FromServices] RiskRepository repository,
         Guid zoneId,
