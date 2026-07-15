@@ -30,13 +30,23 @@ public sealed class OperationEventRepository
                    e.entity_id,
                    e.summary,
                    e.occurred_at,
-                   e.simulation_session_id
+                   e.simulation_session_id,
+                   sd.name AS simulation_dataset_name
             FROM operational.operation_events e
             LEFT JOIN operational.ports p ON p.id = e.port_id
             LEFT JOIN operational.zones z ON z.id = e.zone_id
             LEFT JOIN operational.users u ON u.id = e.actor_user_id
-            WHERE (@simulationOnly = TRUE AND e.simulation_session_id IS NOT NULL)
-               OR (@simulationOnly = FALSE AND e.simulation_session_id IS NULL)
+            LEFT JOIN operational.simulation_sessions ss ON ss.id = e.simulation_session_id
+            LEFT JOIN operational.simulation_datasets sd ON sd.id = ss.dataset_id
+            WHERE (
+                    (@simulationOnly = TRUE AND e.simulation_session_id IS NOT NULL)
+                    OR (@simulationOnly = FALSE AND e.simulation_session_id IS NULL)
+                  )
+              AND NOT (
+                    @simulationOnly = FALSE
+                    AND e.event_type = 'WEATHER_FETCHED'
+                    AND e.port_id IS NULL
+                  )
             ORDER BY e.occurred_at DESC
             LIMIT 50;
             """;
@@ -62,7 +72,8 @@ public sealed class OperationEventRepository
                 reader.IsDBNull(10) ? null : reader.GetGuid(10),
                 reader.GetString(11),
                 reader.GetFieldValue<DateTimeOffset>(12),
-                reader.IsDBNull(13) ? null : reader.GetGuid(13)));
+                reader.IsDBNull(13) ? null : reader.GetGuid(13),
+                reader.IsDBNull(14) ? null : reader.GetString(14)));
         }
 
         return results;
@@ -83,4 +94,5 @@ public sealed record OperationEventReadModel(
     Guid? EntityId,
     string Summary,
     DateTimeOffset OccurredAt,
-    Guid? SimulationSessionId);
+    Guid? SimulationSessionId,
+    string? SimulationDatasetName);
