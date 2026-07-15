@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "../components/common/Badge";
 import { useDemoRefresh } from "../hooks/useDemoRefresh";
 import { getOperationEvents } from "../services/logService";
@@ -125,12 +125,21 @@ export function LogPage({ refreshKey }: LogPageProps) {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
+  const loadEvents = useCallback(() => {
+    void getOperationEvents(scope).then(setEvents);
+  }, [scope]);
+
   useEffect(() => {
     setCurrentPage(1);
     setSelectedRunKey(null);
     setSimulationSearchTerm("");
-    void getOperationEvents(scope).then(setEvents);
-  }, [refreshKey, scope]);
+    loadEvents();
+  }, [loadEvents, refreshKey]);
+
+  useEffect(() => {
+    const timer = window.setInterval(loadEvents, 600_000);
+    return () => window.clearInterval(timer);
+  }, [loadEvents]);
 
   const runs = useMemo(() => groupOperationRuns(events), [events]);
   const portOptions = useMemo(

@@ -57,8 +57,7 @@ export const navigationGroups: NavigationGroup[] = [
     items: [
       { icon: "play", label: "Mô phỏng", path: "/simulation", roles: allRoles },
       { icon: "chart", label: "Dự báo vận hành", path: "/forecast-planning", roles: adminRoles },
-      { icon: "chart", label: "Thống kê và đánh giá", path: "/forecast-evaluation", roles: adminRoles },
-      { icon: "chart", label: "Phân tích BI", path: "/analytics", roles: adminRoles }
+      { icon: "chart", label: "Thống kê và đánh giá", path: "/forecast-evaluation", roles: adminRoles }
     ]
   }
 ];
