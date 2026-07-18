@@ -1,5 +1,5 @@
 import { getAlerts as getAlertsData } from "../mock/demoData";
-import { formatTimeLabel, requestJson, withMockFallback } from "./api";
+import { formatTimeLabel, requestJson, requestVoid, withMockFallback } from "./api";
 import type { TaskLogRecord } from "./taskService";
 import type { AlertItem } from "../types/alert";
 
@@ -33,4 +33,8 @@ export async function getAlert(alertId: string): Promise<AlertItem> {
 
 export async function getAlertTasks(alertId: string): Promise<TaskLogRecord[]> {
   return requestJson<TaskLogRecord[]>(`/api/alerts/${alertId}/tasks`);
+}
+
+export async function acknowledgeAlert(alertId: string): Promise<void> {
+  await requestVoid(`/api/alerts/${alertId}/acknowledge`, { method: "PATCH" });
 }

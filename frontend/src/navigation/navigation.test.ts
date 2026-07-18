@@ -16,6 +16,7 @@ describe("role navigation", () => {
     expect(paths).toContain("/ports");
     expect(paths).toContain("/simulation");
     expect(paths).toContain("/forecast-planning");
+    expect(paths).toContain("/ai-long-range-forecast");
     expect(paths).toContain("/forecast-evaluation");
   });
 
@@ -30,6 +31,7 @@ describe("role navigation", () => {
     expect(paths).toContain("/risk-config");
     expect(paths).toContain("/sop-rules");
     expect(paths).toContain("/forecast-planning");
+    expect(paths).toContain("/ai-long-range-forecast");
     expect(paths).toContain("/forecast-evaluation");
     expect(paths).not.toContain("/users");
     expect(paths).not.toContain("/ports");
@@ -54,6 +56,7 @@ describe("role navigation", () => {
     expect(isRouteAllowed("PORT_MANAGER", "/users")).toBe(false);
     expect(isRouteAllowed("PORT_MANAGER", "/ports")).toBe(false);
     expect(isRouteAllowed("PORT_MANAGER", "/forecast-planning")).toBe(true);
+    expect(isRouteAllowed("PORT_MANAGER", "/ai-long-range-forecast")).toBe(true);
     expect(isRouteAllowed("PORT_MANAGER", "/forecast-evaluation")).toBe(true);
     expect(isRouteAllowed("ADMIN", "/users")).toBe(true);
     expect(isRouteAllowed("ADMIN", "/ports/new")).toBe(true);

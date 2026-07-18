@@ -1,3 +1,6 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
 using PORMS.Infrastructure.Repositories;
@@ -59,6 +62,30 @@ public sealed class AlertController : ControllerBase
         return Ok(tasks.Select(TaskController.ToResponse).ToList());
     }
 
+    [HttpPatch("{alertId:guid}/acknowledge")]
+    [Authorize(Policy = "AllAppUsers")]
+    public async Task<ActionResult<AlertResponse>> AcknowledgeAlert(
+        Guid alertId,
+        [FromServices] AlertRepository repository,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(User);
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var acknowledged = await repository.AcknowledgeAlertAsync(alertId, userId.Value, cancellationToken);
+        if (!acknowledged)
+        {
+            return NotFound();
+        }
+
+        var alerts = await repository.GetAlertsAsync(cancellationToken);
+        var alert = alerts.SingleOrDefault(item => item.AlertId == alertId);
+        return alert is null ? NotFound() : Ok(ToResponse(alert));
+    }
+
     private static AlertResponse ToResponse(AlertReadModel alert) =>
         new()
         {
@@ -79,4 +106,12 @@ public sealed class AlertController : ControllerBase
             AcknowledgedCount = alert.AcknowledgedCount,
             Read = alert.RecipientCount > 0 && alert.ReadCount >= alert.RecipientCount
         };
+
+    private static Guid? GetUserId(ClaimsPrincipal user)
+    {
+        var rawUserId = user.FindFirstValue(JwtRegisteredClaimNames.Sub)
+            ?? user.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        return Guid.TryParse(rawUserId, out var userId) ? userId : null;
+    }
 }
