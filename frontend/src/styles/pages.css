@@ -1013,6 +1013,182 @@
   margin-top: 3px;
 }
 
+.ai-forecast-page {
+  gap: 16px;
+}
+
+.ai-forecast-source-card,
+.ai-forecast-main-card {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.ai-forecast-seed-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.ai-forecast-seed-day {
+  background: #f8fbfd;
+  border: 1px solid #e3edf5;
+  border-left: 4px solid #0f766e;
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.ai-forecast-seed-day strong,
+.ai-forecast-seed-day span,
+.ai-forecast-seed-day small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-forecast-seed-day strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.ai-forecast-seed-day span,
+.ai-forecast-seed-day small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ai-horizon-tabs {
+  align-items: center;
+  background: #f8fbfd;
+  border: 1px solid #e3edf5;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+}
+
+.ai-horizon-tabs button {
+  background: #fff;
+  border: 1px solid #d8e5ee;
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.ai-horizon-tabs button.is-active {
+  background: #102a43;
+  border-color: #102a43;
+  color: #fff;
+}
+
+.ai-horizon-tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.ai-forecast-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ai-forecast-summary-grid > div {
+  background: #fff;
+  border: 1px solid #e3edf5;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.ai-forecast-summary-grid span,
+.ai-forecast-summary-grid small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.ai-forecast-summary-grid strong {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.ai-forecast-chart-card {
+  background: #f8fbfd;
+  border: 1px solid #e3edf5;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.ai-forecast-chart-card h3 {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 850;
+  margin: 0 0 4px;
+}
+
+.ai-forecast-chart-card p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.ai-forecast-line-chart {
+  background: #fff;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px;
+}
+
+.ai-forecast-line-chart .MuiChartsAxis-tickLabel,
+.ai-forecast-line-chart .MuiChartsAxis-label {
+  fill: #53687b;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.ai-forecast-score-legend {
+  background: #fff;
+  border: 1px solid #e3edf5;
+  border-left: 0;
+  border-radius: 8px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  padding: 10px 12px;
+}
+
+.ai-forecast-table td,
+.ai-forecast-table th {
+  text-align: left;
+}
+
+.ai-forecast-explain {
+  background: #fff;
+  border: 1px solid #e3edf5;
+  border-radius: 8px;
+  padding: 14px;
+}
+
 .forecast-llm-plan {
   border-top: 1px solid #e8eef4;
   display: grid;
