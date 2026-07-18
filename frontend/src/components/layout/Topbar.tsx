@@ -15,6 +15,7 @@ const pageTitles: Record<string, string> = {
   "/alerts": "Cảnh báo",
   "/change-password": "Đổi mật khẩu",
   "/dashboard": "Dashboard",
+  "/ai-long-range-forecast": "AI dự đoán dài hạn",
   "/forecast-planning": "Dự báo vận hành",
   "/operation-log": "Nhật ký vận hành",
   "/ports": "Cảng & khu vực",

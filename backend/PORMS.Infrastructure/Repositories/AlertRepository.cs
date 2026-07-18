@@ -108,6 +108,50 @@ public sealed class AlertRepository
 
         return results;
     }
+
+    public async Task<bool> AcknowledgeAlertAsync(
+        Guid alertId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+
+        const string sql = """
+            WITH selected_alert AS (
+                SELECT id
+                FROM operational.alerts
+                WHERE id = @alertId
+            ),
+            upserted_receipt AS (
+                INSERT INTO operational.alert_receipts (
+                    alert_id,
+                    user_id,
+                    delivered_at,
+                    read_at,
+                    acknowledged_at
+                )
+                SELECT
+                    id,
+                    @userId,
+                    NOW(),
+                    NOW(),
+                    NOW()
+                FROM selected_alert
+                ON CONFLICT (alert_id, user_id)
+                DO UPDATE
+                SET read_at = COALESCE(operational.alert_receipts.read_at, NOW()),
+                    acknowledged_at = COALESCE(operational.alert_receipts.acknowledged_at, NOW())
+                RETURNING alert_id
+            )
+            SELECT EXISTS (SELECT 1 FROM upserted_receipt);
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("alertId", alertId);
+        command.Parameters.AddWithValue("userId", userId);
+
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? false);
+    }
 }
 
 public sealed record AlertReadModel(

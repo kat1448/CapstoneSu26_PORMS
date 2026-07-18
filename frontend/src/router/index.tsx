@@ -7,6 +7,7 @@ import { AlertPage } from "../pages/AlertPage";
 import { ChangePasswordPage } from "../pages/ChangePasswordPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { ForecastPlanningPage } from "../pages/ForecastPlanningPage";
+import { AiLongRangeForecastPage } from "../pages/AiLongRangeForecastPage";
 import { ForecastEvaluationPage } from "../pages/ForecastEvaluationPage";
 import { LogPage } from "../pages/LogPage";
 import { LoginPage } from "../pages/LoginPage";
@@ -83,6 +84,7 @@ export function buildRouter(context: RouterContext) {
         { path: "sop-rules", element: guarded("/sop-rules", <SopRulesPage />) },
         { path: "simulation", element: guarded("/simulation", <SimulationPage refreshKey={context.refreshKey} />) },
         { path: "forecast-planning", element: guarded("/forecast-planning", <ForecastPlanningPage />) },
+        { path: "ai-long-range-forecast", element: guarded("/ai-long-range-forecast", <AiLongRangeForecastPage />) },
         { path: "forecast-evaluation", element: guarded("/forecast-evaluation", <ForecastEvaluationPage />) },
         { path: "simulation-results", element: guarded("/simulation-results", <SimulationResultsPage refreshKey={context.refreshKey} />) },
         { path: "profile", element: <ProfilePage currentUser={context.currentUser!} /> },

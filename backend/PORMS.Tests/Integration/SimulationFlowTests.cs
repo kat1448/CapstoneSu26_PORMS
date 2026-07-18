@@ -363,6 +363,41 @@ public sealed class SimulationFlowTests
     }
 
     [Fact]
+    public async Task AnalyzeForecastRisk_ReturnsEveryLongRangeForecastItem()
+    {
+        var client = _factory.CreateClient();
+        var items = Enumerable.Range(1, 14)
+            .Select(day => new
+            {
+                plannedAt = DateTimeOffset.UtcNow.AddDays(day),
+                ruleRiskLevel = day > 10 ? "HIGH" : "MEDIUM",
+                windRiskLevel = day > 10 ? "HIGH" : "MEDIUM",
+                rainRiskLevel = "LOW",
+                visibilityRiskLevel = "LOW",
+                windSpeedMs = 8.0 + day * 0.3,
+                rainfallMm = 2.0 + day * 0.2,
+                visibilityKm = 10.0,
+                humidityPct = 76,
+                pressureHpa = 1008,
+                temperatureC = 29
+            })
+            .ToArray();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/ml/forecast-risk-analysis",
+            new
+            {
+                portCode = "DNTSA",
+                items
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(14, payload.RootElement.GetProperty("items").GetArrayLength());
+    }
+
+    [Fact]
     public async Task AnalyzeForecastRisk_MediumRiskRecommendationIsNormal()
     {
         using var factory = new IntegrationTestWebApplicationFactory();

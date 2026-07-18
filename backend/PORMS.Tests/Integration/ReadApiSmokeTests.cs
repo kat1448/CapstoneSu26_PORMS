@@ -107,13 +107,13 @@ public sealed class ReadApiSmokeTests
         Assert.Equal("Updated port name", updated.PortName);
     }
 
-    private static string CreateToken(string role)
+    private static string CreateToken(string role, Guid? userId = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("PORMS-development-signing-key-change-in-production-2026"));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var claims = new[]
         {
-            new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString()),
+            new Claim(JwtRegisteredClaimNames.Sub, (userId ?? Guid.NewGuid()).ToString()),
             new Claim(JwtRegisteredClaimNames.Email, $"{role.ToLowerInvariant()}@porms.vn"),
             new Claim(ClaimTypes.Name, role),
             new Claim(ClaimTypes.Role, role),
@@ -146,6 +146,36 @@ public sealed class ReadApiSmokeTests
         Assert.Equal("SYSTEM", alert.AlertType);
         Assert.Equal("HIGH", alert.Severity);
         Assert.Equal("Seeded smoke alert", alert.Title);
+    }
+
+    [Fact]
+    public async Task AcknowledgeAlert_MarksAlertReadForCurrentUser()
+    {
+        var alertId = Guid.NewGuid();
+        try
+        {
+            await _factory.SeedAlertAsync(alertId);
+            var user = await _factory.GetFirstActiveUserAsync();
+            var client = _factory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                CreateToken("ADMIN", user.UserId));
+
+            var response = await client.PatchAsync($"/api/alerts/{alertId}/acknowledge", null);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var alert = await response.Content.ReadFromJsonAsync<AlertResponse>();
+            Assert.NotNull(alert);
+            Assert.Equal(alertId, alert!.AlertId);
+            Assert.True(alert.Read);
+            Assert.Equal(1, alert.ReadCount);
+            Assert.Equal(1, alert.AcknowledgedCount);
+        }
+        finally
+        {
+            await _factory.DeleteAlertAsync(alertId);
+        }
     }
 
     [Fact]
