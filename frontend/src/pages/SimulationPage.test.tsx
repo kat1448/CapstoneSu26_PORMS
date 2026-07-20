@@ -11,7 +11,6 @@ import {
   getSimulationMapPoints,
   getSimulationResult,
   getSimulationSnapshot,
-  runDemoSimulation,
   runSimulationDataset,
   updateSimulationDataset
 } from "../services/simulationService";
@@ -30,7 +29,6 @@ vi.mock("../services/simulationService", () => ({
   getSimulationMapPoints: vi.fn(),
   getSimulationResult: vi.fn(),
   getSimulationSnapshot: vi.fn(),
-  runDemoSimulation: vi.fn(),
   runSimulationDataset: vi.fn(),
   updateSimulationDataset: vi.fn()
 }));
@@ -178,9 +176,12 @@ describe("SimulationPage", () => {
     expect(await screen.findByText("Cang Tien Sa")).toBeInTheDocument();
   });
 
-  it("runs the demo from the settings panel", async () => {
-    vi.mocked(getSimulationSnapshot).mockResolvedValue(snapshot);
-    vi.mocked(runDemoSimulation).mockResolvedValue(undefined);
+  it("does not show the rerun button after a simulation is completed", async () => {
+    vi.mocked(getSimulationSnapshot).mockResolvedValue({
+      ...snapshot,
+      progressPercent: 100,
+      status: "COMPLETED"
+    });
 
     render(
       <MemoryRouter>
@@ -188,9 +189,9 @@ describe("SimulationPage", () => {
       </MemoryRouter>
     );
 
-    await screen.findByRole("button", { name: "Đang phát dữ liệu..." });
+    await screen.findByTestId("simulation-main-grid");
 
-    expect(runDemoSimulation).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Chạy lại" })).not.toBeInTheDocument();
   });
 
   it("opens the create data popup, saves a dataset, and selects it for simulation", async () => {
