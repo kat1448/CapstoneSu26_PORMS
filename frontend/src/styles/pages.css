@@ -2627,6 +2627,83 @@
   flex: 0 0 auto;
 }
 
+.forecast-evaluation-range {
+  display: grid;
+  gap: 8px;
+}
+
+.forecast-evaluation-range > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.forecast-evaluation-range .segmented-control {
+  width: max-content;
+}
+
+.forecast-evaluation-chart-card {
+  display: grid;
+  gap: 14px;
+}
+
+.forecast-evaluation-chart-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.forecast-evaluation-chart-toolbar > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.forecast-evaluation-chart-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.forecast-evaluation-chart-summary span {
+  align-items: baseline;
+  background: #f7fafc;
+  border: 1px solid #dbe8f3;
+  border-radius: 8px;
+  color: #52677a;
+  display: inline-flex;
+  gap: 6px;
+  min-height: 38px;
+  padding: 9px 12px;
+}
+
+.forecast-evaluation-chart-summary strong {
+  color: #102a43;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.forecast-evaluation-chart {
+  background: #ffffff;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  min-height: 320px;
+  overflow: hidden;
+  padding: 10px 16px 4px;
+  width: 100%;
+}
+
+.forecast-evaluation-chart .MuiChartsLegend-root text,
+.forecast-evaluation-chart .MuiChartsAxis-tickLabel {
+  fill: #52677a;
+  font-size: 12px;
+}
+
 .forecast-evaluation-table td strong,
 .forecast-evaluation-table td small {
   display: block;

@@ -11,7 +11,6 @@ import {
   getSimulationMapPoints,
   getSimulationResult,
   getSimulationSnapshot,
-  runDemoSimulation,
   runSimulationDataset,
   updateSimulationDataset
 } from "../services/simulationService";
@@ -186,13 +185,6 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
     : snapshot.status === "COMPLETED"
       ? "Mô phỏng hoàn tất"
       : "Sẵn sàng mô phỏng";
-
-  async function handleRunSimulation() {
-    setRunning(true);
-    await runDemoSimulation();
-    setSnapshot(await getSimulationSnapshot());
-    setRunning(false);
-  }
 
   async function handleSaveDataset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -636,14 +628,6 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
             <span>Rủi ro đỉnh: CRITICAL</span>
           </div>
           <button
-            className={isRunning ? "button button-danger simulation-action" : "button button-primary simulation-action"}
-            disabled={isRunning}
-            onClick={handleRunSimulation}
-            type="button"
-          >
-            {isRunning ? "Đang phát dữ liệu..." : snapshot.status === "COMPLETED" ? "Chạy lại" : "Bắt đầu mô phỏng"}
-          </button>
-          <button
             className="button button-secondary simulation-action"
             disabled={isRunning || selectedDatasetIds.length === 0}
             onClick={handleRunDataset}
@@ -664,7 +648,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
             {snapshot.feed.length === 0 ? (
               <div className="empty-state">
                 <strong>Chưa có dữ liệu mô phỏng</strong>
-                <span>Bấm “Bắt đầu mô phỏng” để phát dữ liệu.</span>
+                <span>Chọn bộ dữ liệu và bấm “Chạy dữ liệu đã chọn” để phát dữ liệu.</span>
               </div>
             ) : (
               snapshot.feed.map((item) => (
