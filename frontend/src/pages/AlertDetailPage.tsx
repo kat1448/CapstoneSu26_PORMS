@@ -12,6 +12,7 @@ import {
   type TaskLogRecord
 } from "../services/taskService";
 import type { AlertItem } from "../types/alert";
+import { riskLabel } from "../utils/displayLabels";
 
 type AssignmentFormState = {
   assignedUserId: string;
@@ -35,6 +36,20 @@ function badgeTone(level: string) {
   if (level === "CRITICAL") return "danger";
   if (level === "HIGH") return "warning";
   return "info";
+}
+
+function weatherFacts(message: string) {
+  const weatherMatch = message.match(
+    /gió cấp\s+(\d+).*?tốc độ\s+([\d.]+)\s*m\/s.*?lượng mưa\s+([\d.]+)\s*mm\/(?:giờ|h).*?tầm nhìn\s+([\d.]+)\s*km/i
+  );
+
+  return weatherMatch
+    ? [
+        ["Gió", `Cấp ${weatherMatch[1]} · ${weatherMatch[2]} m/s`],
+        ["Lượng mưa", `${weatherMatch[3]} mm/giờ`],
+        ["Tầm nhìn", `${weatherMatch[4]} km`]
+      ]
+    : [];
 }
 
 export function AlertDetailPage() {
@@ -124,6 +139,8 @@ export function AlertDetailPage() {
     }
   }
 
+  const alertFacts = alert ? weatherFacts(alert.message) : [];
+
   return (
     <section className="page-grid alert-detail-page">
       <div className="section-heading">
@@ -139,16 +156,53 @@ export function AlertDetailPage() {
       {loading ? <div className="card alert-task-detail">Đang tải chi tiết cảnh báo...</div> : null}
 
       {!loading && alert ? (
-        <div className="card alert-task-detail">
-          <div className="table-card-head">
-            <div>
+        <article className={`card alert-overview risk-${alert.severity.toLowerCase()}`}>
+          <header className="alert-overview-banner">
+            <div className="alert-overview-icon" aria-hidden="true">!</div>
+            <div className="alert-overview-title">
+              <span className="alert-overview-eyebrow">Cảnh báo cần xử lý ngay</span>
               <h3>{alert.title}</h3>
-              <p>{alert.portCode} - {alert.portName} | {alert.zoneName} | {alert.createdAt}</p>
+              <div className="alert-location-chips" aria-label="Vị trí và thời gian cảnh báo">
+                <span>{alert.portName}</span>
+                <span>{alert.zoneName}</span>
+                <time>{alert.createdAt}</time>
+              </div>
             </div>
-            <Badge tone={badgeTone(alert.severity)}>{alert.severity}</Badge>
+            <div className="alert-overview-level">
+              <span>Mức nguy hiểm</span>
+              <Badge tone={badgeTone(alert.severity)}>{riskLabel(alert.severity)}</Badge>
+            </div>
+          </header>
+
+          <div className="alert-overview-body">
+            <section className="alert-summary-block">
+              <span className="alert-section-label">Tình hình ghi nhận</span>
+              <p>{alert.message}</p>
+            </section>
+
+            {alertFacts.length > 0 ? (
+              <div className="alert-facts" aria-label="Thông tin thời tiết">
+                {alertFacts.map(([label, value], index) => (
+                  <div className="alert-fact" key={label}>
+                    <span className="alert-fact-number">0{index + 1}</span>
+                    <div>
+                      <span>{label}</span>
+                      <strong>{value}</strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="alert-action-panel">
+              <div className="alert-action-icon" aria-hidden="true">!</div>
+              <div>
+                <strong>Hành động được đề xuất</strong>
+                <p>{alert.severity === "CRITICAL" ? "Tạm dừng vận hành tại khu vực và thực hiện ngay quy trình ứng phó khẩn cấp." : "Hạn chế vận hành, theo dõi sát thời tiết và thực hiện các nhiệm vụ được giao."}</p>
+              </div>
+            </div>
           </div>
-          <p>{alert.message}</p>
-        </div>
+        </article>
       ) : null}
 
       {actionMessage ? <div className="inline-status">{actionMessage}</div> : null}
@@ -166,7 +220,6 @@ export function AlertDetailPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Mã</th>
                   <th>Nhiệm vụ</th>
                   <th>Ưu tiên</th>
                   <th>Trạng thái</th>
@@ -178,15 +231,14 @@ export function AlertDetailPage() {
               <tbody>
                 {alertTasks.map((task) => (
                   <tr key={task.taskId}>
-                    <td>{task.taskCode}</td>
                     <td>
                       <strong>{task.title}</strong>
                       <p>{task.description}</p>
                     </td>
                     <td>
-                      <Badge tone={badgeTone(task.priority)}>{task.priority}</Badge>
+                      <Badge tone={badgeTone(task.priority)}>{riskLabel(task.priority)}</Badge>
                     </td>
-                    <td>{task.status}</td>
+                    <td>{task.status === "NEW" ? "Mới" : task.status === "ACKNOWLEDGED" ? "Đã xác nhận" : task.status === "IN_PROGRESS" ? "Đang thực hiện" : task.status === "COMPLETED" ? "Hoàn tất" : task.status === "CANCELLED" ? "Đã hủy" : task.status}</td>
                     <td>{task.assignedUserName ?? "Chưa phân công"}</td>
                     <td>{task.dueAt ? new Date(task.dueAt).toLocaleString("vi-VN") : "Chưa đặt"}</td>
                     <td>

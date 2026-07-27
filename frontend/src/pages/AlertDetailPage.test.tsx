@@ -143,6 +143,6 @@ describe("AlertDetailPage", () => {
     expect(completeTask).toHaveBeenCalledWith("task-1", {
       completionNote: "Đã đóng khu vực và thông báo điều độ."
     });
-    expect(await screen.findByText("COMPLETED")).toBeInTheDocument();
+    expect(await screen.findByText("Hoàn tất")).toBeInTheDocument();
   });
 });

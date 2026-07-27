@@ -8,6 +8,7 @@ import type { RiskLevel } from "../types/dashboard";
 import type { ForecastRiskAnalysis, ForecastRiskAnalysisInputItem } from "../types/ml";
 import type { PortSummary } from "../types/port";
 import type { OpenWeatherForecast, OpenWeatherForecastDay } from "../types/weather";
+import { clusterLabel, operationModeLabel, riskLabel, weatherDescriptionLabel } from "../utils/displayLabels";
 
 type HorizonOption = {
   confidence: string;
@@ -134,7 +135,7 @@ export function AiLongRangeForecastPage() {
       setForecast(openWeatherForecast);
       setAnalysis(nextAnalysis);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Không thể tạo dữ liệu AI dự đoán dài hạn.");
+      setError(requestError instanceof Error ? requestError.message : "Chưa thể tạo dự báo dài hạn. Vui lòng thử lại.");
       setAnalysis(null);
     } finally {
       setLoading(false);
@@ -172,19 +173,19 @@ export function AiLongRangeForecastPage() {
     <section className="page-grid ai-forecast-page">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">AI planning</span>
-          <h1>AI dự đoán dài hạn</h1>
-          <p>Tách riêng dữ liệu OpenWeather 5 ngày và dữ liệu AI tự dự đoán cho các mốc xa hơn: 7 ngày, 14 ngày, 30 ngày, 2 tháng và 3 tháng.</p>
+          <span className="eyebrow">Hỗ trợ lập kế hoạch</span>
+          <h1>Dự báo xu hướng vận hành</h1>
+          <p>Phân tích xu hướng thời tiết để hỗ trợ chuẩn bị nhân sự, thiết bị và phương án vận hành từ 7 ngày đến 3 tháng.</p>
         </div>
       </div>
 
       <article className="card card-pad ai-forecast-source-card">
         <div className="card-head">
           <div>
-            <h3>Dữ liệu OpenWeather 5 ngày</h3>
-            <p>Nguồn dữ liệu thật từ OpenWeather API, dùng làm đầu vào tham chiếu cho mô hình AI dài hạn.</p>
+            <h3>Dự báo thời tiết 5 ngày gần nhất</h3>
+            <p>Dữ liệu thời tiết trực tuyến được dùng làm cơ sở để hệ thống phân tích xu hướng dài hạn.</p>
           </div>
-          <Badge tone="success">Nguồn thật</Badge>
+          <Badge tone="success">Đang cập nhật trực tuyến</Badge>
         </div>
         <div className="simulation-forecast-controls">
           <label>
@@ -196,26 +197,26 @@ export function AiLongRangeForecastPage() {
             </select>
           </label>
           <button className="button button-primary" disabled={loading} onClick={() => void runPrediction()} type="button">
-            {loading ? "Đang chạy AI..." : "Chạy lại dự đoán"}
+            {loading ? "Đang phân tích..." : "Cập nhật dự báo"}
           </button>
         </div>
         <div className="ai-forecast-seed-grid">
           {forecast?.days.map((day) => (
             <div className="ai-forecast-seed-day" key={day.date}>
               <strong>{formatDate(day.date)}</strong>
-              <span>{day.weatherDescription ?? day.summary ?? "OpenWeather"}</span>
+              <span>{weatherDescriptionLabel(day.weatherDescription ?? day.summary)}</span>
               <small>Gió {day.windSpeedMs.toFixed(1)} m/s · Mưa {day.rainMm.toFixed(1)} mm</small>
               <small>Tầm nhìn {day.visibilityKm !== null ? `${day.visibilityKm.toFixed(1)} km` : "chưa có"}</small>
             </div>
-          )) ?? <div className="simulation-forecast-empty">Đang tải dữ liệu OpenWeather 5 ngày...</div>}
+          )) ?? <div className="simulation-forecast-empty">Đang tải dự báo thời tiết 5 ngày...</div>}
         </div>
       </article>
 
       <article className="card card-pad ai-forecast-main-card">
         <div className="card-head">
           <div>
-            <h3>AI dự đoán dài hạn</h3>
-            <p>Đây là dữ liệu AI nội bộ dùng để tham khảo lập kế hoạch, không thay thế dữ liệu dự báo thời tiết thật.</p>
+            <h3>Xu hướng và khuyến nghị vận hành</h3>
+            <p>Kết quả giúp lập kế hoạch sớm và chỉ mang tính tham khảo; quyết định vận hành vẫn cần dựa trên dữ liệu thời tiết thực tế.</p>
           </div>
           <Badge tone="info">Độ tin cậy: {horizon.confidence}</Badge>
         </div>
@@ -241,31 +242,31 @@ export function AiLongRangeForecastPage() {
             <small>{horizon.note}</small>
           </div>
           <div>
-            <span>Risk score trung bình</span>
+            <span>Điểm rủi ro trung bình</span>
             <strong>{summary.averageScore}</strong>
-            <small>Thang AI 0-100</small>
+            <small>Thang điểm từ 0 đến 100</small>
           </div>
           <div>
-            <span>Ngày HIGH/CRITICAL</span>
+            <span>Số ngày rủi ro cao</span>
             <strong>{summary.highOrCritical}</strong>
             <small>Cần theo dõi kế hoạch vận hành</small>
           </div>
           <div>
-            <span>Ngày STOP</span>
+            <span>Số ngày nên tạm dừng</span>
             <strong>{summary.stopDays}</strong>
-            <small>Theo khuyến nghị AI</small>
+            <small>Theo phân tích của hệ thống</small>
           </div>
         </div>
 
         {error ? <p className="form-error">{error}</p> : null}
-        {loading ? <div className="simulation-forecast-empty">Đang chạy PCA, K-Means và Gemini cho mốc {horizon.label}...</div> : null}
+        {loading ? <div className="simulation-forecast-empty">Đang phân tích dữ liệu và xây dựng khuyến nghị cho mốc {horizon.label}...</div> : null}
 
         {analysis ? (
           <>
             <div className="ai-forecast-chart-card">
               <div>
-                <h3>Biểu đồ đường AI risk score</h3>
-                <p>Score càng cao thì rủi ro vận hành càng lớn; các mốc dài hạn có độ tin cậy giảm dần.</p>
+                <h3>Xu hướng rủi ro theo thời gian</h3>
+                <p>Điểm càng cao thì mức ảnh hưởng đến vận hành càng lớn; dự báo càng xa sẽ có độ tin cậy thấp hơn.</p>
               </div>
               <div aria-label="Biểu đồ đường AI dự đoán dài hạn" className="ai-forecast-line-chart">
                 <LineChart
@@ -275,7 +276,7 @@ export function AiLongRangeForecastPage() {
                     color: "#2563eb",
                     curve: "linear",
                     data: chartRows.map((row) => row.score),
-                    label: "AI risk score",
+                    label: "Điểm rủi ro",
                     showMark: true
                   }]}
                   xAxis={[{
@@ -291,11 +292,11 @@ export function AiLongRangeForecastPage() {
               </div>
             </div>
 
-            <div className="forecast-ml-legend ai-forecast-score-legend" aria-label="Chú thích mức độ AI score">
-              <span><i className="score-low" />0-24 LOW</span>
-              <span><i className="score-medium" />25-49 MEDIUM</span>
-              <span><i className="score-high" />50-74 HIGH</span>
-              <span><i className="score-critical" />75-100 CRITICAL</span>
+            <div className="forecast-ml-legend ai-forecast-score-legend" aria-label="Chú thích mức điểm rủi ro">
+              <span><i className="score-low" />0-24 · Thấp</span>
+              <span><i className="score-medium" />25-49 · Cần lưu ý</span>
+              <span><i className="score-high" />50-74 · Cao</span>
+              <span><i className="score-critical" />75-100 · Rất cao</span>
             </div>
 
             <div className="forecast-table-shell">
@@ -303,9 +304,9 @@ export function AiLongRangeForecastPage() {
                 <thead>
                   <tr>
                     <th>Ngày</th>
-                    <th>AI score</th>
-                    <th>Rule risk</th>
-                    <th>K-Means cluster</th>
+                    <th>Điểm rủi ro</th>
+                    <th>Mức cảnh báo</th>
+                    <th>Đặc điểm thời tiết</th>
                     <th>Khuyến nghị</th>
                     <th>Độ tin cậy</th>
                   </tr>
@@ -315,9 +316,9 @@ export function AiLongRangeForecastPage() {
                     <tr key={item.plannedAt}>
                       <td>{formatDate(item.plannedAt)}</td>
                       <td><strong>{item.pcaRiskScore}</strong></td>
-                      <td><Badge tone={riskTone(item.ruleRiskLevel)}>{item.ruleRiskLevel}</Badge></td>
-                      <td>{item.clusterLabel}</td>
-                      <td><Badge tone={operationTone(item.mlRecommendation)}>{item.mlRecommendation}</Badge></td>
+                      <td><Badge tone={riskTone(item.ruleRiskLevel)}>{riskLabel(item.ruleRiskLevel)}</Badge></td>
+                      <td>{clusterLabel(item.clusterLabel)}</td>
+                      <td><Badge tone={operationTone(item.mlRecommendation)}>{operationModeLabel(item.mlRecommendation)}</Badge></td>
                       <td>{Math.round(chartRows[index]?.confidence ?? 40)}%</td>
                     </tr>
                   ))}
@@ -328,10 +329,10 @@ export function AiLongRangeForecastPage() {
             <section className="forecast-llm-plan ai-forecast-explain">
               <div className="forecast-llm-head">
                 <div>
-                  <h3>Giải thích AI</h3>
-                  <p>{analysis.llmPlanAnalysis?.summary ?? "Mô hình PCA/K-Means đã phân tích chuỗi dữ liệu dài hạn để hỗ trợ lập kế hoạch vận hành."}</p>
+                  <h3>Giải thích kết quả</h3>
+                  <p>{analysis.llmPlanAnalysis?.summary ?? "Hệ thống đã phân tích chuỗi dữ liệu dài hạn để hỗ trợ lập kế hoạch vận hành."}</p>
                 </div>
-                <Badge tone="muted">{analysis.modelVersion}</Badge>
+                <Badge tone="muted">Phân tích tự động</Badge>
               </div>
             </section>
           </>

@@ -71,6 +71,10 @@ builder.Services.AddSingleton<ForecastRiskMlService>();
 builder.Services.AddScoped<ITaskAssignmentEmailNotifier, SmtpTaskAssignmentEmailNotifier>();
 builder.Services.AddHttpClient<OpenWeatherService>();
 builder.Services.AddHttpClient<OperationPlanLlmService>();
+builder.Services.AddHttpClient<GoogleTranslateSpeechService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("Missing JWT configuration.");
 builder.Services

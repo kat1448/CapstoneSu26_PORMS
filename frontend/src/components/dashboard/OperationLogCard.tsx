@@ -1,5 +1,6 @@
 import type { OperationEvent } from "../../types/log";
 import { Badge } from "../common/Badge";
+import { actorDisplayLabel, operationEventLabel, operationEventSummaryLabel } from "../../utils/displayLabels";
 
 type OperationLogCardProps = {
   events: OperationEvent[];
@@ -18,14 +19,14 @@ export function OperationLogCard({ events }: OperationLogCardProps) {
         {events.slice(0, 4).map((event) => (
           <div className={`timeline-item tone-${event.tone}`} key={event.operationEventId}>
             <div className="timeline-header">
-              <strong>{event.summary}</strong>
+                <strong>{operationEventSummaryLabel(event.summary)}</strong>
               <small>{event.occurredAt}</small>
             </div>
             <div className="timeline-meta">
               <Badge tone={event.tone === "danger" ? "danger" : event.tone === "warning" ? "warning" : "info"}>
-                {event.eventType}
+                {operationEventLabel(event.eventType)}
               </Badge>
-              <span>{event.actorName}</span>
+              <span>{actorDisplayLabel(event.actorName)}</span>
             </div>
           </div>
         ))}

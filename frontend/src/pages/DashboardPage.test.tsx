@@ -244,10 +244,9 @@ describe("DashboardPage", () => {
     expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Trạng thái khu vực");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Ban do GIS Tất cả cảng");
     expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
-    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Cang Lien Chieu 16.165, 108.1915");
-    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Dữ liệu thời tiết theo cảng và khu vực");
-    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("OPENWEATHER_API");
-    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("moderate rain");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Chi tiết thời tiết tại các khu vực");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Dữ liệu thời tiết trực tuyến");
+    expect(screen.getByTestId("dashboard-left")).toHaveTextContent("Mưa vừa");
     expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Xu hướng rủi ro 24 giờ");
     expect(screen.queryByTestId("dashboard-right")).not.toBeInTheDocument();
     expect(screen.getByTestId("dashboard-left")).not.toHaveTextContent("Thời tiết hiện tại");

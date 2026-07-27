@@ -10,6 +10,7 @@ import type { PortSummary } from "../types/port";
 import type { ForecastHorizonDays, ForecastPlan } from "../types/simulation";
 import type { OpenWeatherForecast } from "../types/weather";
 import type { ForecastRiskAnalysis } from "../types/ml";
+import { clusterLabel, operationModeLabel, riskLabel, weatherDescriptionLabel } from "../utils/displayLabels";
 
 const FORECAST_AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
 const ANALYSIS_STEP_DELAY_MS = 180;
@@ -23,7 +24,7 @@ const forecastProcessingSteps: Array<{
   progress: number;
 }> = [
   {
-    description: "Lấy dữ liệu OpenWeather và tạo kế hoạch 5 ngày",
+    description: "Lấy dự báo thời tiết và tạo kế hoạch 5 ngày",
     key: "forecast",
     label: "Dữ liệu dự báo",
     progress: 25
@@ -31,19 +32,19 @@ const forecastProcessingSteps: Array<{
   {
     description: "Chuẩn hóa chỉ số thời tiết thành vector phân tích",
     key: "pca",
-    label: "PCA",
+    label: "Chuẩn hóa dữ liệu",
     progress: 52
   },
   {
     description: "Phân cụm trạng thái thời tiết và rủi ro vận hành",
     key: "kmeans",
-    label: "K-Means",
+    label: "Nhóm tình huống",
     progress: 74
   },
   {
-    description: "Gemini phân tích kế hoạch vận hành theo kết quả AI",
+    description: "Tạo khuyến nghị vận hành dễ hiểu",
     key: "gemini",
-    label: "Gemini",
+    label: "Đề xuất phương án",
     progress: 94
   }
 ];
@@ -71,7 +72,7 @@ const riskScores = {
   MEDIUM: 2
 };
 
-const riskLabels = ["", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
+const riskLabels = ["", "Thấp", "Cần lưu ý", "Cao", "Rất cao"];
 
 function operationRecommendation(riskLevel: string) {
   if (riskLevel === "CRITICAL") return "STOP";
@@ -143,7 +144,7 @@ export function ForecastPlanningPage() {
       setNextForecastRefreshAt(new Date(now.getTime() + FORECAST_AUTO_REFRESH_MS));
     } catch (requestError) {
       setForecast(null);
-      setForecastError(requestError instanceof Error ? requestError.message : "Không tải được dự báo OpenWeather");
+      setForecastError(requestError instanceof Error ? requestError.message : "Không tải được dự báo thời tiết");
     } finally {
       setForecastLoading(false);
     }
@@ -195,7 +196,7 @@ export function ForecastPlanningPage() {
       await delay(ANALYSIS_STEP_DELAY_MS);
       setProcessingStep("gemini");
       setMlAnalysis(await analyzeForecastRisk(analysisInput));
-      setMessage("Đã cập nhật kế hoạch dự báo từ OpenWeather");
+      setMessage("Đã cập nhật kế hoạch vận hành");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Không tạo được kế hoạch dự báo");
       setMlAnalysis(null);
@@ -222,20 +223,20 @@ export function ForecastPlanningPage() {
     <section className="page-grid simulation-page">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">OpenWeather API</span>
+          <span className="eyebrow">Dự báo 5 ngày</span>
           <h1>Dự báo vận hành</h1>
-          <p>Dữ liệu dự đoán tương lai từ OpenWeather API phục vụ lập kế hoạch vận hành trong 5 ngày tới.</p>
+          <p>Thông tin thời tiết sắp tới giúp bạn chuẩn bị nhân sự, thiết bị và phương án vận hành tại cảng.</p>
         </div>
         <Link className="button button-secondary" to="/simulation">
-          Dữ liệu mô phỏng nhập tay
+          Mô phỏng tình huống
         </Link>
       </div>
 
       <article className="card card-pad simulation-forecast-panel">
         <div className="card-head">
           <div>
-            <h3>Kế hoạch dự báo tương lai</h3>
-            <p>Nguồn dữ liệu này được sinh từ OpenWeather mới nhất trong database và có thể cập nhật lại khi thời tiết thay đổi.</p>
+            <h3>Kế hoạch vận hành 5 ngày tới</h3>
+            <p>Dữ liệu được cập nhật từ nguồn thời tiết trực tuyến và có thể làm mới khi điều kiện thời tiết thay đổi.</p>
           </div>
           <Badge tone={plan ? riskTone(plan.items[0]?.riskLevel ?? "LOW") : "info"}>
             {plan ? `${plan.horizonDays} ngày` : "Dự báo"}
@@ -268,14 +269,14 @@ export function ForecastPlanningPage() {
             </select>
           </label>
           <button className="button button-primary" disabled={loading} onClick={handleCreateForecastPlan} type="button">
-            {loading ? "Đang cập nhật..." : "Cập nhật kế hoạch từ OpenWeather"}
+            {loading ? "Đang phân tích..." : "Cập nhật kế hoạch"}
           </button>
         </div>
 
         {message ? <p className="form-success">{message}</p> : null}
         {error ? <p className="form-error">{error}</p> : null}
         {loading && processingStep ? (
-          <div aria-label="Tiến trình phân tích PCA K-Means Gemini" className="forecast-analysis-loader">
+          <div aria-label="Tiến trình phân tích dự báo" className="forecast-analysis-loader">
             <div className="forecast-analysis-loader-head">
               <div>
                 <strong>{currentProcessingStep.label}</strong>
@@ -309,7 +310,7 @@ export function ForecastPlanningPage() {
             <div className="sim-dataset-card simulation-forecast-dataset">
               <strong>{plan.dataset.name}</strong>
               <span>{plan.dataset.description}</span>
-              <small>{plan.dataset.snapshotCount} điểm dự báo · {plan.dataset.portCode}</small>
+            <small>{plan.dataset.snapshotCount} thời điểm dự báo · {plan.dataset.portCode}</small>
             </div>
             <div className="forecast-plan-visual-grid">
               <div aria-label="Timeline dự báo vận hành 5 ngày" className="forecast-plan-timeline">
@@ -321,17 +322,17 @@ export function ForecastPlanningPage() {
                     <div className="forecast-plan-timeline-content">
                       <div className="forecast-plan-timeline-head">
                         <strong>{new Date(item.plannedAt).toLocaleDateString("vi-VN")}</strong>
-                        <Badge tone={riskTone(item.riskLevel)}>{item.riskLevel}</Badge>
+                        <Badge tone={riskTone(item.riskLevel)}>{riskLabel(item.riskLevel)}</Badge>
                       </div>
                       <p>{item.summary}</p>
                       <div className="forecast-plan-metrics">
-                        <small>Gió: {item.windRiskLevel}</small>
-                        <small>Mưa: {item.rainRiskLevel}</small>
-                        <small>Tầm nhìn: {item.visibilityRiskLevel}</small>
+                        <small>Gió: {riskLabel(item.windRiskLevel)}</small>
+                        <small>Mưa: {riskLabel(item.rainRiskLevel)}</small>
+                        <small>Tầm nhìn: {riskLabel(item.visibilityRiskLevel)}</small>
                       </div>
                       <div className="forecast-plan-operation">
                         <span>Khuyến nghị vận hành</span>
-                        <strong>{operationRecommendation(item.riskLevel)}</strong>
+                        <strong>{operationModeLabel(operationRecommendation(item.riskLevel))}</strong>
                       </div>
                     </div>
                   </div>
@@ -369,15 +370,15 @@ export function ForecastPlanningPage() {
             </div>
             {mlError ? <p className="form-error">{mlError}</p> : null}
             {mlAnalysis ? (
-              <article aria-label="Phân tích ML PCA K-Means dự báo 5 ngày" className="forecast-ml-card">
+              <article aria-label="Phân tích mức rủi ro dự báo 5 ngày" className="forecast-ml-card">
                 <div className="card-head">
                   <div>
-                    <h3>Phân tích ML PCA + K-Means</h3>
-                    <p>So sánh rule engine với điểm PCA và cụm trạng thái thời tiết từ K-Means.</p>
+                    <h3>Phân tích mức rủi ro</h3>
+                    <p>Đối chiếu điều kiện thời tiết với điểm rủi ro để đưa ra khuyến nghị vận hành.</p>
                   </div>
-                  <Badge tone="info">{mlAnalysis.modelVersion}</Badge>
+                  <Badge tone="info">Phân tích tự động</Badge>
                 </div>
-                <div aria-label="Biểu đồ AI PCA score 5 ngày" className="forecast-ml-chart">
+                <div aria-label="Biểu đồ điểm rủi ro 5 ngày" className="forecast-ml-chart">
                   <div className="forecast-ml-chart-body">
                     <div className="forecast-ml-line">
                       <LineChart
@@ -388,7 +389,7 @@ export function ForecastPlanningPage() {
                           curve: "linear",
                           data: mlChartData.map((item) => item.score),
                           showMark: true,
-                          label: "AI PCA score"
+                          label: "Điểm rủi ro"
                         }]}
                         xAxis={[{
                           data: mlChartData.map((item) => item.date),
@@ -401,11 +402,11 @@ export function ForecastPlanningPage() {
                         }]}
                       />
                     </div>
-                    <div className="forecast-ml-legend" aria-label="Chú thích mức độ AI score">
-                      <span><i className="score-low" />0-24 LOW</span>
-                      <span><i className="score-medium" />25-49 MEDIUM</span>
-                      <span><i className="score-high" />50-74 HIGH</span>
-                      <span><i className="score-critical" />75-100 CRITICAL</span>
+                    <div className="forecast-ml-legend" aria-label="Chú thích mức điểm rủi ro">
+                      <span><i className="score-low" />0-24 · Thấp</span>
+                      <span><i className="score-medium" />25-49 · Cần lưu ý</span>
+                      <span><i className="score-high" />50-74 · Cao</span>
+                      <span><i className="score-critical" />75-100 · Rất cao</span>
                     </div>
                   </div>
                 </div>
@@ -416,14 +417,14 @@ export function ForecastPlanningPage() {
                       <div className={`forecast-ml-item risk-${aiRiskLevel.toLowerCase()}`} key={item.plannedAt}>
                         <div>
                           <strong>{new Date(item.plannedAt).toLocaleDateString("vi-VN")}</strong>
-                          <span>{item.clusterLabel}</span>
+                          <span>{clusterLabel(item.clusterLabel)}</span>
                         </div>
-                        <Badge tone={riskTone(aiRiskLevel)}>AI Risk {aiRiskLevel}</Badge>
+                        <Badge tone={riskTone(aiRiskLevel)}>Mức {riskLabel(aiRiskLevel)}</Badge>
                         <div className="forecast-ml-score">
-                          <span>ML Score {item.pcaRiskScore}</span>
-                          <strong>{item.mlRecommendation}</strong>
+                          <span>Điểm phân tích {item.pcaRiskScore}</span>
+                          <strong>{operationModeLabel(item.mlRecommendation)}</strong>
                         </div>
-                        <small>Rule {item.ruleRiskLevel}</small>
+                        <small>Theo quy tắc: {riskLabel(item.ruleRiskLevel)}</small>
                         <small>{item.dominantFactors.join(" / ")}</small>
                       </div>
                     );
@@ -433,11 +434,11 @@ export function ForecastPlanningPage() {
                   <section aria-label="Phân tích kế hoạch vận hành bằng LLM" className="forecast-llm-plan">
                     <div className="forecast-llm-head">
                       <div>
-                        <h3>Phân tích kế hoạch vận hành bằng LLM</h3>
+                        <h3>Giải thích và phương án đề xuất</h3>
                         <p>{mlAnalysis.llmPlanAnalysis.summary}</p>
                       </div>
                       <Badge tone={mlAnalysis.llmPlanAnalysis.isConfigured ? "success" : "muted"}>
-                        {mlAnalysis.llmPlanAnalysis.provider} · {mlAnalysis.llmPlanAnalysis.model}
+                        Phân tích tự động
                       </Badge>
                     </div>
                     <div className="forecast-llm-grid">
@@ -445,12 +446,12 @@ export function ForecastPlanningPage() {
                         <div className={`forecast-llm-item mode-${item.operationMode.toLowerCase()}`} key={`${item.plannedAt}-${item.operationMode}`}>
                           <div className="forecast-llm-item-head">
                             <strong>{new Date(item.plannedAt).toLocaleDateString("vi-VN")}</strong>
-                            <Badge tone={operationModeTone(item.operationMode)}>Chế độ {item.operationMode}</Badge>
+                            <Badge tone={operationModeTone(item.operationMode)}>{operationModeLabel(item.operationMode)}</Badge>
                           </div>
                           <p>{item.planChange}</p>
                           <small>{item.reason}</small>
                           <div className="forecast-llm-actions">
-                            <span>Hành động</span>
+                            <span>Việc nên làm</span>
                             {item.recommendedActions.map((action) => (
                               <strong key={action}>{action}</strong>
                             ))}
@@ -470,7 +471,7 @@ export function ForecastPlanningPage() {
           </>
         ) : (
           <div className="simulation-forecast-empty">
-            Chưa có kế hoạch dự báo. Hãy chọn cảng và cập nhật kế hoạch 5 ngày từ dữ liệu OpenWeather mới nhất.
+            Chưa có kế hoạch dự báo. Hãy chọn cảng và bấm “Cập nhật kế hoạch”.
           </div>
         )}
       </article>
@@ -478,8 +479,8 @@ export function ForecastPlanningPage() {
       <article className="card card-pad simulation-forecast-panel">
         <div className="card-head">
           <div>
-            <h3>Bảng dự báo OpenWeather 5 ngày</h3>
-            <p>Dữ liệu dự báo trực tiếp từ OpenWeather API, dùng để đối chiếu trước khi tạo kế hoạch vận hành.</p>
+            <h3>Dự báo thời tiết 5 ngày tới</h3>
+            <p>Dữ liệu thời tiết trực tuyến dùng để đối chiếu trước khi tạo kế hoạch vận hành.</p>
             <p>
               {lastForecastUpdatedAt
                 ? `Cập nhật lúc ${formatDateTime(lastForecastUpdatedAt)}. Tự động cập nhật hằng ngày${nextForecastRefreshAt ? `, lần kế tiếp ${formatDateTime(nextForecastRefreshAt)}` : ""}.`
@@ -488,7 +489,7 @@ export function ForecastPlanningPage() {
           </div>
           <div className="card-head-actions">
             <button className="button button-secondary button-small" disabled={forecastLoading} onClick={() => void reloadForecast()} type="button">
-              {forecastLoading ? "Đang tải..." : "Reload dự báo"}
+              {forecastLoading ? "Đang tải..." : "Làm mới dự báo"}
             </button>
             <Badge tone="info">{forecastLoading ? "Đang tải" : "5 ngày"}</Badge>
           </div>
@@ -496,7 +497,7 @@ export function ForecastPlanningPage() {
         {forecastError ? <p className="form-error">{forecastError}</p> : null}
         {forecast ? (
           <div className="forecast-table-shell">
-            <table aria-label="Dự báo OpenWeather 5 ngày" className="forecast-table">
+            <table aria-label="Dự báo thời tiết 5 ngày" className="forecast-table">
               <thead>
                 <tr>
                   <th>Ngày</th>
@@ -514,8 +515,8 @@ export function ForecastPlanningPage() {
                   <tr key={day.date}>
                     <td>{new Date(day.date).toLocaleDateString("vi-VN")}</td>
                     <td>
-                      <strong>{day.summary || day.weatherDescription || "Chưa có mô tả"}</strong>
-                      {day.weatherDescription ? <small>{day.weatherDescription}</small> : null}
+                      <strong>{weatherDescriptionLabel(day.summary || day.weatherDescription)}</strong>
+                      {day.weatherDescription ? <small>{weatherDescriptionLabel(day.weatherDescription)}</small> : null}
                     </td>
                     <td>{day.temperatureMinC.toFixed(0)}-{day.temperatureMaxC.toFixed(0)} °C</td>
                     <td>
@@ -536,7 +537,7 @@ export function ForecastPlanningPage() {
           </div>
         ) : (
           <div className="simulation-forecast-empty">
-            {forecastLoading ? "Đang tải dự báo OpenWeather..." : "Chưa có dữ liệu dự báo OpenWeather."}
+            {forecastLoading ? "Đang tải dự báo thời tiết..." : "Chưa có dữ liệu dự báo thời tiết."}
           </div>
         )}
       </article>

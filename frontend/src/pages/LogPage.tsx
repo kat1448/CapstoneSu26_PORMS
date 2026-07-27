@@ -3,6 +3,7 @@ import { Badge } from "../components/common/Badge";
 import { useDemoRefresh } from "../hooks/useDemoRefresh";
 import { getOperationEvents } from "../services/logService";
 import type { OperationEvent } from "../types/log";
+import { actorDisplayLabel, operationEventLabel, operationEventSummaryLabel, simulationDetailLabel } from "../utils/displayLabels";
 
 type LogPageProps = {
   refreshKey: number;
@@ -32,10 +33,10 @@ const tonePriority: Record<OperationEvent["tone"], number> = {
 const PAGE_SIZE = 15;
 const toneOptions: OperationEvent["tone"][] = ["info", "success", "warning", "danger"];
 const toneLabels: Record<OperationEvent["tone"], string> = {
-  danger: "DANGER",
-  info: "INFO",
-  success: "SUCCESS",
-  warning: "WARNING"
+  danger: "Nguy hiểm",
+  info: "Thông tin",
+  success: "Hoàn tất",
+  warning: "Cần chú ý"
 };
 
 function uniqueBy<T>(items: T[], keyOf: (item: T) => string) {
@@ -106,7 +107,7 @@ function groupOperationRuns(events: OperationEvent[]): OperationLogRun[] {
       portCode: newest?.portCode ?? "N/A",
       portName: newest?.portName ?? newest?.portCode ?? "Không xác định",
       riskTone: strongestTone,
-      runLabel: newest?.simulationSessionId ? `Phiên mô phỏng ${newest.simulationSessionId.slice(0, 8)}` : `Lần chạy ${newest?.portCode ?? "N/A"}`,
+      runLabel: newest?.simulationDatasetName ?? (newest?.simulationSessionId ? "Kịch bản mô phỏng" : `Lần vận hành ${newest?.portName ?? ""}`),
       scenarioName: newest?.simulationDatasetName ?? null
     };
   }).sort((a, b) => new Date(b.events[b.events.length - 1]?.occurredAtRaw ?? 0).getTime() - new Date(a.events[a.events.length - 1]?.occurredAtRaw ?? 0).getTime());
@@ -216,7 +217,7 @@ export function LogPage({ refreshKey }: LogPageProps) {
       <div className="section-heading">
         <div>
           <h2>Nhật ký vận hành</h2>
-          <p>Audit trail bất biến, gom các nhật ký trong cùng một lần chạy của từng cảng.</p>
+          <p>Theo dõi các sự kiện đã xảy ra trong từng ca vận hành và từng lần mô phỏng.</p>
         </div>
         <div aria-label="Loại nhật ký" className="segmented-control" role="tablist">
           <button
@@ -309,7 +310,7 @@ export function LogPage({ refreshKey }: LogPageProps) {
                 <Badge tone={badgeTone(run.riskTone)}>{run.events.length} nhật ký</Badge>
                 <span>{run.portName}</span>
                 <span>{run.runLabel}</span>
-                {run.scenarioName ? <span>{run.scenarioName}</span> : null}
+                {run.scenarioName && run.scenarioName !== run.runLabel ? <span>{run.scenarioName}</span> : null}
                 <button className="button button-secondary button-small" onClick={() => setSelectedRunKey(run.groupKey)} type="button">
                   Chi tiết
                 </button>
@@ -340,11 +341,11 @@ export function LogPage({ refreshKey }: LogPageProps) {
         </article>
         </>
       ) : (
-        <section className="simulation-results-page">
+        <section className="simulation-results-page operation-log-detail">
           <div className="section-heading">
             <div>
               <h2>Chi tiết nhật ký vận hành</h2>
-              <p>{selectedRun.portName} · {selectedRun.firstAt} - {selectedRun.lastAt}</p>
+              <p>{selectedRun.portName} · Từ {selectedRun.firstAt} đến {selectedRun.lastAt}</p>
             </div>
             <button className="button button-secondary" onClick={() => setSelectedRunKey(null)} type="button">Quay lại</button>
           </div>
@@ -352,52 +353,46 @@ export function LogPage({ refreshKey }: LogPageProps) {
           <div className="simulation-results-kpis">
             <article className="card card-pad simulation-results-kpi">
               <span>Cảng</span>
-              <strong>{selectedRun.portCode}</strong>
-              <small>{selectedRun.portName}</small>
+              <strong>{selectedRun.portName}</strong>
+              <small>Khu vực được ghi nhận</small>
             </article>
             <article className="card card-pad simulation-results-kpi">
-              <span>Số nhật ký</span>
+              <span>Số sự kiện</span>
               <strong>{selectedRun.events.length}</strong>
               <small>{selectedRun.runLabel}</small>
             </article>
             <article className="card card-pad simulation-results-kpi risk">
-              <span>Mức nổi bật</span>
-              <strong>{selectedRun.riskTone.toUpperCase()}</strong>
-              <Badge tone={badgeTone(selectedRun.riskTone)}>{selectedRun.riskTone.toUpperCase()}</Badge>
+              <span>Mức cần chú ý</span>
+              <strong>{toneLabels[selectedRun.riskTone]}</strong>
+              <Badge tone={badgeTone(selectedRun.riskTone)}>{toneLabels[selectedRun.riskTone]}</Badge>
             </article>
           </div>
 
           <article className="card card-pad simulation-results-card">
             <div className="card-head">
               <div>
-                <h3>Sự kiện trong lần chạy</h3>
-                <p>Danh sách nhật ký của cùng một cảng, cùng một phiên hoặc cùng khung thời gian vận hành.</p>
+                <h3>Diễn biến hoạt động</h3>
+                <p>Các sự kiện được sắp xếp theo thời gian để dễ theo dõi toàn bộ quá trình.</p>
               </div>
               <Badge tone="info">{selectedRun.events.length} dòng</Badge>
             </div>
-            <div className="simulation-results-table-wrap">
-              <table aria-label="Bảng sự kiện vận hành trong lần chạy" className="simulation-results-table">
-                <thead>
-                  <tr>
-                    <th>Thời gian</th>
-                    <th>Sự kiện</th>
-                    <th>Khu vực</th>
-                    <th>Loại</th>
-                    <th>Người/nguồn</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedRun.events.map((event) => (
-                    <tr key={event.operationEventId}>
-                      <td>{event.occurredAt}</td>
-                      <td><strong>{event.summary}</strong></td>
-                      <td>{event.zoneName ?? "Toàn cảng"}</td>
-                      <td><Badge tone={badgeTone(event.tone)}>{event.eventType}</Badge></td>
-                      <td>{event.actorName}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div aria-label="Danh sách diễn biến vận hành" className="operation-event-list" role="list">
+              {selectedRun.events.map((event, index) => (
+                <article className={`operation-event-item tone-${event.tone}`} key={event.operationEventId} role="listitem">
+                  <div className="operation-event-index" aria-hidden="true">{index + 1}</div>
+                  <div className="operation-event-main">
+                    <div className="operation-event-head">
+                      <strong>{event.isSimulation ? simulationDetailLabel(operationEventSummaryLabel(event.summary)) : operationEventSummaryLabel(event.summary)}</strong>
+                      <time>{event.occurredAt}</time>
+                    </div>
+                    <div className="operation-event-meta">
+                      <Badge tone={badgeTone(event.tone)}>{operationEventLabel(event.eventType)}</Badge>
+                      <span>Vị trí: {event.zoneName ?? "Toàn cảng"}</span>
+                      <span>Ghi nhận bởi: {actorDisplayLabel(event.actorName)}</span>
+                    </div>
+                  </div>
+                </article>
+              ))}
             </div>
           </article>
         </section>

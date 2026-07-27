@@ -4,6 +4,7 @@ import { Badge } from "../components/common/Badge";
 import { exportForecastEvaluation, getForecastEvaluation } from "../services/forecastEvaluationService";
 import { getPorts } from "../services/portService";
 import type { ForecastEvaluationResponse } from "../types/forecastEvaluation";
+import { dataSourceLabel, riskLabel } from "../utils/displayLabels";
 import type { PortSummary } from "../types/port";
 
 const PAGE_SIZE = 50;
@@ -216,7 +217,7 @@ export function ForecastEvaluationPage() {
     <section className="page-grid forecast-evaluation-page">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">Forecast evaluation</span>
+          <span className="eyebrow">Độ chính xác dự báo</span>
           <h1>Thống kê và đánh giá</h1>
           <p>So sánh dữ liệu dự đoán 5 ngày với dữ liệu thời tiết thật để đo sai số và điều chỉnh mô hình.</p>
         </div>
@@ -270,17 +271,17 @@ export function ForecastEvaluationPage() {
           <small>Dự báo đã khớp với dữ liệu thời tiết thật</small>
         </article>
         <article className="card bi-kpi-card bi-card-pad risk">
-          <span>MAE gió</span>
+          <span>Sai số gió trung bình</span>
           <strong>{formatNumber(data?.summary.avgWindMae, " m/s")}</strong>
           <small>Sai số tuyệt đối trung bình</small>
         </article>
         <article className="card bi-kpi-card bi-card-pad">
-          <span>MAE mưa</span>
+          <span>Sai số mưa trung bình</span>
           <strong>{formatNumber(data?.summary.avgRainMae, " mm")}</strong>
           <small>Sai số lượng mưa 1h</small>
         </article>
         <article className="card bi-kpi-card bi-card-pad">
-          <span>MAE tầm nhìn</span>
+          <span>Sai số tầm nhìn trung bình</span>
           <strong>{formatNumber(data?.summary.avgVisibilityMae, " km")}</strong>
           <small>Sai số tầm nhìn</small>
         </article>
@@ -372,6 +373,7 @@ export function ForecastEvaluationPage() {
                     <strong>{new Date(row.plannedAt).toLocaleString("vi-VN")}</strong>
                     <small>{row.datasetName}</small>
                     <small>Thực tế: {formatDateTime(row.actualObservedAt)}</small>
+                    {row.actualDataSource ? <small>Nguồn: {dataSourceLabel(row.actualDataSource)}</small> : null}
                   </td>
                   <td>
                     <strong>{row.portCode}</strong>
@@ -390,11 +392,11 @@ export function ForecastEvaluationPage() {
                     <small>Sai số {formatNumber(row.visibilityAbsError, " km")}</small>
                   </td>
                   <td>
-                    <Badge tone={riskTone(row.forecastRiskLevel)}>{row.forecastRiskLevel}</Badge>
-                    <small>Thực tế: {row.actualRiskLevel ?? "Chưa có"}</small>
-                    <small>Lệch mức: {row.riskScoreError ?? "N/A"}</small>
+                    <Badge tone={riskTone(row.forecastRiskLevel)}>{riskLabel(row.forecastRiskLevel)}</Badge>
+                    <small>Thực tế: {row.actualRiskLevel ? riskLabel(row.actualRiskLevel) : "Chưa có"}</small>
+                    <small>Lệch mức: {row.riskScoreError ?? "Chưa tính"}</small>
                   </td>
-                  <td>{row.status === "MATCHED" ? "Đã đối chiếu" : "Chờ dữ liệu thật"}</td>
+                  <td>{row.status === "MATCHED" ? "Đã đối chiếu dữ liệu thật" : row.status === "MATCHED_DEMO" ? "Đã bù bằng dữ liệu mô phỏng" : row.status === "FUTURE" ? "Chưa đến thời điểm đối chiếu" : "Đang chờ dữ liệu đối chiếu"}</td>
                 </tr>
               ))}
               {!loading && rows.length === 0 ? (

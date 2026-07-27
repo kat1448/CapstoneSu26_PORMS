@@ -37,5 +37,6 @@ public sealed class ForecastEvaluationRowResponse
     public required string ForecastRiskLevel { get; init; }
     public string? ActualRiskLevel { get; init; }
     public int? RiskScoreError { get; init; }
+    public string? ActualDataSource { get; init; }
     public required string Status { get; init; }
 }

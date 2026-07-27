@@ -11,9 +11,9 @@ type SidebarProps = {
 };
 
 const roleLabels = {
-  ADMIN: "System Administrator",
-  PORT_MANAGER: "Port Operations Manager",
-  OPERATOR: "Port Operations Supervisor"
+  ADMIN: "Quản trị hệ thống",
+  PORT_MANAGER: "Quản lý vận hành cảng",
+  OPERATOR: "Nhân viên vận hành"
 } as const;
 
 export function Sidebar({ currentUser, isOpen, onClose, unreadAlertCount }: SidebarProps) {
