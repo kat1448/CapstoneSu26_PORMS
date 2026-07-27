@@ -88,7 +88,7 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
       <div className="section-heading">
         <div>
           <h2>Trung tâm điều hành</h2>
-          <p>Theo dõi trạng thái vận hành theo thời gian thực</p>
+          <p>Nắm bắt nhanh tình hình an toàn và hoạt động tại các cảng.</p>
         </div>
       </div>
       <div className="dashboard-grid">

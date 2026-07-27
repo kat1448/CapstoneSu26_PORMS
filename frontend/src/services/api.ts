@@ -3,9 +3,13 @@ import { getStoredSession } from "./authService";
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000").replace(/\/$/, "");
 const USE_MOCK_FALLBACK = import.meta.env.VITE_USE_MOCK_FALLBACK !== "false";
 
+export function getApiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
+
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const session = getStoredSession();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(getApiUrl(path), {
     headers: {
       "Content-Type": "application/json",
       ...(session ? { Authorization: `Bearer ${session.accessToken}` } : {}),
@@ -23,7 +27,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
 
 export async function requestVoid(path: string, init?: RequestInit): Promise<void> {
   const session = getStoredSession();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(getApiUrl(path), {
     headers: {
       "Content-Type": "application/json",
       ...(session ? { Authorization: `Bearer ${session.accessToken}` } : {}),

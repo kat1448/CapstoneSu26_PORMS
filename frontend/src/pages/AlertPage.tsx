@@ -4,6 +4,7 @@ import { Badge } from "../components/common/Badge";
 import { useDemoRefresh } from "../hooks/useDemoRefresh";
 import { getAlerts } from "../services/alertService";
 import type { AlertItem } from "../types/alert";
+import { riskLabel } from "../utils/displayLabels";
 
 type AlertPageProps = {
   refreshKey: number;
@@ -108,7 +109,7 @@ export function AlertPage({ refreshKey }: AlertPageProps) {
       <div className="section-heading">
         <div>
           <h2>Cảnh báo</h2>
-          <p>Theo dõi và xác nhận các cảnh báo vận hành</p>
+          <p>Theo dõi các thay đổi thời tiết có thể ảnh hưởng đến an toàn và hoạt động tại cảng.</p>
         </div>
       </div>
       <div className="card toolbar sop-toolbar filter-toolbar">
@@ -139,11 +140,11 @@ export function AlertPage({ refreshKey }: AlertPageProps) {
           <input className="input" onChange={(event) => setToDate(event.target.value)} type="date" value={toDate} />
         </label>
         <label>
-          <span>Cấp độ rủi ro</span>
+          <span>Mức cảnh báo</span>
           <select className="select-input" onChange={(event) => setSelectedSeverity(event.target.value)} value={selectedSeverity}>
             <option value="">Tất cả cấp độ</option>
             {riskOptions.map((risk) => (
-              <option key={risk} value={risk}>{risk}</option>
+              <option key={risk} value={risk}>{riskLabel(risk)}</option>
             ))}
           </select>
         </label>
@@ -165,7 +166,13 @@ export function AlertPage({ refreshKey }: AlertPageProps) {
           <tbody>
             {visibleAlerts.length === 0 ? (
               <tr>
-                <td colSpan={7}>Không có cảnh báo phù hợp.</td>
+                <td className="table-empty-cell" colSpan={7}>
+                  <div className="friendly-empty-state">
+                    <span className="friendly-empty-icon">✓</span>
+                    <strong>{alerts.length ? "Không có cảnh báo phù hợp với bộ lọc" : "Tình hình hiện tại chưa có cảnh báo"}</strong>
+                    <small>{alerts.length ? "Hãy thay đổi hoặc xóa bộ lọc để xem các cảnh báo khác." : "Cảnh báo sẽ tự xuất hiện khi hệ thống phát hiện rủi ro Cao hoặc Rất cao."}</small>
+                  </div>
+                </td>
               </tr>
             ) : null}
             {visibleAlerts.map((alert) => (
@@ -175,7 +182,7 @@ export function AlertPage({ refreshKey }: AlertPageProps) {
                 <td>{alert.zoneName}</td>
                 <td>
                   <Badge tone={badgeTone(alert.severity)}>
-                    {alert.severity}
+                    {riskLabel(alert.severity)}
                   </Badge>
                 </td>
                 <td>{alert.alertType}</td>

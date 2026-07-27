@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
+using PORMS.API.Services;
 using PORMS.Infrastructure.Repositories;
 
 namespace PORMS.API.Controllers;
@@ -60,6 +61,25 @@ public sealed class AlertController : ControllerBase
     {
         var tasks = await repository.GetTasksByAlertAsync(alertId, cancellationToken);
         return Ok(tasks.Select(TaskController.ToResponse).ToList());
+    }
+
+    [HttpGet("{alertId:guid}/speech")]
+    [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Client)]
+    public async Task<IActionResult> GetAlertSpeech(
+        Guid alertId,
+        [FromServices] AlertRepository repository,
+        [FromServices] GoogleTranslateSpeechService speechService,
+        CancellationToken cancellationToken)
+    {
+        var alerts = await repository.GetAlertsAsync(cancellationToken);
+        var alert = alerts.SingleOrDefault(item => item.AlertId == alertId);
+        if (alert is null || alert.Severity is not ("HIGH" or "CRITICAL"))
+        {
+            return NotFound();
+        }
+
+        var audio = await speechService.SynthesizeAlertAsync(alert, cancellationToken);
+        return File(audio, "audio/mpeg", enableRangeProcessing: true);
     }
 
     [HttpPatch("{alertId:guid}/acknowledge")]

@@ -73,6 +73,7 @@ public sealed class ForecastEvaluationController : ControllerBase
                 ForecastRiskLevel = item.ForecastRiskLevel,
                 ActualRiskLevel = item.ActualRiskLevel,
                 RiskScoreError = item.RiskScoreError,
+                ActualDataSource = item.ActualDataSource,
                 Status = item.Status
             }).ToList()
         };
@@ -87,7 +88,7 @@ public sealed class ForecastEvaluationController : ControllerBase
     private static string BuildCsv(IReadOnlyList<ForecastEvaluationRowReadModel> rows)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("Dataset,Cang,Ten cang,Ngay du bao,Ngay thuc te,Gio du bao,Gio thuc te,Sai so gio,Mua du bao,Mua thuc te,Sai so mua,Tam nhin du bao,Tam nhin thuc te,Sai so tam nhin,Rui ro du bao,Rui ro thuc te,Sai so risk,Trang thai");
+        builder.AppendLine("Dataset,Cang,Ten cang,Ngay du bao,Ngay thuc te,Gio du bao,Gio thuc te,Sai so gio,Mua du bao,Mua thuc te,Sai so mua,Tam nhin du bao,Tam nhin thuc te,Sai so tam nhin,Rui ro du bao,Rui ro thuc te,Sai so risk,Nguon doi chieu,Trang thai");
 
         foreach (var row in rows)
         {
@@ -110,6 +111,7 @@ public sealed class ForecastEvaluationController : ControllerBase
                 row.ForecastRiskLevel,
                 row.ActualRiskLevel ?? "",
                 row.RiskScoreError?.ToString(CultureInfo.InvariantCulture) ?? "",
+                row.ActualDataSource ?? "",
                 row.Status
             };
             builder.AppendLine(string.Join(",", values.Select(EscapeCsv)));

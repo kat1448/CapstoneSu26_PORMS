@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { WeatherSnapshot } from "../../types/dashboard";
+import { dataSourceLabel, weatherDescriptionLabel } from "../../utils/displayLabels";
 
 type WeatherDataTableProps = {
   weather: WeatherSnapshot;
@@ -22,22 +23,30 @@ function formatTimestamp(value: string | null | undefined) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
-  const pad = (part: number) => String(part).padStart(2, "0");
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "2-digit",
+    second: "2-digit",
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric"
+  }).format(date);
 }
 
 function formatWeatherDescription(weather: WeatherSnapshot) {
   const description = weather.weatherDescription?.trim();
   const code = weather.weatherCode;
 
-  if (description && code !== null && code !== undefined) return `${description} · ${code}`;
-  if (description) return description;
+  if (description && code !== null && code !== undefined) return `${weatherDescriptionLabel(description)} · ${code}`;
+  if (description) return weatherDescriptionLabel(description);
   if (code !== null && code !== undefined) return String(code);
   return "Chưa có dữ liệu";
 }
 
 function formatPointWeatherDescription(description: string | null | undefined) {
-  return description?.trim() || "Chưa có dữ liệu";
+  return weatherDescriptionLabel(description);
 }
 
 function formatCoordinate(latitude: number | null | undefined, longitude: number | null | undefined) {
@@ -81,20 +90,20 @@ export function WeatherDataTable({ weather }: WeatherDataTableProps) {
     <article className="card card-pad weather-data-card">
       <div className="card-head">
         <div>
-          <h3>Dữ liệu thời tiết theo cảng và khu vực</h3>
-          <p>Mỗi dòng thể hiện dữ liệu OpenWeather gắn với cảng, khu vực, vị trí và thời gian cập nhật.</p>
+          <h3>Chi tiết thời tiết tại các khu vực</h3>
+          <p>So sánh nhanh điều kiện gió, mưa, tầm nhìn và thời điểm cập nhật tại từng vị trí trong cảng.</p>
         </div>
       </div>
 
       <div className="weather-point-table-shell">
-        <table aria-label="Dữ liệu thời tiết theo cảng và khu vực" className="weather-point-table">
+        <table aria-label="Chi tiết thời tiết tại các khu vực" className="weather-point-table">
           <thead>
             <tr>
               <th>Cảng</th>
               <th>Khu vực</th>
-              <th>Vị trí</th>
-              <th>Quan trắc lúc</th>
-              <th>Cập nhật lúc</th>
+              <th>Tọa độ</th>
+              <th>Ghi nhận lúc</th>
+              <th>Hệ thống nhận lúc</th>
               <th>Nguồn</th>
               <th>Thời tiết</th>
               <th>Gió</th>
@@ -115,11 +124,11 @@ export function WeatherDataTable({ weather }: WeatherDataTableProps) {
                 <td>{formatCoordinate(point.latitude, point.longitude)}</td>
                 <td>{formatTimestamp(point.observedAt)}</td>
                 <td>{formatTimestamp(point.recordedAt)}</td>
-                <td>{point.dataSource || "Chưa có dữ liệu"}</td>
+                <td>{dataSourceLabel(point.dataSource)}</td>
                 <td>{formatPointWeatherDescription(point.weatherDescription)}</td>
                 <td>
                   <strong>{formatNumber(point.windSpeedMs, "m/s")}</strong>
-                  <small>Beaufort {point.beaufortNumber}</small>
+                  <small>Cấp gió {point.beaufortNumber}</small>
                 </td>
                 <td>{formatNumber(point.rainfall1hMm, "mm/h")}</td>
                 <td>{formatNumber(point.visibilityKm, "km")}</td>

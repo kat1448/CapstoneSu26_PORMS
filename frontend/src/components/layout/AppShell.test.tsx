@@ -7,6 +7,7 @@ import { AppShell } from "./AppShell";
 
 vi.mock("../../services/alertService", () => ({
   acknowledgeAlert: vi.fn(),
+  getAlertSpeechUrl: vi.fn((alertId: string) => `http://localhost:5000/api/alerts/${alertId}/speech`),
   getAlerts: vi.fn()
 }));
 
@@ -97,6 +98,76 @@ describe("AppShell", () => {
     expect(screen.queryByRole("dialog", { name: "Cảnh báo mới" })).not.toBeInTheDocument();
   });
 
+  it.each(["LOW", "MEDIUM"] as const)(
+    "does not show a popup or play a sound for %s alerts",
+    async (severity) => {
+      const oscillator = { connect: vi.fn(), frequency: { value: 0 }, start: vi.fn(), stop: vi.fn(), type: "" };
+      const gain = { connect: vi.fn(), gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() } };
+      const audioContext = {
+        createGain: vi.fn(() => gain),
+        createOscillator: vi.fn(() => oscillator),
+        currentTime: 0,
+        destination: {}
+      };
+      vi.stubGlobal("AudioContext", vi.fn(() => audioContext));
+      vi.mocked(getAlerts).mockResolvedValue([{ ...unreadAlert, alertId: `alert-${severity}`, severity }]);
+
+      renderShell();
+
+      await waitFor(() => expect(getAlerts).toHaveBeenCalled());
+      expect(screen.queryByRole("dialog", { name: "Cảnh báo mới" })).not.toBeInTheDocument();
+      expect(oscillator.start).not.toHaveBeenCalled();
+    }
+  );
+
+  it("reads a high alert through the PORMS speech endpoint, supports replay, and stops after acknowledgement", async () => {
+    vi.useFakeTimers();
+    const audioInstances: MockAudio[] = [];
+
+    class MockAudio {
+      load = vi.fn();
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      onplaying: (() => void) | null = null;
+      pause = vi.fn();
+      preload = "";
+      removeAttribute = vi.fn();
+      src: string;
+
+      constructor(src: string) {
+        this.src = src;
+        audioInstances.push(this);
+      }
+
+      play = vi.fn(() => {
+        this.onplaying?.();
+        return Promise.resolve();
+      });
+    }
+
+    vi.stubGlobal("Audio", MockAudio);
+    vi.mocked(getAlerts).mockResolvedValue([unreadAlert]);
+
+    renderShell();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole("dialog", { name: "Cảnh báo mới" })).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(900));
+
+    expect(audioInstances).toHaveLength(1);
+    expect(audioInstances[0].src).toBe("http://localhost:5000/api/alerts/alert-1/speech");
+    expect(screen.queryByText(/Đang đọc cảnh báo/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Nghe cảnh báo/ }));
+    expect(audioInstances).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận" }));
+    expect(audioInstances[1].pause).toHaveBeenCalled();
+  });
+
   it("resumes a suspended audio context before playing the alert sound", async () => {
     const oscillator = { connect: vi.fn(), frequency: { value: 0 }, start: vi.fn(), stop: vi.fn(), type: "" };
     const gain = { connect: vi.fn(), gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() } };
@@ -116,6 +187,33 @@ describe("AppShell", () => {
 
     expect(await screen.findByRole("dialog", { name: "Cảnh báo mới" })).toBeInTheDocument();
     await waitFor(() => expect(audioContext.resume).toHaveBeenCalled());
+  });
+
+  it("does not play a pending alert after the user has acknowledged it", async () => {
+    let resolveResume: (() => void) | undefined;
+    const oscillator = { connect: vi.fn(), frequency: { value: 0 }, start: vi.fn(), stop: vi.fn(), type: "" };
+    const gain = { connect: vi.fn(), gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() } };
+    const audioContext = {
+      createGain: vi.fn(() => gain),
+      createOscillator: vi.fn(() => oscillator),
+      currentTime: 0,
+      destination: {},
+      resume: vi.fn(() => new Promise<void>((resolve) => { resolveResume = resolve; })),
+      state: "suspended"
+    };
+    vi.stubGlobal("AudioContext", vi.fn(() => audioContext));
+    vi.mocked(getAlerts).mockResolvedValue([unreadAlert]);
+
+    renderShell();
+    expect(await screen.findByRole("dialog", { name: "Cảnh báo mới" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận" }));
+
+    await act(async () => {
+      resolveResume?.();
+      await Promise.resolve();
+    });
+
+    expect(oscillator.start).not.toHaveBeenCalled();
   });
 
   it("retries alert sound automatically after the next user interaction unlocks audio", async () => {

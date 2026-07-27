@@ -147,14 +147,14 @@ describe("SimulationPage", () => {
       </MemoryRouter>
     );
 
-    await screen.findByRole("heading", { name: "Chế độ mô phỏng" });
+    await screen.findByRole("heading", { name: "Mô phỏng tình huống vận hành" });
 
     expect(screen.getByTestId("simulation-status-panel")).toBeInTheDocument();
     expect(screen.getByTestId("simulation-kpi-grid")).toBeInTheDocument();
     expect(screen.getByTestId("simulation-main-grid")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Thiết lập mô phỏng" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Luồng sự kiện mô phỏng" })).toBeInTheDocument();
-    expect(screen.getAllByText("HIGH").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Diễn biến mô phỏng" })).toBeInTheDocument();
+    expect(screen.getAllByText("Cao").length).toBeGreaterThan(0);
   });
 
   it("falls back to ports when simulation points are empty", async () => {
@@ -228,7 +228,7 @@ describe("SimulationPage", () => {
     expect(portSelect).toHaveDisplayValue("DNTSA - Cang Tien Sa");
     expect(screen.queryByRole("textbox", { name: "Mã cảng" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Beaufort")).not.toBeInTheDocument();
-    const zoneSelect = await screen.findByRole("combobox", { name: "Zone ID" });
+    const zoneSelect = await screen.findByRole("combobox", { name: "Mã khu vực" });
     expect(zoneSelect).toHaveDisplayValue("Ben so 1");
     await user.type(screen.getByLabelText("Tên kịch bản"), "Kich ban moi");
     await user.click(screen.getByRole("button", { name: "Lưu dữ liệu" }));
@@ -238,7 +238,7 @@ describe("SimulationPage", () => {
     }));
     expect(await screen.findByText("Đã lưu dữ liệu mô phỏng")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Kich ban moi/ })).toBeChecked();
-    expect(screen.getByRole("button", { name: "Chạy dữ liệu đã chọn" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Chạy tình huống đã chọn" })).toBeInTheDocument();
   });
 
   it("runs every selected simulation dataset in sequence", async () => {
@@ -267,7 +267,7 @@ describe("SimulationPage", () => {
     expect(firstDataset).toBeChecked();
 
     await user.click(secondDataset);
-    await user.click(screen.getByRole("button", { name: "Chạy dữ liệu đã chọn" }));
+    await user.click(screen.getByRole("button", { name: "Chạy tình huống đã chọn" }));
 
     expect(runSimulationDataset).toHaveBeenNthCalledWith(1, "dataset-1");
     expect(runSimulationDataset).toHaveBeenNthCalledWith(2, "dataset-2");
