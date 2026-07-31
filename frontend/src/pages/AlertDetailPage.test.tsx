@@ -46,7 +46,7 @@ function renderDetail() {
   return render(
     <MemoryRouter initialEntries={["/alerts/alert-1"]}>
       <Routes>
-        <Route path="/alerts/:alertId" element={<AlertDetailPage />} />
+        <Route path="/alerts/:alertId" element={<AlertDetailPage currentUser={{ email: "admin@porms.vn", initials: "AD", name: "Admin", portName: "Toàn hệ thống", role: "ADMIN" }} />} />
       </Routes>
     </MemoryRouter>
   );
@@ -130,19 +130,6 @@ describe("AlertDetailPage", () => {
     });
     expect(await screen.findByText("Nguyễn Văn A")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Xác nhận" }));
-    expect(acknowledgeTask).toHaveBeenCalledWith("task-1");
-
-    await user.click(await screen.findByRole("button", { name: "Bắt đầu" }));
-    expect(startTask).toHaveBeenCalledWith("task-1");
-
-    await user.click(await screen.findByRole("button", { name: "Hoàn tất" }));
-    await user.type(screen.getByLabelText("Ghi chú hoàn tất"), "Đã đóng khu vực và thông báo điều độ.");
-    await user.click(screen.getByRole("button", { name: "Lưu hoàn tất" }));
-
-    expect(completeTask).toHaveBeenCalledWith("task-1", {
-      completionNote: "Đã đóng khu vực và thông báo điều độ."
-    });
-    expect(await screen.findByText("Hoàn tất")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Xác nhận" })).not.toBeInTheDocument();
   });
 });

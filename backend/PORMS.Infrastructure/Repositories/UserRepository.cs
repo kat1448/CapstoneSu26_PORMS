@@ -13,7 +13,8 @@ public sealed class UserRepository
         _connectionFactory = connectionFactory;
     }
 
-    public async Task<IReadOnlyList<UserSummaryReadModel>> GetUsersAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<UserSummaryReadModel>> GetUsersAsync(
+        string? search, string? role, string? status, string? portCode, CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
 
@@ -29,10 +30,18 @@ public sealed class UserRepository
             FROM operational.users u
             LEFT JOIN operational.ports p ON p.id = u.assigned_port_id
             WHERE u.deleted_at IS NULL
+              AND (@search IS NULL OR CONCAT_WS(' ', u.full_name, u.email, p.name, p.code, p.address) ILIKE '%' || @search || '%')
+              AND (@role IS NULL OR u.role::text = @role)
+              AND (@status IS NULL OR u.status::text = @status)
+              AND (@portCode IS NULL OR p.code = @portCode)
             ORDER BY u.full_name;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("search", string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim());
+        command.Parameters.AddWithValue("role", string.IsNullOrWhiteSpace(role) ? DBNull.Value : role.Trim().ToUpperInvariant());
+        command.Parameters.AddWithValue("status", string.IsNullOrWhiteSpace(status) ? DBNull.Value : status.Trim().ToUpperInvariant());
+        command.Parameters.AddWithValue("portCode", string.IsNullOrWhiteSpace(portCode) ? DBNull.Value : portCode.Trim().ToUpperInvariant());
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var results = new List<UserSummaryReadModel>();
@@ -131,21 +140,41 @@ public sealed class UserRepository
         return await reader.ReadAsync(cancellationToken) ? ReadUserSummary(reader) : null;
     }
 
-    public async Task<bool> DeleteUserAsync(Guid userId, CancellationToken cancellationToken)
+    public async Task<DeleteUserResult> DeleteUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
 
         const string sql = """
-            UPDATE operational.users
-            SET deleted_at = NOW(),
-                updated_at = NOW()
-            WHERE id = @userId
-              AND deleted_at IS NULL;
+            WITH target AS (
+                SELECT role::text
+                FROM operational.users
+                WHERE id = @userId
+                  AND deleted_at IS NULL
+            ), deleted AS (
+                UPDATE operational.users
+                SET deleted_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = @userId
+                  AND deleted_at IS NULL
+                  AND role <> 'ADMIN'
+                RETURNING id
+            )
+            SELECT CASE
+                WHEN EXISTS (SELECT 1 FROM deleted) THEN 'DELETED'
+                WHEN EXISTS (SELECT 1 FROM target WHERE role = 'ADMIN') THEN 'PROTECTED_ADMIN'
+                ELSE 'NOT_FOUND'
+            END;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("userId", userId);
-        return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+        var result = (string?)await command.ExecuteScalarAsync(cancellationToken);
+        return result switch
+        {
+            "DELETED" => DeleteUserResult.Deleted,
+            "PROTECTED_ADMIN" => DeleteUserResult.ProtectedAdmin,
+            _ => DeleteUserResult.NotFound
+        };
     }
 
     public async Task<AuthUserReadModel?> FindForAuthenticationAsync(
@@ -154,7 +183,7 @@ public sealed class UserRepository
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
         const string sql = """
-            SELECT u.id, u.email, u.full_name, u.password_hash, u.role, u.status,
+            SELECT u.id, u.email, u.full_name, u.password_hash, u.role, u.status, u.assigned_port_id,
                    COALESCE(p.name, 'Tất cả cảng')
             FROM operational.users u
             LEFT JOIN operational.ports p ON p.id = u.assigned_port_id
@@ -173,7 +202,7 @@ public sealed class UserRepository
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
         const string sql = """
-            SELECT u.id, u.email, u.full_name, u.password_hash, u.role, u.status,
+            SELECT u.id, u.email, u.full_name, u.password_hash, u.role, u.status, u.assigned_port_id,
                    COALESCE(p.name, 'Tất cả cảng')
             FROM operational.users u
             LEFT JOIN operational.ports p ON p.id = u.assigned_port_id
@@ -250,7 +279,8 @@ public sealed class UserRepository
             reader.GetString(3),
             reader.GetString(4),
             reader.GetString(5),
-            reader.GetString(6));
+            reader.IsDBNull(6) ? null : reader.GetGuid(6),
+            reader.GetString(7));
 
     private static UserSummaryReadModel ReadUserSummary(NpgsqlDataReader reader) =>
         new(
@@ -307,6 +337,13 @@ public sealed record UpdateUserReadModel(
     string Status,
     Guid? PortId);
 
+public enum DeleteUserResult
+{
+    Deleted,
+    NotFound,
+    ProtectedAdmin
+}
+
 public sealed record AuthUserReadModel(
     Guid Id,
     string Email,
@@ -314,4 +351,5 @@ public sealed record AuthUserReadModel(
     string PasswordHash,
     string Role,
     string Status,
+    Guid? PortId,
     string PortName);

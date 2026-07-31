@@ -21,6 +21,7 @@ public sealed class ForecastEvaluationRepository
         string? portCode,
         DateTimeOffset? from,
         DateTimeOffset? to,
+        Guid? scopedPortId,
         CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
@@ -47,6 +48,7 @@ public sealed class ForecastEvaluationRepository
                 JOIN operational.ports p ON p.code = UPPER(d.metadata->>'portCode')
                 WHERE d.metadata->>'source' = 'forecast-plan'
                   AND (@portCode::text IS NULL OR p.code = @portCode::text)
+                  AND (@scopedPortId::uuid IS NULL OR p.id = @scopedPortId::uuid)
             ),
             forecast_rows AS (
                 SELECT dataset_name,
@@ -149,6 +151,7 @@ public sealed class ForecastEvaluationRepository
         command.Parameters.Add("portCode", NpgsqlTypes.NpgsqlDbType.Text).Value = string.IsNullOrWhiteSpace(portCode) ? DBNull.Value : portCode.Trim().ToUpperInvariant();
         command.Parameters.Add("fromDate", NpgsqlTypes.NpgsqlDbType.TimestampTz).Value = from.HasValue ? from.Value : DBNull.Value;
         command.Parameters.Add("toDate", NpgsqlTypes.NpgsqlDbType.TimestampTz).Value = to.HasValue ? to.Value : DBNull.Value;
+        command.Parameters.Add("scopedPortId", NpgsqlTypes.NpgsqlDbType.Uuid).Value = scopedPortId.HasValue ? scopedPortId.Value : DBNull.Value;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var rows = new List<ForecastEvaluationRowReadModel>();

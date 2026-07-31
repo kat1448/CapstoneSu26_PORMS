@@ -10,7 +10,7 @@ import type { PortSummary } from "../types/port";
 import type { ForecastHorizonDays, ForecastPlan } from "../types/simulation";
 import type { OpenWeatherForecast } from "../types/weather";
 import type { ForecastRiskAnalysis } from "../types/ml";
-import { clusterLabel, operationModeLabel, riskLabel, weatherDescriptionLabel } from "../utils/displayLabels";
+import { clusterLabel, forecastTextLabel, operationModeLabel, riskLabel, weatherDescriptionLabel } from "../utils/displayLabels";
 
 const FORECAST_AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
 const ANALYSIS_STEP_DELAY_MS = 180;
@@ -435,7 +435,7 @@ export function ForecastPlanningPage() {
                     <div className="forecast-llm-head">
                       <div>
                         <h3>Giải thích và phương án đề xuất</h3>
-                        <p>{mlAnalysis.llmPlanAnalysis.summary}</p>
+                        <p>{forecastTextLabel(mlAnalysis.llmPlanAnalysis.summary)}</p>
                       </div>
                       <Badge tone={mlAnalysis.llmPlanAnalysis.isConfigured ? "success" : "muted"}>
                         Phân tích tự động
@@ -448,17 +448,17 @@ export function ForecastPlanningPage() {
                             <strong>{new Date(item.plannedAt).toLocaleDateString("vi-VN")}</strong>
                             <Badge tone={operationModeTone(item.operationMode)}>{operationModeLabel(item.operationMode)}</Badge>
                           </div>
-                          <p>{item.planChange}</p>
-                          <small>{item.reason}</small>
+                          <p>{forecastTextLabel(item.planChange)}</p>
+                          <small>{forecastTextLabel(item.reason)}</small>
                           <div className="forecast-llm-actions">
                             <span>Việc nên làm</span>
                             {item.recommendedActions.map((action) => (
-                              <strong key={action}>{action}</strong>
+                              <strong key={action}>{forecastTextLabel(action)}</strong>
                             ))}
                           </div>
                           <div className="forecast-llm-affected">
                             {item.affectedOperations.map((operation) => (
-                              <span key={operation}>{operation}</span>
+                              <span key={operation}>{forecastTextLabel(operation)}</span>
                             ))}
                           </div>
                         </div>

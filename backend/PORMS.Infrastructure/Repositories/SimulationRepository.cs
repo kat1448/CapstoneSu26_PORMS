@@ -374,7 +374,8 @@ public sealed class SimulationRepository
         for (var dayOffset = 0; dayOffset < horizonDays; dayOffset++)
         {
             var snapshotNumber = dayOffset + 1;
-            var plannedAt = new DateTimeOffset(now.UtcDateTime.Date.AddDays(dayOffset).AddHours(8), TimeSpan.Zero);
+            // Kế hoạch dự báo bắt đầu từ ngày vận hành kế tiếp, tránh tạo mốc giờ đã qua trong hôm nay.
+            var plannedAt = new DateTimeOffset(now.UtcDateTime.Date.AddDays(dayOffset + 1).AddHours(8), TimeSpan.Zero);
             var wind = Math.Max(0, weather.WindSpeedMs + Math.Min(snapshotNumber, 6) * 0.35m);
             var rainfall = Math.Max(0, weather.Rainfall1hMm + (snapshotNumber % 4) * 2.5m);
             var visibility = Math.Max(0.5m, weather.VisibilityKm - Math.Min(snapshotNumber, 8) * 0.25m);

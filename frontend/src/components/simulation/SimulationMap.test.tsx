@@ -148,7 +148,7 @@ describe("SimulationMap", () => {
     );
 
     expect(JSON.stringify(leafletState.markers[0].options)).toContain("#d94848");
-    expect(leafletState.markers[0].popup).toContain("CRITICAL");
+    expect(leafletState.markers[0].popup).toContain("Rất cao");
   });
 
   it("renders selected port zones using simulation risk and port-coordinate fallback", () => {
@@ -169,7 +169,7 @@ describe("SimulationMap", () => {
     expect(leafletState.markers.some((marker) => marker.popup?.includes("Cang Lien Chieu"))).toBe(false);
     expect(leafletState.markers[1].coordinates[1]).not.toBe(108.2144);
     expect(leafletState.markers[1].popup).toContain("Ben so 1");
-    expect(leafletState.markers[1].popup).toContain("CRITICAL");
+    expect(leafletState.markers[1].popup).toContain("Rất cao");
     expect(leafletState.markers[1].popup).toContain("toa do cang");
   });
 

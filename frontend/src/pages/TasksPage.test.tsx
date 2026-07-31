@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { getTasks, type TaskLogRecord } from "../services/taskService";
 import { TasksPage } from "./TasksPage";
@@ -32,6 +33,10 @@ function makeTask(index: number): TaskLogRecord {
   };
 }
 
+function renderTasks() {
+  return render(<MemoryRouter><TasksPage /></MemoryRouter>);
+}
+
 describe("TasksPage", () => {
   it("loads task log rows from the API service", async () => {
     vi.mocked(getTasks).mockResolvedValue([{
@@ -56,9 +61,9 @@ describe("TasksPage", () => {
       zoneName: "Bến số 1"
     }]);
 
-    render(<TasksPage />);
+    renderTasks();
 
-    expect(screen.getByRole("heading", { name: "Nhiệm vụ cần thực hiện" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Quản lý nhiệm vụ" })).toBeInTheDocument();
     expect(await screen.findByText("Kiểm tra khu vực rủi ro")).toBeInTheDocument();
     expect(screen.getAllByText("Bến số 1").length).toBeGreaterThan(0);
     expect(screen.getByText("Đội vận hành")).toBeInTheDocument();
@@ -69,7 +74,7 @@ describe("TasksPage", () => {
     const user = userEvent.setup();
     vi.mocked(getTasks).mockResolvedValue(Array.from({ length: 16 }, (_, index) => makeTask(index + 1)));
 
-    render(<TasksPage />);
+    renderTasks();
 
     expect(await screen.findByText("Trang 1/2")).toBeInTheDocument();
     expect(screen.getByText("Task row 1")).toBeInTheDocument();
@@ -153,7 +158,7 @@ describe("TasksPage", () => {
       }
     ]);
 
-    const { container } = render(<TasksPage />);
+    const { container } = renderTasks();
     const view = within(container);
 
     expect(await view.findByText("Task dung bo loc")).toBeInTheDocument();

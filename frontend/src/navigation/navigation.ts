@@ -58,7 +58,8 @@ export const navigationGroups: NavigationGroup[] = [
       { icon: "play", label: "Mô phỏng", path: "/simulation", roles: adminOnly },
       { icon: "chart", label: "Dự báo vận hành", path: "/forecast-planning", roles: adminAndPortManager },
       { icon: "chart", label: "Dự báo dài hạn", path: "/ai-long-range-forecast", roles: adminAndPortManager },
-      { icon: "chart", label: "Đánh giá dự báo", path: "/forecast-evaluation", roles: adminAndPortManager }
+      { icon: "chart", label: "Đánh giá dự báo", path: "/forecast-evaluation", roles: adminAndPortManager },
+      { icon: "chart", label: "Báo cáo vận hành", path: "/reports", roles: adminAndPortManager }
     ]
   }
 ];
@@ -70,7 +71,7 @@ export function getNavigationForRole(role: DemoUserRole): NavigationGroup[] {
 }
 
 export function isRouteAllowed(role: DemoUserRole, pathname: string): boolean {
-  if (pathname === "/profile" || pathname === "/change-password") {
+  if (pathname === "/profile" || pathname === "/change-password" || pathname === "/notification-settings") {
     return true;
   }
 

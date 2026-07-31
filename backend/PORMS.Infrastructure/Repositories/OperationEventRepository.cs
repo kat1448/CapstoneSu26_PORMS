@@ -12,7 +12,11 @@ public sealed class OperationEventRepository
         _connectionFactory = connectionFactory;
     }
 
-    public async Task<IReadOnlyList<OperationEventReadModel>> GetOperationEventsAsync(bool simulationOnly, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<OperationEventReadModel>> GetOperationEventsAsync(
+        bool simulationOnly,
+        Guid userId,
+        string role,
+        CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
 
@@ -47,12 +51,37 @@ public sealed class OperationEventRepository
                     AND e.event_type = 'WEATHER_FETCHED'
                     AND e.port_id IS NULL
                   )
+              AND (
+                    @role = 'ADMIN'
+                    OR (
+                        @role = 'PORT_MANAGER'
+                        AND e.port_id = (
+                            SELECT assigned_port_id
+                            FROM operational.users
+                            WHERE id = @userId
+                              AND deleted_at IS NULL
+                              AND status = 'ACTIVE'
+                        )
+                    )
+                    OR (
+                        @role = 'OPERATOR'
+                        AND e.entity_type = 'TASK'
+                        AND EXISTS (
+                            SELECT 1
+                            FROM operational.tasks scoped_task
+                            WHERE scoped_task.id = e.entity_id
+                              AND scoped_task.assigned_user_id = @userId
+                        )
+                    )
+                  )
             ORDER BY e.occurred_at DESC
             LIMIT 50;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("simulationOnly", simulationOnly);
+        command.Parameters.AddWithValue("userId", userId);
+        command.Parameters.AddWithValue("role", role);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var results = new List<OperationEventReadModel>();
@@ -77,6 +106,90 @@ public sealed class OperationEventRepository
         }
 
         return results;
+    }
+
+    public async Task RecordTaskEventAsync(
+        TaskLogReadModel task,
+        Guid actorUserId,
+        string eventType,
+        string summary,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+        const string sql = """
+            INSERT INTO operational.operation_events (
+                id,
+                event_type,
+                port_id,
+                zone_id,
+                actor_user_id,
+                entity_type,
+                entity_id,
+                summary,
+                payload,
+                simulation_session_id,
+                occurred_at
+            ) VALUES (
+                @id,
+                @eventType,
+                @portId,
+                @zoneId,
+                @actorUserId,
+                'TASK',
+                @taskId,
+                @summary,
+                jsonb_build_object(
+                    'taskCode', @taskCode,
+                    'status', @status,
+                    'assignedUserId', @assignedUserId
+                ),
+                @simulationSessionId,
+                NOW()
+            );
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("id", Guid.NewGuid());
+        command.Parameters.AddWithValue("eventType", eventType);
+        command.Parameters.AddWithValue("portId", task.PortId);
+        AddNullableGuid(command, "zoneId", task.ZoneId);
+        command.Parameters.AddWithValue("actorUserId", actorUserId);
+        command.Parameters.AddWithValue("taskId", task.TaskId);
+        command.Parameters.AddWithValue("summary", summary);
+        command.Parameters.AddWithValue("taskCode", task.TaskCode);
+        command.Parameters.AddWithValue("status", task.Status);
+        AddNullableGuid(command, "assignedUserId", task.AssignedUserId);
+        AddNullableGuid(command, "simulationSessionId", task.SimulationSessionId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task RecordReportExportAsync(
+        Guid actorUserId, Guid? portId, string reportType, string format, string filterSummary,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+        const string sql = """
+            INSERT INTO operational.operation_events
+                (id, event_type, port_id, actor_user_id, entity_type, summary, payload, occurred_at)
+            VALUES
+                (@id, 'REPORT_EXPORTED', @portId, @actorUserId, 'REPORT', @summary,
+                 jsonb_build_object('reportType', @reportType, 'format', @format, 'filters', @filters), NOW());
+            """;
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("id", Guid.NewGuid());
+        AddNullableGuid(command, "portId", portId);
+        command.Parameters.AddWithValue("actorUserId", actorUserId);
+        command.Parameters.AddWithValue("summary", $"Đã xuất báo cáo {reportType} định dạng {format}. Bộ lọc: {filterSummary}");
+        command.Parameters.AddWithValue("reportType", reportType);
+        command.Parameters.AddWithValue("format", format);
+        command.Parameters.AddWithValue("filters", filterSummary);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static void AddNullableGuid(NpgsqlCommand command, string name, Guid? value)
+    {
+        var parameter = command.Parameters.Add(name, NpgsqlTypes.NpgsqlDbType.Uuid);
+        parameter.Value = value.HasValue ? value.Value : DBNull.Value;
     }
 }
 

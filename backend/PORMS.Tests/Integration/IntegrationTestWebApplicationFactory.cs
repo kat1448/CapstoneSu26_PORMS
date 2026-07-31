@@ -133,6 +133,39 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         return (reader.GetGuid(0), reader.GetString(1), reader.GetString(2));
     }
 
+    public async Task<(Guid UserId, string FullName, string Email)> GetFirstActiveUserByRoleAsync(
+        string role,
+        Guid? assignedPortId = null,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            SELECT id, full_name, email
+            FROM operational.users
+            WHERE deleted_at IS NULL
+              AND status = 'ACTIVE'
+              AND role::text = @role
+              AND (@assignedPortId IS NULL OR assigned_port_id = @assignedPortId)
+            ORDER BY created_at, full_name
+            LIMIT 1;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("role", role);
+        command.Parameters.Add(new NpgsqlParameter("assignedPortId", NpgsqlTypes.NpgsqlDbType.Uuid)
+        {
+            Value = assignedPortId.HasValue ? assignedPortId.Value : DBNull.Value
+        });
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException($"No active {role} test user exists.");
+        }
+
+        return (reader.GetGuid(0), reader.GetString(1), reader.GetString(2));
+    }
+
     public async Task SeedAlertAsync(Guid alertId, CancellationToken cancellationToken = default)
     {
         var port = await GetPrimaryPortAsync(cancellationToken);

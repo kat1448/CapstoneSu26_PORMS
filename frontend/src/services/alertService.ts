@@ -1,5 +1,6 @@
 import { getAlerts as getAlertsData } from "../mock/demoData";
 import { formatTimeLabel, getApiUrl, requestJson, requestVoid, withMockFallback } from "./api";
+import { getStoredSession } from "./authService";
 import type { TaskLogRecord } from "./taskService";
 import type { AlertItem } from "../types/alert";
 
@@ -41,4 +42,17 @@ export async function acknowledgeAlert(alertId: string): Promise<void> {
 
 export function getAlertSpeechUrl(alertId: string): string {
   return getApiUrl(`/api/alerts/${encodeURIComponent(alertId)}/speech`);
+}
+
+export async function getAlertSpeechAudio(alertId: string): Promise<Blob> {
+  const session = getStoredSession();
+  const response = await fetch(getAlertSpeechUrl(alertId), {
+    headers: session ? { Authorization: `Bearer ${session.accessToken}` } : {}
+  });
+
+  if (!response.ok) {
+    throw new Error(`Speech API returned ${response.status}`);
+  }
+
+  return response.blob();
 }

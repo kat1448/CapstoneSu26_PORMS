@@ -2,10 +2,16 @@ import { useEffect, useMemo, useRef, useState, type PropsWithChildren } from "re
 import type { DemoUser } from "../../App";
 import {
   acknowledgeAlert as acknowledgeAlertRequest,
+  getAlertSpeechAudio,
   getAlerts,
-  getAlertSpeechUrl
 } from "../../services/alertService";
 import type { AlertItem } from "../../types/alert";
+import {
+  getNotificationPreferences,
+  NOTIFICATION_PREFERENCES_CHANGED,
+  severityMeetsPreference,
+  type NotificationPreferences
+} from "../../services/notificationPreferenceService";
 import { riskLabel } from "../../utils/displayLabels";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
@@ -95,7 +101,7 @@ function unlockAlertSound() {
     .catch(() => undefined);
 }
 
-function buildAlertSpeechText(alert: AlertItem) {
+function buildFriendlyAlertSpeechText(alert: AlertItem) {
   return `Chú ý. ${alert.title}. ${alert.message}`
     .replace(/\bCRITICAL\b/g, "rất cao")
     .replace(/\bHIGH\b/g, "cao")
@@ -118,6 +124,7 @@ function playOnlineAlertSpeech(
   let hasFailed = false;
   let source: AudioBufferSourceNode | null = null;
   let fallbackAudio: HTMLAudioElement | null = null;
+  let fallbackAudioUrl: string | null = null;
 
   const fail = () => {
     if (cancelled || hasFailed) return;
@@ -125,36 +132,41 @@ function playOnlineAlertSpeech(
     callbacks.onError();
   };
 
-  const playWithHtmlAudio = () => {
-    fallbackAudio = new Audio(getAlertSpeechUrl(alert.alertId));
+  const fallbackToBrowserSpeech = () => {
+    if (cancelled || hasFailed) return;
+    const started = speakAlert(alert, callbacks);
+    if (!started) fail();
+  };
+
+  const playWithHtmlAudio = async () => {
+    const speechBlob = await getAlertSpeechAudio(alert.alertId);
+    if (cancelled) return;
+    fallbackAudioUrl = URL.createObjectURL(speechBlob);
+    fallbackAudio = new Audio(fallbackAudioUrl);
     fallbackAudio.preload = "auto";
     fallbackAudio.onplaying = callbacks.onStart;
     fallbackAudio.onended = callbacks.onEnd;
-    fallbackAudio.onerror = fail;
+    fallbackAudio.onerror = fallbackToBrowserSpeech;
 
     try {
       const playback = fallbackAudio.play();
       if (playback && typeof playback.catch === "function") {
-        void playback.catch(fail);
+        void playback.catch(fallbackToBrowserSpeech);
       }
     } catch {
-      fail();
+      fallbackToBrowserSpeech();
     }
   };
 
   const playWithAudioContext = async () => {
     const audioContext = await getRunningAlertAudioContext();
     if (!audioContext || typeof audioContext.decodeAudioData !== "function") {
-      playWithHtmlAudio();
+      await playWithHtmlAudio();
       return;
     }
 
-    const response = await fetch(getAlertSpeechUrl(alert.alertId));
-    if (!response.ok) {
-      throw new Error(`Speech API returned ${response.status}`);
-    }
-
-    const audioBuffer = await audioContext.decodeAudioData(await response.arrayBuffer());
+    const speechBlob = await getAlertSpeechAudio(alert.alertId);
+    const audioBuffer = await audioContext.decodeAudioData(await speechBlob.arrayBuffer());
     if (cancelled) return;
 
     source = audioContext.createBufferSource();
@@ -166,13 +178,9 @@ function playOnlineAlertSpeech(
   };
 
   if (getAudioContextConstructor()) {
-    void playWithAudioContext().catch(() => {
-      if (!cancelled && !hasFailed) {
-        playWithHtmlAudio();
-      }
-    });
+    void playWithAudioContext().catch(fallbackToBrowserSpeech);
   } else {
-    playWithHtmlAudio();
+    void playWithHtmlAudio().catch(fallbackToBrowserSpeech);
   }
 
   return () => {
@@ -186,6 +194,10 @@ function playOnlineAlertSpeech(
     fallbackAudio?.pause();
     fallbackAudio?.removeAttribute("src");
     fallbackAudio?.load();
+    if (fallbackAudioUrl) {
+      URL.revokeObjectURL(fallbackAudioUrl);
+      fallbackAudioUrl = null;
+    }
   };
 }
 
@@ -197,7 +209,7 @@ function speakAlert(
     return false;
   }
 
-  const speech = new SpeechSynthesisUtterance(buildAlertSpeechText(alert));
+  const speech = new SpeechSynthesisUtterance(buildFriendlyAlertSpeechText(alert));
   const synthesizer = window.speechSynthesis;
   const voices = synthesizer.getVoices();
   const vietnameseVoice = voices.find((voice) => voice.lang.toLocaleLowerCase().startsWith("vi"));
@@ -235,49 +247,42 @@ function cancelAlertSpeech() {
   }
 }
 
-function AlertNotificationPopup({
+function AlertNotificationPopupV2({
   alert,
   onAcknowledge,
   onReplay,
+  onSnooze,
   voiceStatus,
-  onSnooze
+  voiceEnabled
 }: {
   alert: AlertItem;
   onAcknowledge: (alertId: string) => void;
   onReplay: () => void;
-  voiceStatus: AlertVoiceStatus;
   onSnooze: (alertId: string) => void;
+  voiceStatus: AlertVoiceStatus;
+  voiceEnabled: boolean;
 }) {
+  const action = alert.severity === "CRITICAL"
+    ? "Tạm dừng hoạt động tại khu vực và thực hiện ngay quy trình ứng phó khẩn cấp."
+    : "Hạn chế hoạt động tại khu vực và triển khai các nhiệm vụ ứng phó được giao.";
+
   return (
     <div className="alert-popup-backdrop">
-      <section aria-label="Cảnh báo mới" className="alert-popup" role="dialog">
+      <section aria-label="Cảnh báo mới" className={`alert-popup alert-popup-v2 severity-${alert.severity.toLowerCase()}`} data-voice-status={voiceStatus} role="dialog">
+        <div className="alert-popup-accent" />
         <div className="alert-popup-head">
-          <div>
-            <p className="alert-popup-kicker">Cảnh báo mới</p>
-            <h2>{alert.title}</h2>
+          <div className="alert-popup-heading-group">
+            <span className="alert-popup-icon" aria-hidden="true">!</span>
+            <div><p className="alert-popup-kicker">CẢNH BÁO MỚI</p><h2>{alert.title}</h2></div>
           </div>
-          <span className={`alert-popup-severity severity-${alert.severity.toLowerCase()}`}>
-            {riskLabel(alert.severity)}
-          </span>
+          <span className={`alert-popup-severity severity-${alert.severity.toLowerCase()}`}>{riskLabel(alert.severity)}</span>
         </div>
+        <div className="alert-popup-location"><strong>{alert.portName}</strong><span>{alert.zoneName}</span><time>{alert.createdAt}</time></div>
         <p className="alert-popup-message">{alert.message}</p>
-        <div className={`alert-popup-voice-panel voice-${voiceStatus}`}>
-          <button className="alert-popup-replay" onClick={onReplay} type="button">
-            <span aria-hidden="true">🔊</span> Nghe cảnh báo
-          </button>
-        </div>
-        <div className="alert-popup-meta">
-          <span>{alert.portCode}</span>
-          <span>{alert.zoneName}</span>
-          <span>{alert.createdAt}</span>
-        </div>
-        <div className="alert-popup-actions">
-          <button className="secondary-button" onClick={() => onSnooze(alert.alertId)} type="button">
-            Báo sau 5 phút
-          </button>
-          <button className="primary-button" onClick={() => onAcknowledge(alert.alertId)} type="button">
-            Xác nhận
-          </button>
+        <div className="alert-popup-recommendation"><span aria-hidden="true">!</span><div><strong>Việc cần thực hiện</strong><p>{action}</p></div></div>
+        <div className="alert-popup-footer">
+          {voiceEnabled ? <button className="alert-popup-replay" onClick={onReplay} type="button"><span aria-hidden="true">🔊</span> Nghe cảnh báo</button> : <span className="alert-voice-muted">Giọng đọc đang tắt</span>}
+          <div className="alert-popup-actions"><button aria-label="Báo sau 5 phút" className="secondary-button" onClick={() => onSnooze(alert.alertId)} type="button">Nhắc lại sau 5 phút</button><button aria-label="Xác nhận" className="primary-button" onClick={() => onAcknowledge(alert.alertId)} type="button">Xác nhận tiếp nhận</button></div>
         </div>
       </section>
     </div>
@@ -292,6 +297,10 @@ export function AppShell({ children, currentUser, onLogout, onRefresh, refreshKe
   const [now, setNow] = useState(() => Date.now());
   const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const [voiceStatus, setVoiceStatus] = useState<AlertVoiceStatus>("idle");
+  const userPreferenceKey = currentUser.id ?? currentUser.email;
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(
+    () => getNotificationPreferences(userPreferenceKey)
+  );
   const lastSoundAlertId = useRef<string | null>(null);
   const speechTimer = useRef<number | null>(null);
   const speechStartGuardTimer = useRef<number | null>(null);
@@ -367,6 +376,16 @@ export function AppShell({ children, currentUser, onLogout, onRefresh, refreshKe
   };
 
   useEffect(() => {
+    setNotificationPreferences(getNotificationPreferences(userPreferenceKey));
+    const handlePreferenceChange = (event: Event) => {
+      const changed = event as CustomEvent<NotificationPreferences>;
+      setNotificationPreferences(changed.detail ?? getNotificationPreferences(userPreferenceKey));
+    };
+    window.addEventListener(NOTIFICATION_PREFERENCES_CHANGED, handlePreferenceChange);
+    return () => window.removeEventListener(NOTIFICATION_PREFERENCES_CHANGED, handlePreferenceChange);
+  }, [userPreferenceKey]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const loadAlerts = () => {
@@ -393,19 +412,22 @@ export function AppShell({ children, currentUser, onLogout, onRefresh, refreshKe
     () =>
       alerts.find(
         (alert) =>
+          currentUser.role !== "OPERATOR" &&
           POPUP_ALERT_SEVERITIES.has(alert.severity) &&
+          notificationPreferences.inAppEnabled &&
+          severityMeetsPreference(alert.severity, notificationPreferences.minimumSeverity) &&
           !alert.read &&
           !acknowledgedAlertIds.has(alert.alertId) &&
           (snoozedAlertUntil[alert.alertId] ?? 0) <= now
       ) ?? null,
-    [acknowledgedAlertIds, alerts, now, snoozedAlertUntil]
+    [acknowledgedAlertIds, alerts, currentUser.role, notificationPreferences, now, snoozedAlertUntil]
   );
 
   useEffect(() => {
     const generation = announcementGeneration.current;
     const unlockAudio = () => {
       void unlockAlertSound().then(() => {
-        if (!activeAlert || generation !== announcementGeneration.current) {
+        if (!activeAlert || !notificationPreferences.voiceEnabled || generation !== announcementGeneration.current) {
           return;
         }
 
@@ -421,7 +443,7 @@ export function AppShell({ children, currentUser, onLogout, onRefresh, refreshKe
       window.removeEventListener("pointerdown", unlockAudio, { capture: true });
       window.removeEventListener("keydown", unlockAudio, { capture: true });
     };
-  }, [activeAlert]);
+  }, [activeAlert, notificationPreferences.voiceEnabled]);
 
   useEffect(() => {
     setUnreadAlertCount(
@@ -435,8 +457,8 @@ export function AppShell({ children, currentUser, onLogout, onRefresh, refreshKe
     }
 
     lastSoundAlertId.current = activeAlert.alertId;
-    announceAlert(activeAlert);
-  }, [activeAlert]);
+    if (notificationPreferences.voiceEnabled) announceAlert(activeAlert);
+  }, [activeAlert, notificationPreferences.voiceEnabled]);
 
   useEffect(() => () => stopAlertAnnouncement(), []);
 
@@ -481,6 +503,7 @@ export function AppShell({ children, currentUser, onLogout, onRefresh, refreshKe
 
   const replayAlert = () => {
     if (!activeAlert) return;
+    if (!notificationPreferences.voiceEnabled) return;
     announcementGeneration.current += 1;
     announceAlert(activeAlert, true);
   };
@@ -513,12 +536,13 @@ export function AppShell({ children, currentUser, onLogout, onRefresh, refreshKe
         <main className="content">{children}</main>
       </div>
       {activeAlert ? (
-        <AlertNotificationPopup
+        <AlertNotificationPopupV2
           alert={activeAlert}
           onAcknowledge={acknowledgeAlert}
           onReplay={replayAlert}
           onSnooze={snoozeAlert}
           voiceStatus={voiceStatus}
+          voiceEnabled={notificationPreferences.voiceEnabled}
         />
       ) : null}
     </div>
