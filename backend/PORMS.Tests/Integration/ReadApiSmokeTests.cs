@@ -135,6 +135,9 @@ public sealed class ReadApiSmokeTests
     {
         await _factory.SeedAlertAsync(SeedAlertId);
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateToken("ADMIN"));
 
         var response = await client.GetAsync("/api/alerts");
 
@@ -221,11 +224,13 @@ public sealed class ReadApiSmokeTests
         try
         {
             taskId = await _factory.SeedAlertTaskAsync(alertId, taskCode);
-            var assignee = await _factory.GetFirstActiveUserAsync();
+            var port = await _factory.GetPrimaryPortAsync();
+            var assignee = await _factory.GetFirstActiveUserByRoleAsync("OPERATOR", port.PortId);
+            var admin = await _factory.GetFirstActiveUserByRoleAsync("ADMIN");
             var client = _factory.CreateClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Bearer",
-                CreateToken("ADMIN"));
+                CreateToken("ADMIN", admin.UserId));
             var notifier = _factory.Services.GetRequiredService<FakeTaskAssignmentEmailNotifier>();
             notifier.Clear();
 
@@ -253,21 +258,32 @@ public sealed class ReadApiSmokeTests
             Assert.Equal(assignee.FullName, notification.ToName);
             Assert.Equal(taskCode, notification.TaskCode);
 
-            var acknowledgeResponse = await client.PatchAsync($"/api/tasks/{taskId}/acknowledge", null);
+            var managerAcknowledgeResponse = await client.PatchAsync($"/api/tasks/{taskId}/acknowledge", null);
+            Assert.Equal(HttpStatusCode.Forbidden, managerAcknowledgeResponse.StatusCode);
+
+            var operatorClient = _factory.CreateClient();
+            operatorClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                CreateToken("OPERATOR", assignee.UserId));
+
+            var prematureStartResponse = await operatorClient.PatchAsync($"/api/tasks/{taskId}/start", null);
+            Assert.Equal(HttpStatusCode.Conflict, prematureStartResponse.StatusCode);
+
+            var acknowledgeResponse = await operatorClient.PatchAsync($"/api/tasks/{taskId}/acknowledge", null);
             Assert.Equal(HttpStatusCode.OK, acknowledgeResponse.StatusCode);
             using var acknowledgedPayload = JsonDocument.Parse(await acknowledgeResponse.Content.ReadAsStringAsync());
             Assert.Equal("ACKNOWLEDGED", acknowledgedPayload.RootElement.GetProperty("status").GetString());
             Assert.True(acknowledgedPayload.RootElement.TryGetProperty("acknowledgedAt", out var acknowledgedAt));
             Assert.Equal(JsonValueKind.String, acknowledgedAt.ValueKind);
 
-            var startResponse = await client.PatchAsync($"/api/tasks/{taskId}/start", null);
+            var startResponse = await operatorClient.PatchAsync($"/api/tasks/{taskId}/start", null);
             Assert.Equal(HttpStatusCode.OK, startResponse.StatusCode);
             using var startedPayload = JsonDocument.Parse(await startResponse.Content.ReadAsStringAsync());
             Assert.Equal("IN_PROGRESS", startedPayload.RootElement.GetProperty("status").GetString());
             Assert.True(startedPayload.RootElement.TryGetProperty("startedAt", out var startedAt));
             Assert.Equal(JsonValueKind.String, startedAt.ValueKind);
 
-            var completeResponse = await client.PatchAsJsonAsync($"/api/tasks/{taskId}/complete", new
+            var completeResponse = await operatorClient.PatchAsJsonAsync($"/api/tasks/{taskId}/complete", new
             {
                 completionNote = "Đã hoàn tất kiểm tra hiện trường."
             });
@@ -276,6 +292,19 @@ public sealed class ReadApiSmokeTests
             using var completedPayload = JsonDocument.Parse(await completeResponse.Content.ReadAsStringAsync());
             Assert.Equal("COMPLETED", completedPayload.RootElement.GetProperty("status").GetString());
             Assert.Equal("Đã hoàn tất kiểm tra hiện trường.", completedPayload.RootElement.GetProperty("completionNote").GetString());
+
+            var eventsResponse = await client.GetAsync("/api/operation-events");
+            Assert.Equal(HttpStatusCode.OK, eventsResponse.StatusCode);
+            var events = await eventsResponse.Content.ReadFromJsonAsync<List<OperationEventResponse>>();
+            Assert.NotNull(events);
+            var taskEvents = events!
+                .Where(item => item.EntityId == taskId)
+                .Select(item => item.EventType)
+                .ToHashSet();
+            Assert.Contains("TASK_ASSIGNED", taskEvents);
+            Assert.Contains("TASK_ACKNOWLEDGED", taskEvents);
+            Assert.Contains("TASK_STARTED", taskEvents);
+            Assert.Contains("TASK_COMPLETED", taskEvents);
         }
         finally
         {
@@ -294,6 +323,9 @@ public sealed class ReadApiSmokeTests
         var seedOperationEventId = Guid.NewGuid();
         await _factory.SeedOperationEventAsync(seedOperationEventId);
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateToken("ADMIN"));
 
         var response = await client.GetAsync("/api/operation-events");
 
@@ -316,6 +348,9 @@ public sealed class ReadApiSmokeTests
         await _factory.SeedOperationEventAsync(liveEventId);
         await _factory.SeedSimulationOperationEventAsync(simulationEventId, simulationSessionId);
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateToken("ADMIN"));
 
         var liveResponse = await client.GetAsync("/api/operation-events");
         var simulationResponse = await client.GetAsync("/api/operation-events?scope=simulation");

@@ -9,7 +9,7 @@ describe("role navigation", () => {
       "Vận hành",
       "Quản lý",
       "Cấu hình",
-      "Công cụ & báo cáo"
+      "Phân tích & kế hoạch"
     ]);
     const paths = groups.flatMap((group) => group.items.map((item) => item.path));
     expect(paths).toContain("/users");

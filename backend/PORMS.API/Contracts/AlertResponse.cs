@@ -14,8 +14,15 @@ public sealed class AlertResponse
     public string Message { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
+    public short? BeaufortNumber { get; set; }
+    public decimal? WindSpeedMs { get; set; }
+    public decimal? Rainfall1hMm { get; set; }
+    public decimal? VisibilityKm { get; set; }
     public long RecipientCount { get; set; }
     public long ReadCount { get; set; }
     public long AcknowledgedCount { get; set; }
     public bool Read { get; set; }
+    public bool Acknowledged { get; set; }
+    public DateTimeOffset? AcknowledgedAt { get; set; }
+    public string Status { get; set; } = "NEW";
 }

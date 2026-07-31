@@ -13,6 +13,16 @@ vi.mock("../services/userService", () => ({
 
 const userRecords: UserRecord[] = [
   {
+    email: "admin@porms.vn",
+    fullName: "System Administrator",
+    lastLoginLabel: "Vua xong",
+    portId: null,
+    portName: "Tất cả",
+    role: "ADMIN",
+    status: "ACTIVE",
+    userId: "admin-1"
+  },
+  {
     email: "hung@example.com",
     fullName: "Nguyen Van Hung",
     lastLoginLabel: "Vua xong",
@@ -53,6 +63,7 @@ describe("UsersPage", () => {
 
     expect(screen.getByRole("link", { name: "Thêm người dùng" })).toHaveAttribute("href", "/users/new");
     expect(screen.getByRole("link", { name: "Sửa Nguyen Van Hung" })).toHaveAttribute("href", "/users/user-1/edit");
+    expect(screen.queryByRole("button", { name: "Xóa System Administrator" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Họ tên")).not.toBeInTheDocument();
   });
 
@@ -73,5 +84,17 @@ describe("UsersPage", () => {
 
     expect(deleteUser).toHaveBeenCalledWith("user-2");
     await waitFor(() => expect(getUsers).toHaveBeenCalledTimes(2));
+  });
+
+  it("filters users by name, email or assigned port", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getUsers).mockResolvedValue(userRecords);
+    render(<MemoryRouter><UsersPage refreshKey={0} /></MemoryRouter>);
+
+    await screen.findByText("Nguyen Van Hung");
+    await user.type(screen.getByRole("textbox", { name: "Tìm người dùng" }), "Cang Tien Sa");
+
+    expect(screen.getByText("Nguyen Van Hung")).toBeInTheDocument();
+    expect(screen.queryByText("System Administrator")).not.toBeInTheDocument();
   });
 });

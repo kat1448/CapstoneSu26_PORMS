@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import type { DemoUser } from "../App";
 import { Badge } from "../components/common/Badge";
 import { formatTimeLabel } from "../services/api";
 import { getTasks, type TaskLogRecord } from "../services/taskService";
@@ -11,6 +13,20 @@ const statusLabels: Record<string, string> = {
   IN_PROGRESS: "Đang thực hiện",
   NEW: "Mới"
 };
+
+function taskStatusLabel(task: TaskLogRecord) {
+  if (task.status === "NEW") {
+    return task.assignedUserId ? "Chờ tiếp nhận" : "Chờ phân công";
+  }
+  return statusLabels[task.status] ?? task.status;
+}
+
+function matchesStatusFilter(task: TaskLogRecord, filter: string) {
+  if (!filter) return true;
+  if (filter === "UNASSIGNED") return task.status === "NEW" && !task.assignedUserId;
+  if (filter === "NEW") return task.status === "NEW" && Boolean(task.assignedUserId);
+  return task.status === filter;
+}
 
 const PAGE_SIZE = 15;
 const riskOptions = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
@@ -44,12 +60,13 @@ function zoneLabel(task: TaskLogRecord) {
   return task.zoneName ?? task.portName ?? "Toàn cảng";
 }
 
-export function TasksPage() {
+export function TasksPage({ currentUser }: { currentUser?: DemoUser }) {
   const [tasks, setTasks] = useState<TaskLogRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedPortId, setSelectedPortId] = useState("");
   const [selectedZoneName, setSelectedZoneName] = useState("");
   const [selectedPriority, setSelectedPriority] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -108,9 +125,10 @@ export function TasksPage() {
     return (!selectedPortId || task.portId === selectedPortId)
       && (!selectedZoneName || zoneLabel(task) === selectedZoneName)
       && (!selectedPriority || task.priority === selectedPriority)
+      && matchesStatusFilter(task, selectedStatus)
       && (!fromDate || createdDate >= fromDate)
       && (!toDate || createdDate <= toDate);
-  }), [fromDate, selectedPortId, selectedPriority, selectedZoneName, tasks, toDate]);
+  }), [fromDate, selectedPortId, selectedPriority, selectedStatus, selectedZoneName, tasks, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
   const visibleTasks = useMemo(() => {
@@ -124,12 +142,13 @@ export function TasksPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [fromDate, selectedPortId, selectedPriority, selectedZoneName, toDate]);
+  }, [fromDate, selectedPortId, selectedPriority, selectedStatus, selectedZoneName, toDate]);
 
   function resetFilters() {
     setSelectedPortId("");
     setSelectedZoneName("");
     setSelectedPriority("");
+    setSelectedStatus("");
     setFromDate("");
     setToDate("");
   }
@@ -138,9 +157,21 @@ export function TasksPage() {
     <section className="page-grid">
       <div className="section-heading">
         <div>
-          <h2>Nhiệm vụ cần thực hiện</h2>
-          <p>Theo dõi các công việc ứng phó được hệ thống đề xuất khi thời tiết có thể ảnh hưởng đến cảng.</p>
+          <span className="page-eyebrow">ĐIỀU PHỐI ỨNG PHÓ</span>
+          <h2>{currentUser?.role === "OPERATOR" ? "Nhiệm vụ của tôi" : "Quản lý nhiệm vụ"}</h2>
+          <p>{currentUser?.role === "OPERATOR" ? "Tiếp nhận, thực hiện và ghi lại kết quả các công việc được giao." : "Theo dõi tiến độ, người phụ trách và kết quả xử lý tại các cảng."}</p>
         </div>
+      </div>
+
+      <div className="task-status-tabs" aria-label="Lọc theo trạng thái">
+        {[
+          ["", "Tất cả"],
+          ["UNASSIGNED", "Chờ phân công"],
+          ["NEW", "Chờ tiếp nhận"],
+          ["ACKNOWLEDGED", "Đã tiếp nhận"],
+          ["IN_PROGRESS", "Đang thực hiện"],
+          ["COMPLETED", "Đã hoàn tất"]
+        ].map(([value, label]) => <button className={selectedStatus === value ? "is-active" : ""} key={value || "all"} onClick={() => setSelectedStatus(value)} type="button"><span>{label}</span><strong>{value ? tasks.filter((task) => matchesStatusFilter(task, value)).length : tasks.length}</strong></button>)}
       </div>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
@@ -195,18 +226,19 @@ export function TasksPage() {
               <th>Phụ trách</th>
               <th>Trạng thái</th>
               <th>Thời gian</th>
+              <th>Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7}>Đang tải nhiệm vụ...</td>
+                <td colSpan={8}>Đang tải nhiệm vụ...</td>
               </tr>
             ) : null}
 
             {!isLoading && filteredTasks.length === 0 ? (
               <tr>
-                <td className="table-empty-cell" colSpan={7}>
+                <td className="table-empty-cell" colSpan={8}>
                   <div className="friendly-empty-state">
                     <span className="friendly-empty-icon">✓</span>
                     <strong>{tasks.length ? "Không có nhiệm vụ phù hợp với bộ lọc" : "Hiện chưa có nhiệm vụ cần xử lý"}</strong>
@@ -220,18 +252,17 @@ export function TasksPage() {
               ? visibleTasks.map((task) => (
                   <tr key={task.taskId}>
                     <td>
-                      <strong>{task.title}</strong>
-                      {task.isSimulation ? <span className="meta-text">Mô phỏng</span> : null}
+                      <div className="task-title-cell"><strong>{task.title}</strong><small>{task.isSimulation ? "Dữ liệu mô phỏng" : "Vận hành thực tế"}</small></div>
                     </td>
                     <td>
-                      <strong>{task.portCode}</strong>
-                      <span className="meta-text">{task.portName}</span>
+                      <div className="task-port-cell"><strong>{task.portCode}</strong><span>{task.portName}</span></div>
                     </td>
                     <td>{zoneLabel(task)}</td>
                     <td><Badge tone={priorityTone(task.priority)}>{riskLabel(task.priority)}</Badge></td>
                     <td>{assigneeLabel(task)}</td>
-                    <td>{statusLabels[task.status] ?? task.status}</td>
+                    <td>{taskStatusLabel(task)}</td>
                     <td>{formatTimeLabel(task.createdAt)}</td>
+                    <td><Link className="button button-secondary button-small" to={`/tasks/${task.taskId}`}>{currentUser?.role === "OPERATOR" && task.status !== "COMPLETED" ? "Xử lý" : "Xem chi tiết"}</Link></td>
                   </tr>
                 ))
               : null}

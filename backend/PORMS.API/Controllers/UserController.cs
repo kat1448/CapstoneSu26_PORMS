@@ -16,10 +16,14 @@ public sealed class UserController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<UserSummaryResponse>>> GetUsers(
+        [FromQuery] string? search,
+        [FromQuery] string? role,
+        [FromQuery] string? status,
+        [FromQuery] string? portCode,
         [FromServices] UserRepository repository,
         CancellationToken cancellationToken)
     {
-        var users = await repository.GetUsersAsync(cancellationToken);
+        var users = await repository.GetUsersAsync(search, role, status, portCode, cancellationToken);
         return Ok(users.Select(ToResponse).ToList());
     }
 
@@ -81,8 +85,17 @@ public sealed class UserController : ControllerBase
         [FromServices] UserRepository repository,
         CancellationToken cancellationToken)
     {
-        var deleted = await repository.DeleteUserAsync(userId, cancellationToken);
-        return deleted ? NoContent() : NotFound();
+        var result = await repository.DeleteUserAsync(userId, cancellationToken);
+        return result switch
+        {
+            DeleteUserResult.Deleted => NoContent(),
+            DeleteUserResult.ProtectedAdmin => Conflict(new
+            {
+                code = "PROTECTED_ADMIN_ACCOUNT",
+                message = "Tài khoản quản trị hệ thống được bảo vệ và không thể xoá."
+            }),
+            _ => NotFound()
+        };
     }
 
     private static UserSummaryResponse ToResponse(UserSummaryReadModel user) =>

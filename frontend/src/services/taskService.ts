@@ -32,6 +32,8 @@ export type TaskLogRecord = {
 export type TaskAssignee = {
   email: string;
   fullName: string;
+  portId?: string | null;
+  portName?: string | null;
   role: string;
   userId: string;
 };
@@ -47,6 +49,10 @@ export type CompleteTaskInput = {
 
 export async function getTasks(): Promise<TaskLogRecord[]> {
   return requestJson<TaskLogRecord[]>("/api/tasks");
+}
+
+export async function getTask(taskId: string): Promise<TaskLogRecord> {
+  return requestJson<TaskLogRecord>(`/api/tasks/${taskId}`);
 }
 
 export async function getTaskAssignees(): Promise<TaskAssignee[]> {

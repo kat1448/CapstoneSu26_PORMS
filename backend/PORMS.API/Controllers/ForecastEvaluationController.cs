@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
 using PORMS.Infrastructure.Repositories;
@@ -7,6 +9,7 @@ using PORMS.Infrastructure.Repositories;
 namespace PORMS.API.Controllers;
 
 [ApiController]
+[Authorize(Policy = "AdminOrPortManager")]
 [Route("api/forecast-evaluation")]
 public sealed class ForecastEvaluationController : ControllerBase
 {
@@ -18,7 +21,7 @@ public sealed class ForecastEvaluationController : ControllerBase
         [FromQuery] DateTimeOffset? to,
         CancellationToken cancellationToken)
     {
-        var rows = await repository.GetRowsAsync(portCode, from, to, cancellationToken);
+        var rows = await repository.GetRowsAsync(portCode, from, to, ScopedPortId(), cancellationToken);
         return Ok(ToResponse(rows));
     }
 
@@ -30,7 +33,7 @@ public sealed class ForecastEvaluationController : ControllerBase
         [FromQuery] DateTimeOffset? to,
         CancellationToken cancellationToken)
     {
-        var rows = await repository.GetRowsAsync(portCode, from, to, cancellationToken);
+        var rows = await repository.GetRowsAsync(portCode, from, to, ScopedPortId(), cancellationToken);
         var csv = BuildCsv(rows);
         var fileName = $"forecast-evaluation-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.csv";
         return File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray(), "text/csv; charset=utf-8", fileName);
@@ -131,5 +134,11 @@ public sealed class ForecastEvaluationController : ControllerBase
         return value.Contains(',') || value.Contains('"') || value.Contains('\n')
             ? $"\"{value.Replace("\"", "\"\"")}\""
             : value;
+    }
+
+    private Guid? ScopedPortId()
+    {
+        if (User.IsInRole("ADMIN")) return null;
+        return Guid.TryParse(User.FindFirstValue("port_id"), out var portId) ? portId : Guid.Empty;
     }
 }

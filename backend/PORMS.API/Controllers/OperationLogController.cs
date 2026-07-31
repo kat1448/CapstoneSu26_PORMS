@@ -1,3 +1,6 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
 using PORMS.Infrastructure.Repositories;
@@ -5,6 +8,7 @@ using PORMS.Infrastructure.Repositories;
 namespace PORMS.API.Controllers;
 
 [ApiController]
+[Authorize(Policy = "AllAppUsers")]
 [Route("api/operation-events")]
 public sealed class OperationLogController : ControllerBase
 {
@@ -14,8 +18,13 @@ public sealed class OperationLogController : ControllerBase
         [FromServices] OperationEventRepository repository,
         CancellationToken cancellationToken)
     {
+        var rawUserId = User.FindFirstValue(JwtRegisteredClaimNames.Sub)
+            ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(rawUserId, out var userId)) return Unauthorized();
+
+        var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
         var simulationOnly = string.Equals(scope, "simulation", StringComparison.OrdinalIgnoreCase);
-        var events = await repository.GetOperationEventsAsync(simulationOnly, cancellationToken);
+        var events = await repository.GetOperationEventsAsync(simulationOnly, userId, role, cancellationToken);
 
         return Ok(events.Select(operationEvent => new OperationEventResponse
         {
@@ -47,6 +56,10 @@ public sealed class OperationLogController : ControllerBase
             "RISK_CHANGED" => "warning",
             "SIMULATION_STEP" => "warning",
             "SIMULATION_COMPLETED" => "success",
+            "TASK_ASSIGNED" => "info",
+            "TASK_ACKNOWLEDGED" => "info",
+            "TASK_STARTED" => "warning",
+            "TASK_COMPLETED" => "success",
             "USER_LOGIN" => "success",
             _ => "info"
         };

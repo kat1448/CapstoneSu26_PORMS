@@ -50,6 +50,7 @@ public sealed class AuthService
                 user.Email,
                 user.FullName,
                 user.Role,
+                user.PortId,
                 user.PortName,
                 BuildInitials(user.FullName)));
     }
@@ -97,6 +98,7 @@ public sealed class AuthService
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
             new Claim(ClaimTypes.Name, user.FullName),
             new Claim(ClaimTypes.Role, user.Role),
+            new Claim("port_id", user.PortId?.ToString() ?? string.Empty),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
         var token = new JwtSecurityToken(

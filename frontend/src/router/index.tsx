@@ -21,6 +21,9 @@ import { SopRulesPage } from "../pages/SopRulesPage";
 import { UserFormPage } from "../pages/UserFormPage";
 import { UsersPage } from "../pages/UsersPage";
 import { TasksPage } from "../pages/TasksPage";
+import { TaskDetailPage } from "../pages/TaskDetailPage";
+import { NotificationSettingsPage } from "../pages/NotificationSettingsPage";
+import { ReportPage } from "../pages/ReportPage";
 import { isRouteAllowed } from "../navigation/navigation";
 
 type RouterContext = {
@@ -71,8 +74,9 @@ export function buildRouter(context: RouterContext) {
         { index: true, element: <Navigate to="/dashboard" replace /> },
         { path: "dashboard", element: <DashboardPage refreshKey={context.refreshKey} /> },
         { path: "alerts", element: <AlertPage refreshKey={context.refreshKey} /> },
-        { path: "alerts/:alertId", element: <AlertDetailPage /> },
-        { path: "tasks", element: guarded("/tasks", <TasksPage />) },
+        { path: "alerts/:alertId", element: <AlertDetailPage currentUser={context.currentUser ?? undefined} /> },
+        { path: "tasks", element: guarded("/tasks", <TasksPage currentUser={context.currentUser!} />) },
+        { path: "tasks/:taskId", element: guarded("/tasks", <TaskDetailPage currentUser={context.currentUser!} />) },
         { path: "operation-log", element: guarded("/operation-log", <LogPage refreshKey={context.refreshKey} />) },
         { path: "ports", element: <PortManagementPage refreshKey={context.refreshKey} /> },
         { path: "ports/new", element: <PortCreatePage /> },
@@ -86,8 +90,10 @@ export function buildRouter(context: RouterContext) {
         { path: "forecast-planning", element: guarded("/forecast-planning", <ForecastPlanningPage />) },
         { path: "ai-long-range-forecast", element: guarded("/ai-long-range-forecast", <AiLongRangeForecastPage />) },
         { path: "forecast-evaluation", element: guarded("/forecast-evaluation", <ForecastEvaluationPage />) },
+        { path: "reports", element: guarded("/reports", <ReportPage currentUser={context.currentUser!} />) },
         { path: "simulation-results", element: guarded("/simulation-results", <SimulationResultsPage refreshKey={context.refreshKey} />) },
         { path: "profile", element: <ProfilePage currentUser={context.currentUser!} /> },
+        { path: "notification-settings", element: <NotificationSettingsPage currentUser={context.currentUser!} /> },
         { path: "change-password", element: <ChangePasswordPage onChanged={context.onLogout} /> }
       ]
     },

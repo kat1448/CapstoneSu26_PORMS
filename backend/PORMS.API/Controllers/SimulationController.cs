@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using PORMS.API.Services;
 using PORMS.API.Contracts;
 using PORMS.Infrastructure.Repositories;
 
@@ -184,6 +185,9 @@ public sealed class SimulationController : ControllerBase
     public async Task<ActionResult<object>> RunDataset(
         [FromBody] RunSimulationDatasetRequest request,
         [FromServices] SimulationRepository repository,
+        [FromServices] AlertRepository alertRepository,
+        [FromServices] IAlertEmailNotifier alertEmailNotifier,
+        [FromServices] ILogger<SimulationController> logger,
         CancellationToken cancellationToken)
     {
         var result = await repository.RunDatasetAsync(request.DatasetId, cancellationToken);
@@ -191,6 +195,8 @@ public sealed class SimulationController : ControllerBase
         {
             return NotFound(new ErrorResponse { Error = "The requested simulation dataset was not found." });
         }
+
+        await NotifyPortManagersAsync(result.SessionId, alertRepository, alertEmailNotifier, logger, cancellationToken);
 
         return Ok(new
         {
@@ -237,6 +243,9 @@ public sealed class SimulationController : ControllerBase
     public async Task<ActionResult<object>> RunDemo(
         [FromBody] SimulationRunRequest? request,
         [FromServices] SimulationRepository repository,
+        [FromServices] AlertRepository alertRepository,
+        [FromServices] IAlertEmailNotifier alertEmailNotifier,
+        [FromServices] ILogger<SimulationController> logger,
         CancellationToken cancellationToken)
     {
         var result = await repository.RunDemoAsync(request?.PortCode, cancellationToken);
@@ -247,6 +256,8 @@ public sealed class SimulationController : ControllerBase
                 Error = "The requested port was not found."
             });
         }
+
+        await NotifyPortManagersAsync(result.SessionId, alertRepository, alertEmailNotifier, logger, cancellationToken);
 
         return Ok(new
         {
@@ -260,6 +271,26 @@ public sealed class SimulationController : ControllerBase
             finalRiskLevel = result.FinalRiskLevel,
             finalOperationMode = result.FinalOperationMode
         });
+    }
+
+    private static async Task NotifyPortManagersAsync(
+        Guid sessionId,
+        AlertRepository alertRepository,
+        IAlertEmailNotifier alertEmailNotifier,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var alerts = await alertRepository.GetHighSeverityNotificationsAsync(sessionId, cancellationToken);
+            foreach (var alert in alerts)
+                await alertEmailNotifier.SendHighSeverityAlertAsync(alert, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // A mail server outage must not undo a completed simulation.
+            logger.LogError(exception, "Simulation completed but alert email delivery failed. SessionId={SessionId}", sessionId);
+        }
     }
 
     private static SimulationDatasetSummaryResponse ToResponse(SimulationDatasetSummaryReadModel dataset)

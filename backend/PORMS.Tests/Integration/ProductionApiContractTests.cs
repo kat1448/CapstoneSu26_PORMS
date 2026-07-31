@@ -1,4 +1,9 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
+using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
+using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
 namespace PORMS.Tests.Integration;
@@ -49,6 +54,7 @@ public sealed class ProductionApiContractTests
     {
         await _factory.SeedAlertAsync(Guid.Parse("33333333-3333-3333-3333-333333333333"));
         var client = _factory.CreateClient();
+        AuthorizeAsAdmin(client);
 
         var response = await client.GetAsync("/api/alerts");
         response.EnsureSuccessStatusCode();
@@ -64,6 +70,7 @@ public sealed class ProductionApiContractTests
     {
         await _factory.SeedOperationEventAsync(Guid.NewGuid());
         var client = _factory.CreateClient();
+        AuthorizeAsAdmin(client);
 
         var response = await client.GetAsync("/api/operation-events");
         response.EnsureSuccessStatusCode();
@@ -72,6 +79,28 @@ public sealed class ProductionApiContractTests
         var first = payload.RootElement.EnumerateArray().First();
 
         Assert.True(first.TryGetProperty("tone", out _));
+    }
+
+    private static void AuthorizeAsAdmin(HttpClient client)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("PORMS-development-signing-key-change-in-production-2026"));
+        var token = new JwtSecurityToken(
+            issuer: "PORMS",
+            audience: "PORMS.Frontend",
+            claims:
+            [
+                new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, "admin@porms.vn"),
+                new Claim(ClaimTypes.Name, "ADMIN"),
+                new Claim(ClaimTypes.Role, "ADMIN"),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            ],
+            expires: DateTime.UtcNow.AddMinutes(15),
+            signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            new JwtSecurityTokenHandler().WriteToken(token));
     }
 
     [Theory]

@@ -44,15 +44,15 @@ describe("WeatherDataTable", () => {
   it("renders OpenWeather detail rows", () => {
     render(<WeatherDataTable weather={weather} />);
 
-    expect(screen.getByRole("heading", { name: "Dữ liệu thời tiết theo cảng và khu vực" })).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Dữ liệu thời tiết theo cảng và khu vực" })).toBeInTheDocument();
-    expect(screen.getByText("OPENWEATHER_API")).toBeInTheDocument();
-    expect(screen.getByText("moderate rain")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Chi tiết thời tiết tại các khu vực" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Chi tiết thời tiết tại các khu vực" })).toBeInTheDocument();
+    expect(screen.getByText("Dữ liệu thời tiết trực tuyến")).toBeInTheDocument();
+    expect(screen.getByText("Mưa vừa")).toBeInTheDocument();
     expect(screen.getByText("18.4 m/s")).toBeInTheDocument();
-    expect(screen.getByText("Beaufort 8")).toBeInTheDocument();
+    expect(screen.getByText("Cấp gió 8")).toBeInTheDocument();
     expect(screen.getByText("82%")).toBeInTheDocument();
-    expect(screen.getByText("26/06/2026 12:10:00")).toBeInTheDocument();
-    expect(screen.getByText("26/06/2026 12:11:30")).toBeInTheDocument();
+    expect(screen.getByText("10:10:00 26/06/2026")).toBeInTheDocument();
+    expect(screen.getByText("10:11:30 26/06/2026")).toBeInTheDocument();
     expect(screen.getByText("Cảng Tiên Sa")).toBeInTheDocument();
     expect(screen.getByText("Bến số 1")).toBeInTheDocument();
     expect(screen.getByText("16.116235, 108.230378")).toBeInTheDocument();

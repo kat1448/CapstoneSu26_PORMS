@@ -2,11 +2,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { acknowledgeAlert, getAlerts } from "../../services/alertService";
+import { acknowledgeAlert, getAlerts, getAlertSpeechAudio } from "../../services/alertService";
 import { AppShell } from "./AppShell";
 
 vi.mock("../../services/alertService", () => ({
   acknowledgeAlert: vi.fn(),
+  getAlertSpeechAudio: vi.fn(),
   getAlertSpeechUrl: vi.fn((alertId: string) => `http://localhost:5000/api/alerts/${alertId}/speech`),
   getAlerts: vi.fn()
 }));
@@ -50,6 +51,7 @@ function renderShell() {
 
 beforeEach(() => {
   vi.mocked(acknowledgeAlert).mockResolvedValue();
+  vi.mocked(getAlertSpeechAudio).mockResolvedValue(new Blob(["audio"], { type: "audio/mpeg" }));
   vi.mocked(getAlerts).mockResolvedValue([]);
 });
 
@@ -146,6 +148,11 @@ describe("AppShell", () => {
     }
 
     vi.stubGlobal("Audio", MockAudio);
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:porms-alert-speech"),
+      revokeObjectURL: vi.fn()
+    });
     vi.mocked(getAlerts).mockResolvedValue([unreadAlert]);
 
     renderShell();
@@ -157,11 +164,14 @@ describe("AppShell", () => {
     expect(screen.getByRole("dialog", { name: "Cảnh báo mới" })).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(900));
 
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(getAlertSpeechAudio).toHaveBeenCalledWith("alert-1");
     expect(audioInstances).toHaveLength(1);
-    expect(audioInstances[0].src).toBe("http://localhost:5000/api/alerts/alert-1/speech");
+    expect(audioInstances[0].src).toBe("blob:porms-alert-speech");
     expect(screen.queryByText(/Đang đọc cảnh báo/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Nghe cảnh báo/ }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
     expect(audioInstances).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Xác nhận" }));

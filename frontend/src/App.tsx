@@ -10,6 +10,7 @@ export type DemoUser = {
   email: string;
   initials: string;
   name: string;
+  portId?: string | null;
   portName: string;
   role: DemoUserRole;
 };

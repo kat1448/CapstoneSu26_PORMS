@@ -12,6 +12,7 @@ public sealed record AuthUserResponse(
     string Email,
     string Name,
     string Role,
+    Guid? PortId,
     string PortName,
     string Initials);
 

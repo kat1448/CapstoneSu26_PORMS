@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Mail;
+using System.Text;
 using Microsoft.Extensions.Options;
 using PORMS.API.Configuration;
 using PORMS.Infrastructure.Repositories;
@@ -9,13 +10,16 @@ namespace PORMS.API.Services;
 public sealed class SmtpTaskAssignmentEmailNotifier : ITaskAssignmentEmailNotifier
 {
     private readonly EmailOptions _options;
+    private readonly string _frontendBaseUrl;
     private readonly ILogger<SmtpTaskAssignmentEmailNotifier> _logger;
 
     public SmtpTaskAssignmentEmailNotifier(
         IOptions<EmailOptions> options,
+        IConfiguration configuration,
         ILogger<SmtpTaskAssignmentEmailNotifier> logger)
     {
         _options = options.Value;
+        _frontendBaseUrl = (configuration["Frontend:BaseUrl"] ?? "http://localhost:5173").TrimEnd('/');
         _logger = logger;
     }
 
@@ -38,12 +42,18 @@ public sealed class SmtpTaskAssignmentEmailNotifier : ITaskAssignmentEmailNotifi
 
         using var message = new MailMessage
         {
-            From = new MailAddress(smtp.FromEmail, smtp.FromName),
-            Subject = $"PORMS - Nhiem vu moi: {task.TaskCode}",
-            Body = BuildBody(task),
-            IsBodyHtml = false
+            From = new MailAddress(smtp.FromEmail, smtp.FromName, Encoding.UTF8),
+            Subject = $"PORMS - Nhiệm vụ mới: {task.TaskCode}",
+            Body = BuildBody(task, _frontendBaseUrl),
+            IsBodyHtml = false,
+            SubjectEncoding = Encoding.UTF8,
+            BodyEncoding = Encoding.UTF8,
+            HeadersEncoding = Encoding.UTF8
         };
-        message.To.Add(new MailAddress(task.AssignedUserEmail, task.AssignedUserName ?? task.AssignedUserEmail));
+        message.To.Add(new MailAddress(
+            task.AssignedUserEmail,
+            task.AssignedUserName ?? task.AssignedUserEmail,
+            Encoding.UTF8));
 
         using var client = new SmtpClient(smtp.Host, smtp.Port)
         {
@@ -71,29 +81,51 @@ public sealed class SmtpTaskAssignmentEmailNotifier : ITaskAssignmentEmailNotifi
         }
     }
 
-    private static string BuildBody(TaskLogReadModel task)
+    private static string BuildBody(TaskLogReadModel task, string frontendBaseUrl)
     {
-        var dueAt = task.DueAt?.ToString("dd/MM/yyyy HH:mm zzz") ?? "Chua dat";
-        var zone = string.IsNullOrWhiteSpace(task.ZoneName) ? "Chua co khu vuc" : task.ZoneName;
-        var description = string.IsNullOrWhiteSpace(task.Description) ? "Khong co mo ta." : task.Description;
+        var dueAt = task.DueAt is null
+            ? "Chưa đặt"
+            : $"{task.DueAt.Value.ToOffset(TimeSpan.FromHours(7)):dd/MM/yyyy HH:mm} (GMT+7)";
+        var zone = string.IsNullOrWhiteSpace(task.ZoneName) ? "Toàn cảng" : task.ZoneName;
+        var description = string.IsNullOrWhiteSpace(task.Description) ? "Không có mô tả." : task.Description;
 
         return $"""
-            Xin chao {task.AssignedUserName ?? task.AssignedUserEmail},
+            Xin chào {task.AssignedUserName ?? task.AssignedUserEmail},
 
-            Ban vua duoc phan cong mot nhiem vu tren he thong PORMS.
+            Bạn vừa được phân công một nhiệm vụ trên hệ thống PORMS.
 
-            Ma nhiem vu: {task.TaskCode}
-            Tieu de: {task.Title}
-            Uu tien: {task.Priority}
-            Trang thai: {task.Status}
-            Cang: {task.PortCode} - {task.PortName}
-            Khu vuc: {zone}
-            Han xu ly: {dueAt}
+            Mã nhiệm vụ: {task.TaskCode}
+            Nhiệm vụ: {task.Title}
+            Mức độ ưu tiên: {TranslatePriority(task.Priority)}
+            Trạng thái: {TranslateStatus(task.Status)}
+            Cảng: {task.PortCode} - {task.PortName}
+            Khu vực: {zone}
+            Hạn xử lý: {dueAt}
 
-            Mo ta:
+            Nội dung:
             {description}
 
-            Vui long dang nhap PORMS de xac nhan va cap nhat tien do nhiem vu.
+            Mở nhiệm vụ: {frontendBaseUrl}/tasks/{task.TaskId}
+
+            Vui lòng đăng nhập PORMS để tiếp nhận và cập nhật tiến độ nhiệm vụ.
             """;
     }
+
+    private static string TranslatePriority(string priority) => priority switch
+    {
+        "LOW" => "Thấp",
+        "MEDIUM" => "Cần lưu ý",
+        "HIGH" => "Cao",
+        "CRITICAL" => "Rất cao",
+        _ => priority
+    };
+
+    private static string TranslateStatus(string status) => status switch
+    {
+        "NEW" => "Mới",
+        "ACKNOWLEDGED" => "Đã xác nhận",
+        "IN_PROGRESS" => "Đang thực hiện",
+        "COMPLETED" => "Đã hoàn tất",
+        _ => status
+    };
 }

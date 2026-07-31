@@ -74,9 +74,11 @@ builder.Services.AddSingleton<RiskThresholdEvaluator>();
 builder.Services.AddScoped<RiskThresholdImportService>();
 builder.Services.AddScoped<SopRuleRepository>();
 builder.Services.AddScoped<TaskRepository>();
+builder.Services.AddScoped<ReportRepository>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddSingleton<ForecastRiskMlService>();
 builder.Services.AddScoped<ITaskAssignmentEmailNotifier, SmtpTaskAssignmentEmailNotifier>();
+builder.Services.AddScoped<IAlertEmailNotifier, SmtpAlertEmailNotifier>();
 builder.Services.AddHttpClient<OpenWeatherService>();
 builder.Services.AddHttpClient<OperationPlanLlmService>();
 builder.Services.AddHttpClient<GoogleTranslateSpeechService>(client =>

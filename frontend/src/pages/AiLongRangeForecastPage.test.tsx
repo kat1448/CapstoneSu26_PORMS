@@ -91,9 +91,8 @@ describe("AiLongRangeForecastPage", () => {
   it("shows separated OpenWeather seed and AI long range prediction horizons", async () => {
     render(<AiLongRangeForecastPage />);
 
-    expect(await screen.findByRole("heading", { level: 1, name: "AI dự đoán dài hạn" })).toBeInTheDocument();
-    expect(screen.getByText("Dữ liệu OpenWeather 5 ngày")).toBeInTheDocument();
-    expect(screen.getAllByText("AI dự đoán dài hạn")).toHaveLength(2);
+    expect(await screen.findByRole("heading", { level: 1, name: "Dự báo xu hướng vận hành" })).toBeInTheDocument();
+    expect(screen.getByText("Dự báo thời tiết 5 ngày gần nhất")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "7 ngày" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "14 ngày" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "30 ngày" })).toBeInTheDocument();
@@ -106,7 +105,7 @@ describe("AiLongRangeForecastPage", () => {
     const user = userEvent.setup();
     render(<AiLongRangeForecastPage />);
 
-    await screen.findByRole("heading", { level: 1, name: "AI dự đoán dài hạn" });
+    await screen.findByRole("heading", { level: 1, name: "Dự báo xu hướng vận hành" });
     await user.click(screen.getByRole("button", { name: "3 tháng" }));
 
     await waitFor(() => {

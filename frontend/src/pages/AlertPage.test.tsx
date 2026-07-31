@@ -67,12 +67,12 @@ describe("AlertPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("Cảnh báo")).toBeInTheDocument();
-    const headers = screen.getAllByRole("columnheader").map((header) => header.textContent);
-    expect(headers).toEqual(["Thời gian", "Cảng", "Khu vực", "Mức độ", "Loại", "Nội dung", "Thao tác"]);
-    expect(screen.getByText("Theo dõi và xác nhận các cảnh báo vận hành")).toBeInTheDocument();
-    expect(screen.getAllByText("Cảng").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("AB - Cảng A").length).toBeGreaterThan(0);
+    expect(await screen.findByText("Trung tâm cảnh báo")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByText("Nắm bắt tình hình, ưu tiên xử lý và phối hợp ứng phó tại các khu vực cảng.")).toBeInTheDocument();
+    expect(screen.getByText("Tình hình tại các cảng")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cảng")).toBeInTheDocument();
+    expect(screen.getAllByText("Cảng A").length).toBeGreaterThan(0);
     expect(screen.getByText("Cảnh báo mô phỏng HIGH tại AB1")).toBeInTheDocument();
     expect(screen.getByText("AB1 (AB) đạt mức HIGH: Gió Beaufort 8, mưa 28 mm/h.")).toBeInTheDocument();
     expect(screen.getByText("27/06/2026 20:45:12")).toBeInTheDocument();
@@ -187,7 +187,7 @@ describe("AlertPage", () => {
 
     renderPage();
 
-    const detailLink = await screen.findByRole("link", { name: "Chi tiết" });
+    const detailLink = await screen.findByRole("link", { name: "Xem chi tiết" });
     expect(detailLink).toHaveAttribute("href", "/alerts/alert-1");
     expect(screen.queryByText("Nhiệm vụ cần thực hiện")).not.toBeInTheDocument();
   });

@@ -22,12 +22,12 @@ describe("Sidebar", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    expect(screen.getByText("Nhật ký nhiệm vụ")).toBeInTheDocument();
-    expect(screen.getByText("Nhật ký vận hành")).toBeInTheDocument();
+    expect(screen.getByText("Tổng quan")).toBeInTheDocument();
+    expect(screen.getByText("Nhiệm vụ")).toBeInTheDocument();
+    expect(screen.getByText("Lịch sử vận hành")).toBeInTheDocument();
     expect(screen.queryByText("Mô phỏng")).not.toBeInTheDocument();
     expect(screen.queryByText("Người dùng")).not.toBeInTheDocument();
-    expect(screen.queryByText("Ngưỡng rủi ro")).not.toBeInTheDocument();
+    expect(screen.queryByText("Mức cảnh báo")).not.toBeInTheDocument();
     expect(screen.getByText("Pham Minh Duc")).toBeInTheDocument();
     expect(screen.getByLabelText("3 cảnh báo chưa đọc")).toBeInTheDocument();
   });

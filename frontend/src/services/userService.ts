@@ -26,9 +26,14 @@ export type CreateUserInput = {
 
 export type UpdateUserInput = Omit<CreateUserInput, "password">;
 
-export async function getUsers() {
+export type UserFilters = { search?: string; role?: string; status?: string; portCode?: string };
+
+export async function getUsers(filters: UserFilters = {}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) if (value && value !== "ALL") params.set(key, value);
+  const suffix = params.toString() ? `?${params.toString()}` : "";
   return withMockFallback(
-    () => requestJson<UserRecord[]>("/api/users"),
+    () => requestJson<UserRecord[]>(`/api/users${suffix}`),
     () => getUsersData() as UserRecord[]
   );
 }

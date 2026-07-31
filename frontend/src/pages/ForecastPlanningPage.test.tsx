@@ -138,22 +138,22 @@ describe("ForecastPlanningPage", () => {
     renderPage();
 
     await screen.findByRole("heading", { name: "Dự báo vận hành" });
-    expect(screen.getByText(/Dữ liệu dự đoán tương lai từ OpenWeather API/)).toBeInTheDocument();
-    expect(await screen.findByRole("table", { name: "Dự báo OpenWeather 5 ngày" })).toBeInTheDocument();
+    expect(screen.getByText(/Thông tin thời tiết sắp tới giúp bạn chuẩn bị nhân sự/)).toBeInTheDocument();
+    expect(await screen.findByRole("table", { name: "Dự báo thời tiết 5 ngày" })).toBeInTheDocument();
     expect(getOpenWeatherForecast).toHaveBeenCalledWith("DNTSA", 5);
     expect(screen.getByText("Mưa rào rải rác")).toBeInTheDocument();
     expect(screen.getByText("9.4 m/s")).toBeInTheDocument();
     expect(screen.getByText("6.2 km")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Cập nhật kế hoạch từ OpenWeather" }));
+    await user.click(screen.getByRole("button", { name: "Cập nhật kế hoạch" }));
 
     expect(createForecastPlan).toHaveBeenCalledWith({ horizonDays: 5, portCode: "DNTSA" });
     expect(await screen.findByText("Kế hoạch dự báo DNTSA")).toBeInTheDocument();
-    expect(screen.getByLabelText("Tiến trình phân tích PCA K-Means Gemini")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tiến trình phân tích dự báo")).toBeInTheDocument();
     await waitFor(() => expect(analyzeForecastRisk).toHaveBeenCalled(), { timeout: 3000 });
-    expect(await screen.findByText("ML Score 74", {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByText("NORMAL")).toBeInTheDocument();
-    expect(screen.getAllByText("LIMITED").length).toBeGreaterThan(0);
+    expect(await screen.findByText("Điểm phân tích 74", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getAllByText("Vận hành bình thường").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Hạn chế vận hành").length).toBeGreaterThan(0);
   });
 
   it("shows a five-day operation timeline and risk chart from forecast plan items", async () => {
@@ -202,21 +202,21 @@ describe("ForecastPlanningPage", () => {
 
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: /Cập nhật kế hoạch từ OpenWeather/i }));
+    await user.click(await screen.findByRole("button", { name: "Cập nhật kế hoạch" }));
 
     expect(await screen.findByLabelText("Timeline dự báo vận hành 5 ngày")).toBeInTheDocument();
     expect(screen.getByLabelText("Biểu đồ rủi ro dự báo 5 ngày")).toBeInTheDocument();
-    expect(await screen.findByLabelText("Phân tích ML PCA K-Means dự báo 5 ngày")).toBeInTheDocument();
-    expect(screen.getByLabelText("Biểu đồ AI PCA score 5 ngày")).toBeInTheDocument();
-    expect(screen.getByText("0-24 LOW")).toBeInTheDocument();
-    expect(screen.getByText("25-49 MEDIUM")).toBeInTheDocument();
-    expect(screen.getByText("50-74 HIGH")).toBeInTheDocument();
-    expect(screen.getByText("75-100 CRITICAL")).toBeInTheDocument();
-    expect(screen.getByText("WIND_RISK")).toBeInTheDocument();
-    expect(screen.getByText("ML Score 74")).toBeInTheDocument();
-    expect(screen.getByText("AI Risk HIGH")).toBeInTheDocument();
-    expect(screen.getByText("Rule MEDIUM")).toBeInTheDocument();
-    expect(screen.getByText("Phân tích kế hoạch vận hành bằng LLM")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Phân tích mức rủi ro dự báo 5 ngày")).toBeInTheDocument();
+    expect(screen.getByLabelText("Biểu đồ điểm rủi ro 5 ngày")).toBeInTheDocument();
+    expect(screen.getByText("0-24 · Thấp")).toBeInTheDocument();
+    expect(screen.getByText("25-49 · Cần lưu ý")).toBeInTheDocument();
+    expect(screen.getByText("50-74 · Cao")).toBeInTheDocument();
+    expect(screen.getByText("75-100 · Rất cao")).toBeInTheDocument();
+    expect(screen.getByText("Gió mạnh cần lưu ý")).toBeInTheDocument();
+    expect(screen.getByText("Điểm phân tích 74")).toBeInTheDocument();
+    expect(screen.getByText("Mức Cao")).toBeInTheDocument();
+    expect(screen.getByText("Theo quy tắc: Cần lưu ý")).toBeInTheDocument();
+    expect(screen.getByText("Giải thích và phương án đề xuất")).toBeInTheDocument();
     expect(screen.getByText("Ngày 1 vận hành bình thường, tăng giám sát gió.")).toBeInTheDocument();
     expect(screen.getByText("Chuẩn bị phương án hạn chế bốc xếp")).toBeInTheDocument();
     expect(analyzeForecastRisk).toHaveBeenCalledWith(expect.objectContaining({
@@ -225,9 +225,9 @@ describe("ForecastPlanningPage", () => {
     expect(screen.getByText("Troi quang, gio nhe")).toBeInTheDocument();
     expect(screen.getByText("Gio manh va mua")).toBeInTheDocument();
     expect(screen.getByText("Mua lon, tam nhin giam")).toBeInTheDocument();
-    expect(screen.getByText("NORMAL")).toBeInTheDocument();
-    expect(screen.getAllByText("LIMITED").length).toBeGreaterThan(0);
-    expect(screen.getByText("STOP")).toBeInTheDocument();
+    expect(screen.getAllByText("Vận hành bình thường").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Hạn chế vận hành").length).toBeGreaterThan(0);
+    expect(screen.getByText("Tạm dừng vận hành")).toBeInTheDocument();
   });
 
   it("reloads the five-day forecast manually", async () => {
@@ -237,7 +237,7 @@ describe("ForecastPlanningPage", () => {
     await waitFor(() => expect(getOpenWeatherForecast).toHaveBeenCalledTimes(1));
     expect(screen.getByText(/Tự động cập nhật hằng ngày/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Reload dự báo" }));
+    await user.click(screen.getByRole("button", { name: "Làm mới dự báo" }));
 
     await waitFor(() => expect(getOpenWeatherForecast).toHaveBeenCalledTimes(2));
   });
