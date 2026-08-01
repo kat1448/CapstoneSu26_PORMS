@@ -22,15 +22,16 @@ export async function getSimulationSnapshot(): Promise<SimulationSnapshot> {
   );
 }
 
-export async function runDemoSimulation(): Promise<void> {
-  await withMockFallback(
-    async () => {
-      await requestJson("/api/simulation/run-demo", {
+export async function runDemoSimulation(): Promise<SimulationRunResult | null> {
+  return withMockFallback(
+    async () => requestJson<SimulationRunResult>("/api/simulation/run-demo", {
         method: "POST",
         body: JSON.stringify({ portCode: "DNTSA" })
-      });
-    },
-    () => runDemoStepSequence()
+      }),
+    async () => {
+      await runDemoStepSequence();
+      return null;
+    }
   );
 }
 

@@ -6,7 +6,7 @@ public sealed class ForecastRiskMlService
 {
     public ForecastRiskAnalysisResponse Analyze(ForecastRiskAnalysisRequest request)
     {
-        var items = request.Items.Take(5).ToList();
+        var items = request.Items.ToList();
         var vectors = items.Select(ToFeatureVector).ToList();
         var normalized = Normalize(vectors);
         var pcaScores = ProjectFirstPrincipalComponent(normalized);

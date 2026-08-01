@@ -31,7 +31,7 @@ public sealed class PortController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "SuperAdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<PortSummaryResponse>> CreatePort(
         CreatePortRequest request,
         [FromServices] PortRepository repository,
@@ -68,7 +68,7 @@ public sealed class PortController : ControllerBase
     }
 
     [HttpPut("{portId:guid}")]
-    [Authorize(Policy = "SuperAdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<PortSummaryResponse>> UpdatePort(
         Guid portId,
         UpdatePortRequest request,
@@ -109,7 +109,7 @@ public sealed class PortController : ControllerBase
     }
 
     [HttpPut("{portId:guid}/zones/{zoneId:guid}")]
-    [Authorize(Policy = "SuperAdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<ZoneResponse>> UpdateZone(
         Guid portId,
         Guid zoneId,
@@ -141,7 +141,7 @@ public sealed class PortController : ControllerBase
     }
 
     [HttpDelete("{portId:guid}/zones/{zoneId:guid}")]
-    [Authorize(Policy = "SuperAdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> DeleteZone(
         Guid portId,
         Guid zoneId,

@@ -40,7 +40,7 @@ const userRecords: UserRecord[] = [
     lastLoginLabel: "Vua xong",
     portId,
     portName: "Cang Tien Sa",
-    role: "ADMIN",
+    role: "PORT_MANAGER",
     status: "ACTIVE",
     userId: "user-1"
   }
@@ -73,7 +73,7 @@ describe("UserFormPage", () => {
 
     await user.type(screen.getByLabelText("Họ tên"), "Le Thi Mai");
     await user.type(screen.getByLabelText("Email"), "mai@example.com");
-    await user.selectOptions(screen.getByLabelText("Vai trò"), "ADMIN");
+    await user.selectOptions(screen.getByLabelText("Vai trò"), "PORT_MANAGER");
     await user.type(screen.getByLabelText("Mật khẩu"), "Strong@2027!");
     await user.click(screen.getByRole("button", { name: "Tạo người dùng" }));
 
@@ -82,20 +82,20 @@ describe("UserFormPage", () => {
       fullName: "Le Thi Mai",
       password: "Strong@2027!",
       portId,
-      role: "ADMIN",
+      role: "PORT_MANAGER",
       status: "ACTIVE"
     });
     await screen.findByText("Users list page");
   });
 
-  it("clears assigned port for super admin", async () => {
+  it("clears assigned port for system admin", async () => {
     const user = userEvent.setup();
     vi.mocked(getPorts).mockResolvedValue(ports);
     vi.mocked(createUser).mockResolvedValue({
       ...userRecords[0],
       portId: null,
       portName: "Tat ca",
-      role: "SUPER_ADMIN",
+      role: "ADMIN",
       userId: "user-2"
     });
 
@@ -103,13 +103,13 @@ describe("UserFormPage", () => {
 
     await user.type(screen.getByLabelText("Họ tên"), "Le Thi Mai");
     await user.type(screen.getByLabelText("Email"), "mai@example.com");
-    await user.selectOptions(screen.getByLabelText("Vai trò"), "SUPER_ADMIN");
+    await user.selectOptions(screen.getByLabelText("Vai trò"), "ADMIN");
     await user.type(screen.getByLabelText("Mật khẩu"), "Strong@2027!");
     await user.click(screen.getByRole("button", { name: "Tạo người dùng" }));
 
     expect(createUser).toHaveBeenCalledWith(expect.objectContaining({
       portId: null,
-      role: "SUPER_ADMIN"
+      role: "ADMIN"
     }));
   });
 
@@ -131,7 +131,7 @@ describe("UserFormPage", () => {
       email: "hung@example.com",
       fullName: "Nguyen Van Hung Updated",
       portId,
-      role: "ADMIN",
+      role: "PORT_MANAGER",
       status: "ACTIVE"
     });
     await screen.findByText("Users list page");

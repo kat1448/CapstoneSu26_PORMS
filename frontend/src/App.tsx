@@ -3,7 +3,7 @@ import { RouterProvider } from "react-router-dom";
 import { buildRouter } from "./router";
 import { clearSession, getStoredSession, login } from "./services/authService";
 
-export type DemoUserRole = "SUPER_ADMIN" | "ADMIN" | "STANDARD_USER";
+export type DemoUserRole = "ADMIN" | "PORT_MANAGER" | "OPERATOR";
 
 export type DemoUser = {
   id?: string;
@@ -20,21 +20,21 @@ const DEMO_USERS: DemoUser[] = [
     initials: "NV",
     name: "Nguyễn Văn Hùng",
     portName: "Cảng Tiên Sa",
-    role: "SUPER_ADMIN"
+    role: "ADMIN"
   },
   {
     email: "manager@porms.vn",
     initials: "TL",
     name: "Trần Thị Lan",
     portName: "Cảng Tiên Sa",
-    role: "ADMIN"
+    role: "PORT_MANAGER"
   },
   {
     email: "operator@porms.vn",
     initials: "MD",
     name: "Phạm Minh Đức",
     portName: "Cảng Tiên Sa",
-    role: "STANDARD_USER"
+    role: "OPERATOR"
   }
 ];
 

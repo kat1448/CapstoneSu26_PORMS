@@ -5,6 +5,7 @@ from datetime import timedelta
 from flows.weather_collector import weather_collector_flow
 from flows.dw_loader import dw_loader_flow
 from flows.historical_backfill import historical_backfill_flow
+from flows.forecast_plan_refresher import forecast_plan_refresh_flow
 
 
 def deploy_all():
@@ -51,6 +52,19 @@ def deploy_all():
     )
     backfill_deployment.apply()
     print("✅ historical-backfill deployed (manual trigger only)")
+
+    forecast_deployment = Deployment.build_from_flow(
+        flow=forecast_plan_refresh_flow,
+        name="prod",
+        version="1.0.0",
+        schedule=CronSchedule(cron="15 0 * * *", timezone="Asia/Ho_Chi_Minh"),
+        work_pool_name="porms-pool",
+        tags=["production", "forecast", "daily"],
+        description="Làm mới kế hoạch dự báo 5 ngày cho tất cả cảng mỗi ngày",
+        parameters={},
+    )
+    forecast_deployment.apply()
+    print("✅ forecast-plan-refresh deployed (daily at 00:15)")
 
     print("\n🎉 All deployments registered!")
     print("📊 Prefect UI: http://localhost:4200")

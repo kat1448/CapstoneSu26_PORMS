@@ -71,6 +71,10 @@ builder.Services.AddSingleton<ForecastRiskMlService>();
 builder.Services.AddScoped<ITaskAssignmentEmailNotifier, SmtpTaskAssignmentEmailNotifier>();
 builder.Services.AddHttpClient<OpenWeatherService>();
 builder.Services.AddHttpClient<OperationPlanLlmService>();
+builder.Services.AddHttpClient<GoogleTranslateSpeechService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("Missing JWT configuration.");
 builder.Services
@@ -91,9 +95,9 @@ builder.Services
     });
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("SuperAdminOnly", policy => policy.RequireRole("SUPER_ADMIN"));
-    options.AddPolicy("AdminOrSuperAdmin", policy => policy.RequireRole("SUPER_ADMIN", "ADMIN"));
-    options.AddPolicy("AllAppUsers", policy => policy.RequireRole("SUPER_ADMIN", "ADMIN", "STANDARD_USER"));
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("ADMIN"));
+    options.AddPolicy("AdminOrPortManager", policy => policy.RequireRole("ADMIN", "PORT_MANAGER"));
+    options.AddPolicy("AllAppUsers", policy => policy.RequireRole("ADMIN", "PORT_MANAGER", "OPERATOR"));
 });
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

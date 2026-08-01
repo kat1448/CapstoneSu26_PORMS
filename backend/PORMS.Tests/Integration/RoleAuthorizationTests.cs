@@ -20,19 +20,19 @@ public sealed class RoleAuthorizationTests
     }
 
     [Fact]
-    public async Task StandardUser_CannotManageUsers()
+    public async Task Operator_CannotManageUsers()
     {
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            CreateToken("STANDARD_USER"));
+            CreateToken("OPERATOR"));
 
         var response = await client.PostAsJsonAsync("/api/users", new
         {
             email = "",
             fullName = "",
             password = "",
-            role = "STANDARD_USER",
+            role = "OPERATOR",
             status = "ACTIVE",
             portId = (Guid?)null
         });
@@ -41,7 +41,28 @@ public sealed class RoleAuthorizationTests
     }
 
     [Fact]
-    public async Task Admin_CannotManageUsers()
+    public async Task PortManager_CannotManageUsers()
+    {
+        using var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateToken("PORT_MANAGER"));
+
+        var response = await client.PostAsJsonAsync("/api/users", new
+        {
+            email = "",
+            fullName = "",
+            password = "",
+            role = "PORT_MANAGER",
+            status = "ACTIVE",
+            portId = (Guid?)null
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_CanReachUserManagement()
     {
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
@@ -53,21 +74,21 @@ public sealed class RoleAuthorizationTests
             email = "",
             fullName = "",
             password = "",
-            role = "ADMIN",
+            role = "OPERATOR",
             status = "ACTIVE",
             portId = (Guid?)null
         });
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task StandardUser_CannotSaveRiskThresholds()
+    public async Task Operator_CannotSaveRiskThresholds()
     {
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            CreateToken("STANDARD_USER"));
+            CreateToken("OPERATOR"));
 
         var response = await client.PutAsJsonAsync("/api/risk/thresholds", new
         {
@@ -79,12 +100,12 @@ public sealed class RoleAuthorizationTests
     }
 
     [Fact]
-    public async Task StandardUser_CannotCreateSopRule()
+    public async Task Operator_CannotCreateSopRule()
     {
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            CreateToken("STANDARD_USER"));
+            CreateToken("OPERATOR"));
 
         var response = await client.PostAsJsonAsync("/api/sop-rules", new
         {
@@ -97,12 +118,12 @@ public sealed class RoleAuthorizationTests
     }
 
     [Fact]
-    public async Task StandardUser_CannotUpdatePorts()
+    public async Task Operator_CannotUpdatePorts()
     {
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            CreateToken("STANDARD_USER"));
+            CreateToken("OPERATOR"));
 
         var response = await client.PutAsJsonAsync($"/api/ports/{Guid.NewGuid()}", new
         {

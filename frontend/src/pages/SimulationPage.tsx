@@ -24,6 +24,7 @@ import type {
   SimulationSnapshot
 } from "../types/simulation";
 import type { PortSummary, PortZone } from "../types/port";
+import { operationModeLabel, riskLabel, simulationDetailLabel, simulationEventLabels } from "../utils/displayLabels";
 
 type SimulationPageProps = {
   refreshKey: number;
@@ -33,6 +34,18 @@ function riskTone(riskLevel: string): "danger" | "info" | "warning" {
   if (riskLevel === "CRITICAL") return "danger";
   if (riskLevel === "HIGH") return "warning";
   return "info";
+}
+
+function simulationEventKind(title: string) {
+  if (title === "SIMULATION_COMPLETED") return "completed";
+  if (title === "SIMULATION_STARTED") return "started";
+  return "step";
+}
+
+function simulationEventIcon(title: string) {
+  if (title === "SIMULATION_COMPLETED") return "✓";
+  if (title === "SIMULATION_STARTED") return "▶";
+  return "↗";
 }
 
 export function SimulationPage({ refreshKey }: SimulationPageProps) {
@@ -187,13 +200,6 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
       ? "Mô phỏng hoàn tất"
       : "Sẵn sàng mô phỏng";
 
-  async function handleRunSimulation() {
-    setRunning(true);
-    await runDemoSimulation();
-    setSnapshot(await getSimulationSnapshot());
-    setRunning(false);
-  }
-
   async function handleSaveDataset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSavingDataset(true);
@@ -273,6 +279,22 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
     }
   }
 
+  async function handleRunStormDemo() {
+    setRunning(true);
+    setSaveError("");
+    setResult(null);
+    try {
+      const run = await runDemoSimulation();
+      setSnapshot(await getSimulationSnapshot());
+      if (run?.sessionId) setResult(await getSimulationResult(run.sessionId));
+      setSaveMessage("Đã tạo tình huống rủi ro cao cùng cảnh báo và nhiệm vụ ứng phó.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Chưa thể chạy kịch bản mẫu. Vui lòng thử lại.");
+    } finally {
+      setRunning(false);
+    }
+  }
+
   function toggleDatasetSelection(datasetId: string) {
     setSelectedDatasetIds((current) => (
       current.includes(datasetId)
@@ -297,8 +319,8 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
     <section className="page-grid simulation-page">
       <div className="section-heading">
         <div>
-          <h2>Chế độ mô phỏng</h2>
-          <p>Replay dữ liệu bão lịch sử để huấn luyện và trình diễn</p>
+          <h2>Mô phỏng tình huống vận hành</h2>
+          <p>Thử các tình huống thời tiết để xem hệ thống đánh giá, cảnh báo và giao nhiệm vụ ứng phó.</p>
         </div>
         {snapshot.status === "COMPLETED" ? (
           <Link className="button button-secondary" to="/simulation-results">
@@ -314,13 +336,13 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
               <span className={`sim-dot${isRunning ? " pulse-dot" : ""}`} />
               {statusLabel}
             </div>
-            <h3>Kịch bản bão Đà Nẵng 10/2023</h3>
+            <h3>Diễn biến thời tiết tại Cảng Tiên Sa</h3>
             <p>
-              Dữ liệu mô phỏng quá trình gió tăng từ cấp 4 lên cấp 10, mưa lớn và tầm nhìn giảm.
-              Hệ thống đánh giá rủi ro, kích hoạt SOP và cập nhật chế độ vận hành.
+              Hệ thống lần lượt tăng mức gió, lượng mưa và giảm tầm nhìn để kiểm tra khả năng đánh giá rủi ro,
+              phát cảnh báo và đề xuất nhiệm vụ ứng phó.
             </p>
           </div>
-          <Badge tone={riskTone(snapshot.currentRiskLevel)}>{snapshot.currentRiskLevel}</Badge>
+          <Badge tone={riskTone(snapshot.currentRiskLevel)}>{riskLabel(snapshot.currentRiskLevel)}</Badge>
         </div>
         <div className="progress-bar sim-progress" aria-label="Tiến độ mô phỏng">
           <span style={{ width: `${snapshot.progressPercent}%` }} />
@@ -336,7 +358,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
         <article className="card card-pad sim-kpi-card">
           <span>Gió</span>
           <strong>{snapshot.windSpeedMs.toFixed(1)} m/s</strong>
-          <small>Beaufort cấp {snapshot.beaufortNumber}</small>
+          <small>Cấp gió {snapshot.beaufortNumber}</small>
         </article>
         <article className="card card-pad sim-kpi-card">
           <span>Mưa 1 giờ</span>
@@ -345,7 +367,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
         </article>
         <article className="card card-pad sim-kpi-card">
           <span>Chế độ</span>
-          <strong>{snapshot.currentMode}</strong>
+          <strong>{operationModeLabel(snapshot.currentMode)}</strong>
           <small>{snapshot.modeChangeCount} lần đổi chế độ</small>
         </article>
         <article className="card card-pad sim-kpi-card">
@@ -361,7 +383,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
           <div className="card-head">
             <div>
               <h3>Dữ liệu mô phỏng</h3>
-              <p>Nhập dữ liệu thời tiết để lưu thành dataset thật trong database</p>
+              <p>Tạo một kịch bản thời tiết riêng để kiểm tra cách hệ thống phản ứng.</p>
             </div>
           </div>
           <form className="simulation-data-form" onSubmit={handleSaveDataset}>
@@ -419,9 +441,9 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
               />
             </label>
             <label>
-              <span>Zone ID</span>
+              <span>Mã khu vực</span>
               <input
-                aria-label="Zone ID"
+                aria-label="Mã khu vực"
                 onChange={(event) => setDatasetForm((value) => ({ ...value, snapshots: [{ ...firstSnapshot, zoneId: event.target.value || null }] }))}
                 placeholder="Để trống dùng khu vực đầu tiên"
                 value={firstSnapshot.zoneId ?? ""}
@@ -485,7 +507,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
             <div className="card-head">
               <div>
                 <h3>{editingDatasetId ? "Chỉnh sửa dữ liệu mô phỏng" : "Tạo dữ liệu mô phỏng"}</h3>
-                <p>Nhập dữ liệu thời tiết để lưu thành dataset thật trong database</p>
+                <p>Nhập các chỉ số thời tiết để tạo một tình huống kiểm tra mới.</p>
               </div>
               <button className="button button-secondary button-small" onClick={() => { setCreateModalOpen(false); setEditingDatasetId(null); }} type="button">Đóng</button>
             </div>
@@ -548,9 +570,9 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
                 />
               </label>
               <label>
-                <span>Zone ID</span>
+                <span>Mã khu vực</span>
                 <select
-                  aria-label="Zone ID"
+                  aria-label="Mã khu vực"
                   onChange={(event) => setDatasetForm((value) => ({ ...value, snapshots: [{ ...firstSnapshot, zoneId: event.target.value || null }] }))}
                   value={firstSnapshot.zoneId ?? ""}
                 >
@@ -576,9 +598,9 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
         <aside className="card card-pad simulation-settings">
           <div>
             <h3>Thiết lập mô phỏng</h3>
-            <p>Bộ dữ liệu replay phục vụ demo vận hành</p>
+            <p>Chọn tình huống đã lưu hoặc chạy nhanh kịch bản bão mẫu.</p>
           </div>
-          <div className="field-label">Bộ dữ liệu</div>
+          <div className="field-label">Tình huống đã lưu</div>
           <div className="simulation-dataset-checklist" aria-label="Bộ dữ liệu">
             {datasets.length === 0 ? (
               <div className="simulation-dataset-empty">Chưa có dữ liệu</div>
@@ -594,7 +616,7 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
                   />
                   <span>
                     <strong>{dataset.name}</strong>
-                    <small>{dataset.portCode} · {dataset.snapshotCount} mẫu</small>
+                    <small>{dataset.portCode} · {dataset.snapshotCount} thời điểm</small>
                   </span>
                 </label>
                 <div className="simulation-dataset-actions">
@@ -623,58 +645,65 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
               ? `Đã chọn ${selectedDatasetIds.length} bộ dữ liệu${runningDatasetIndex ? ` · Đang chạy ${runningDatasetIndex}/${selectedDatasetIds.length}` : ""}`
               : "Chưa chọn bộ dữ liệu mô phỏng"}
           </p>
-          <label className="field-label" htmlFor="simulation-speed">Tốc độ phát lại</label>
+          <label className="field-label" htmlFor="simulation-speed">Tốc độ mô phỏng</label>
           <select className="input select-input" disabled={isRunning} id="simulation-speed">
             <option>1x - Thực tế</option>
             <option>2x - Nhanh</option>
             <option>5x - Demo</option>
           </select>
-          <div className="sim-dataset-card">
-            <strong>120 mẫu thời tiết</strong>
-            <span>Thời lượng gốc: 30 giờ</span>
-            <span>Độ phân giải: 15 phút</span>
-            <span>Rủi ro đỉnh: CRITICAL</span>
+          <div className="sim-dataset-card sim-demo-callout">
+            <strong>Cần xem đầy đủ cảnh báo và nhiệm vụ?</strong>
+            <span>Chạy kịch bản mẫu để hệ thống tạo tình huống từ Thấp đến Rất cao.</span>
+            <button
+              className="button button-primary button-small"
+              disabled={isRunning}
+              onClick={() => { void handleRunStormDemo(); }}
+              type="button"
+            >
+              Chạy kịch bản bão mẫu
+            </button>
           </div>
-          <button
-            className={isRunning ? "button button-danger simulation-action" : "button button-primary simulation-action"}
-            disabled={isRunning}
-            onClick={handleRunSimulation}
-            type="button"
-          >
-            {isRunning ? "Đang phát dữ liệu..." : snapshot.status === "COMPLETED" ? "Chạy lại" : "Bắt đầu mô phỏng"}
-          </button>
           <button
             className="button button-secondary simulation-action"
             disabled={isRunning || selectedDatasetIds.length === 0}
             onClick={handleRunDataset}
             type="button"
           >
-            Chạy dữ liệu đã chọn
+            Chạy tình huống đã chọn
           </button>
         </aside>
 
         <article className="card card-pad simulation-feed-panel">
           <div className="card-head">
             <div>
-              <h3>Luồng sự kiện mô phỏng</h3>
-              <p>Các phản ứng tự động sẽ xuất hiện tại đây</p>
+              <h3>Diễn biến mô phỏng</h3>
+              <p>Theo dõi từng bước thay đổi và phản ứng của hệ thống.</p>
             </div>
+            <Badge tone="muted">{snapshot.feed.length} sự kiện</Badge>
           </div>
-          <div className="timeline">
+          <div className="timeline simulation-event-timeline">
             {snapshot.feed.length === 0 ? (
               <div className="empty-state">
                 <strong>Chưa có dữ liệu mô phỏng</strong>
-                <span>Bấm “Bắt đầu mô phỏng” để phát dữ liệu.</span>
+                <span>Chọn bộ dữ liệu và bấm “Chạy dữ liệu đã chọn” để phát dữ liệu.</span>
               </div>
             ) : (
               snapshot.feed.map((item) => (
-                <div className={`timeline-item sim-feed-item risk-${item.riskLevel.toLowerCase()}`} key={`${item.title}-${item.happenedAt}`}>
-                  <div className="timeline-header">
-                    <strong>{item.title}</strong>
-                    <small>{item.happenedAt}</small>
+                <div className={`sim-event sim-event-${simulationEventKind(item.title)} risk-${item.riskLevel.toLowerCase()}`} key={`${item.title}-${item.happenedAt}`}>
+                  <div aria-hidden="true" className="sim-event-rail">
+                    <span>{simulationEventIcon(item.title)}</span>
                   </div>
-                  <p>{item.detail}</p>
-                  <Badge tone={riskTone(item.riskLevel)}>{item.riskLevel}</Badge>
+                  <div className="sim-event-card">
+                    <div className="sim-event-head">
+                      <strong>{simulationEventLabels[item.title] ?? item.title}</strong>
+                      <time>{item.happenedAt}</time>
+                    </div>
+                    <p>{simulationDetailLabel(item.detail)}</p>
+                    <div className="sim-event-footer">
+                      <span>Mức độ tại thời điểm này</span>
+                      <Badge tone={riskTone(item.riskLevel)}>{riskLabel(item.riskLevel)}</Badge>
+                    </div>
+                  </div>
                 </div>
               ))
             )}
@@ -688,27 +717,27 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
             <div className="card-head">
               <div>
                 <h3>Kết quả mô phỏng</h3>
-                <p>Khu vực nguy hiểm và task cần thực hiện</p>
+                <p>Tổng hợp khu vực cần chú ý và nhiệm vụ ứng phó được tạo tự động.</p>
               </div>
               <button className="button button-secondary button-small" onClick={() => setResult(null)} type="button">Đóng</button>
             </div>
             <div className="simulation-result-grid">
               <div>
-                <h4>Khu vực nguy hiểm</h4>
+                <h4>Khu vực cần ưu tiên</h4>
                 {result.dangerousZones.map((zone) => (
                   <div className="result-row" key={zone.zoneId}>
                     <strong>{zone.zoneName}</strong>
-                    <Badge tone={riskTone(zone.riskLevel)}>{zone.riskLevel}</Badge>
+                    <Badge tone={riskTone(zone.riskLevel)}>{riskLabel(zone.riskLevel)}</Badge>
                     <small>{zone.reason ?? "Vượt ngưỡng mô phỏng"}</small>
                   </div>
                 ))}
               </div>
               <div>
-                <h4>Task sẽ thực hiện</h4>
+                <h4>Nhiệm vụ cần thực hiện</h4>
                 {result.tasks.map((task) => (
                   <div className="result-row" key={task.taskCode}>
                     <strong>{task.title}</strong>
-                    <small>{task.taskCode} · {task.zoneName ?? "Toàn cảng"} · {task.priority}</small>
+                    <small>{task.taskCode} · {task.zoneName ?? "Toàn cảng"} · Mức {riskLabel(task.priority)}</small>
                   </div>
                 ))}
               </div>

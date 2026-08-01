@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "../components/common/Badge";
 import { formatTimeLabel } from "../services/api";
 import { getTasks, type TaskLogRecord } from "../services/taskService";
+import { riskLabel } from "../utils/displayLabels";
 
 const statusLabels: Record<string, string> = {
   ACKNOWLEDGED: "Đã xác nhận",
@@ -137,8 +138,8 @@ export function TasksPage() {
     <section className="page-grid">
       <div className="section-heading">
         <div>
-          <h2>Nhật ký nhiệm vụ</h2>
-          <p>Theo dõi nhiệm vụ được tạo từ quy tắc SOP và kết quả vận hành thực tế.</p>
+          <h2>Nhiệm vụ cần thực hiện</h2>
+          <p>Theo dõi các công việc ứng phó được hệ thống đề xuất khi thời tiết có thể ảnh hưởng đến cảng.</p>
         </div>
       </div>
 
@@ -172,11 +173,11 @@ export function TasksPage() {
           <input className="input" onChange={(event) => setToDate(event.target.value)} type="date" value={toDate} />
         </label>
         <label>
-          <span>Cấp độ rủi ro</span>
+          <span>Mức ưu tiên</span>
           <select className="select-input" onChange={(event) => setSelectedPriority(event.target.value)} value={selectedPriority}>
             <option value="">Tất cả cấp độ</option>
             {riskOptions.map((risk) => (
-              <option key={risk} value={risk}>{risk}</option>
+              <option key={risk} value={risk}>{riskLabel(risk)}</option>
             ))}
           </select>
         </label>
@@ -187,7 +188,6 @@ export function TasksPage() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Mã</th>
               <th>Nhiệm vụ</th>
               <th>Cảng</th>
               <th>Khu vực</th>
@@ -200,20 +200,25 @@ export function TasksPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={8}>Đang tải nhiệm vụ...</td>
+                <td colSpan={7}>Đang tải nhiệm vụ...</td>
               </tr>
             ) : null}
 
             {!isLoading && filteredTasks.length === 0 ? (
               <tr>
-                <td colSpan={8}>Chưa có nhiệm vụ nào.</td>
+                <td className="table-empty-cell" colSpan={7}>
+                  <div className="friendly-empty-state">
+                    <span className="friendly-empty-icon">✓</span>
+                    <strong>{tasks.length ? "Không có nhiệm vụ phù hợp với bộ lọc" : "Hiện chưa có nhiệm vụ cần xử lý"}</strong>
+                    <small>{tasks.length ? "Hãy thay đổi hoặc xóa bộ lọc để xem các nhiệm vụ khác." : "Nhiệm vụ sẽ tự xuất hiện khi có cảnh báo mức Cao hoặc Rất cao. Bạn có thể chạy kịch bản bão mẫu trong trang Mô phỏng để kiểm tra."}</small>
+                  </div>
+                </td>
               </tr>
             ) : null}
 
             {!isLoading
               ? visibleTasks.map((task) => (
                   <tr key={task.taskId}>
-                    <td><span className="code-chip">{task.taskCode}</span></td>
                     <td>
                       <strong>{task.title}</strong>
                       {task.isSimulation ? <span className="meta-text">Mô phỏng</span> : null}
@@ -223,7 +228,7 @@ export function TasksPage() {
                       <span className="meta-text">{task.portName}</span>
                     </td>
                     <td>{zoneLabel(task)}</td>
-                    <td><Badge tone={priorityTone(task.priority)}>{task.priority}</Badge></td>
+                    <td><Badge tone={priorityTone(task.priority)}>{riskLabel(task.priority)}</Badge></td>
                     <td>{assigneeLabel(task)}</td>
                     <td>{statusLabels[task.status] ?? task.status}</td>
                     <td>{formatTimeLabel(task.createdAt)}</td>
