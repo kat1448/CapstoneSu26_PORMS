@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import type { OperationMode, RiskLevel } from "../../types/dashboard";
 import type { PortSummary, PortZone } from "../../types/port";
 import type { SimulationMapPoint } from "../../types/simulation";
+import { riskLabel as readableRiskLabel } from "../../utils/displayLabels";
 
 const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const DEFAULT_CENTER: [number, number] = [16.1228, 108.2144];
@@ -50,9 +51,9 @@ const riskScore: Record<RiskLevel, number> = {
 };
 
 const modeLabels: Record<OperationMode, string> = {
-  LIMITED: "Han che",
-  NORMAL: "Binh thuong",
-  STOP: "Tam dung"
+  LIMITED: "Hạn chế vận hành",
+  NORMAL: "Vận hành bình thường",
+  STOP: "Tạm dừng vận hành"
 };
 
 function escapeHtml(value: string) {
@@ -104,7 +105,7 @@ function portPopupContent(port: DisplayPort) {
   return [
     `<div class="gis-popup-title">${escapeHtml(port.portName)}</div>`,
     `<div class="gis-popup-meta">${escapeHtml(port.portCode)} · ${escapeHtml(modeLabels[port.currentOperationMode])}</div>`,
-    `<div class="gis-popup-meta">${riskLabel}: <strong style="color:${color}">${escapeHtml(port.displayRiskLevel)}</strong></div>`,
+    `<div class="gis-popup-meta">${riskLabel}: <strong style="color:${color}">${escapeHtml(readableRiskLabel(port.displayRiskLevel))}</strong></div>`,
     `<div class="gis-popup-meta">${port.latitude.toFixed(6)}, ${port.longitude.toFixed(6)}</div>`
   ].join("");
 }
@@ -114,7 +115,7 @@ function zonePopupContent(point: ZoneMapPoint) {
   return [
     `<div class="gis-popup-title">${escapeHtml(point.zoneName)}</div>`,
     `<div class="gis-popup-meta">${escapeHtml(point.zoneType)} · ${escapeHtml(point.statusLabel)}</div>`,
-    `<div class="gis-popup-meta">Rui ro mo phong: <strong>${escapeHtml(point.displayRiskLevel)}</strong></div>`,
+    `<div class="gis-popup-meta">Rủi ro mô phỏng: <strong>${escapeHtml(readableRiskLabel(point.displayRiskLevel))}</strong></div>`,
     `<div class="gis-popup-meta">${escapeHtml(sourceLabel)}</div>`,
     `<div class="gis-popup-meta">${point.displayLatitude.toFixed(6)}, ${point.displayLongitude.toFixed(6)}</div>`
   ].join("");

@@ -10,6 +10,7 @@ export type ForecastEvaluationSummary = {
 
 export type ForecastEvaluationRow = {
   actualObservedAt: string | null;
+  actualDataSource?: string | null;
   actualRainfallMm: number | null;
   actualRiskLevel: string | null;
   actualVisibilityKm: number | null;
@@ -25,7 +26,7 @@ export type ForecastEvaluationRow = {
   rainAbsError: number | null;
   riskScoreError: number | null;
   snapshotNumber: number;
-  status: "MATCHED" | "WAITING_ACTUAL";
+  status: "FUTURE" | "MATCHED" | "MATCHED_DEMO" | "WAITING_ACTUAL";
   visibilityAbsError: number | null;
   windAbsError: number | null;
 };

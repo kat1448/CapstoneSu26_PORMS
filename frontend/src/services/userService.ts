@@ -6,7 +6,7 @@ import {
 } from "../mock/demoData";
 import { requestJson, requestVoid, withMockFallback } from "./api";
 
-export type UserRole = "SUPER_ADMIN" | "ADMIN" | "STANDARD_USER";
+export type UserRole = "ADMIN" | "PORT_MANAGER" | "OPERATOR";
 export type UserStatus = "ACTIVE" | "INACTIVE" | "LOCKED";
 
 export type UserRecord = Awaited<ReturnType<typeof getUsersData>>[number] & {

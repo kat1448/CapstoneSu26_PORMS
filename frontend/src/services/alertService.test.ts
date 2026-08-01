@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getAlert, getAlertTasks } from "./alertService";
+import { acknowledgeAlert, getAlert, getAlertTasks } from "./alertService";
 
 describe("alertService", () => {
   beforeEach(() => {
@@ -60,6 +60,17 @@ describe("alertService", () => {
 
     expect(fetch).toHaveBeenCalledWith("http://localhost:5000/api/alerts/alert-1/tasks", expect.objectContaining({
       headers: expect.objectContaining({ "Content-Type": "application/json" })
+    }));
+  });
+
+  it("acknowledges one alert through the API", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(acknowledgeAlert("alert-1")).resolves.toBeUndefined();
+
+    expect(fetch).toHaveBeenCalledWith("http://localhost:5000/api/alerts/alert-1/acknowledge", expect.objectContaining({
+      headers: expect.objectContaining({ "Content-Type": "application/json" }),
+      method: "PATCH"
     }));
   });
 });

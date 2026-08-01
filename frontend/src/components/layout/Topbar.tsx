@@ -14,16 +14,17 @@ type TopbarProps = {
 const pageTitles: Record<string, string> = {
   "/alerts": "Cảnh báo",
   "/change-password": "Đổi mật khẩu",
-  "/dashboard": "Dashboard",
+  "/dashboard": "Tổng quan vận hành",
+  "/ai-long-range-forecast": "Dự báo dài hạn",
   "/forecast-planning": "Dự báo vận hành",
-  "/operation-log": "Nhật ký vận hành",
+  "/operation-log": "Lịch sử vận hành",
   "/ports": "Cảng & khu vực",
   "/profile": "Thông tin cá nhân",
-  "/risk-config": "Cấu hình ngưỡng rủi ro",
-  "/simulation": "Chế độ mô phỏng",
+  "/risk-config": "Thiết lập mức cảnh báo",
+  "/simulation": "Mô phỏng tình huống",
   "/simulation-results": "Kết quả mô phỏng",
-  "/sop-rules": "Quy tắc SOP",
-  "/tasks": "Nhật ký nhiệm vụ",
+  "/sop-rules": "Quy trình ứng phó",
+  "/tasks": "Nhiệm vụ cần thực hiện",
   "/users": "Người dùng"
 };
 
@@ -44,18 +45,17 @@ function formatClock(date: Date) {
 }
 
 const roleLabels: Record<DemoUser["role"], string> = {
-  SUPER_ADMIN: "Super Admin",
-  ADMIN: "Admin",
-  STANDARD_USER: "Standard User"
+  ADMIN: "Quản trị hệ thống",
+  PORT_MANAGER: "Quản lý vận hành cảng",
+  OPERATOR: "Nhân viên vận hành"
 };
 
 export function Topbar({ currentUser, onLogout, onMenuToggle, onRefresh, unreadAlertCount }: TopbarProps) {
   const location = useLocation();
-  const path = location.pathname.startsWith("/ports/")
-    ? "/ports"
-    : location.pathname.startsWith("/users/")
-      ? "/users"
-      : location.pathname;
+  const path = Object.keys(pageTitles)
+    .sort((first, second) => second.length - first.length)
+    .find((candidate) => location.pathname === candidate || location.pathname.startsWith(`${candidate}/`))
+    ?? location.pathname;
   const [clock, setClock] = useState(() => formatClock(new Date()));
   const [isAccountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);

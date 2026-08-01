@@ -71,7 +71,7 @@ describe("AlertDetailPage", () => {
     vi.mocked(getTaskAssignees).mockResolvedValue([{
       email: "operator@porms.vn",
       fullName: "Nguyễn Văn A",
-      role: "STANDARD_USER",
+      role: "OPERATOR",
       userId: "user-1"
     }]);
     vi.mocked(assignTask).mockResolvedValue({
@@ -143,6 +143,6 @@ describe("AlertDetailPage", () => {
     expect(completeTask).toHaveBeenCalledWith("task-1", {
       completionNote: "Đã đóng khu vực và thông báo điều độ."
     });
-    expect(await screen.findByText("COMPLETED")).toBeInTheDocument();
+    expect(await screen.findByText("Hoàn tất")).toBeInTheDocument();
   });
 });

@@ -14,7 +14,6 @@ namespace PORMS.API.Controllers;
 public sealed class TaskController : ControllerBase
 {
     [HttpGet]
-    [Authorize(Policy = "AdminOrSuperAdmin")]
     public async Task<ActionResult<IReadOnlyList<TaskLogResponse>>> GetTasks(
         [FromServices] TaskRepository repository,
         CancellationToken cancellationToken)
@@ -24,7 +23,7 @@ public sealed class TaskController : ControllerBase
     }
 
     [HttpGet("assignees")]
-    [Authorize(Policy = "AdminOrSuperAdmin")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<IReadOnlyList<TaskAssigneeResponse>>> GetAssignees(
         [FromServices] TaskRepository repository,
         CancellationToken cancellationToken)
@@ -40,7 +39,7 @@ public sealed class TaskController : ControllerBase
     }
 
     [HttpPatch("{taskId:guid}/assignment")]
-    [Authorize(Policy = "AdminOrSuperAdmin")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<TaskLogResponse>> AssignTask(
         Guid taskId,
         [FromBody] AssignTaskRequest request,

@@ -362,15 +362,16 @@ public sealed class SimulationRepository
         var snapshots = new List<CreateSimulationSnapshotReadModel>();
         var items = new List<ForecastPlanItemReadModel>();
 
-        for (var day = 1; day <= horizonDays; day++)
+        for (var dayOffset = 0; dayOffset < horizonDays; dayOffset++)
         {
-            var plannedAt = new DateTimeOffset(now.UtcDateTime.Date.AddDays(day).AddHours(8), TimeSpan.Zero);
-            var wind = Math.Max(0, weather.WindSpeedMs + Math.Min(day, 6) * 0.35m);
-            var rainfall = Math.Max(0, weather.Rainfall1hMm + (day % 4) * 2.5m);
-            var visibility = Math.Max(0.5m, weather.VisibilityKm - Math.Min(day, 8) * 0.25m);
+            var snapshotNumber = dayOffset + 1;
+            var plannedAt = new DateTimeOffset(now.UtcDateTime.Date.AddDays(dayOffset).AddHours(8), TimeSpan.Zero);
+            var wind = Math.Max(0, weather.WindSpeedMs + Math.Min(snapshotNumber, 6) * 0.35m);
+            var rainfall = Math.Max(0, weather.Rainfall1hMm + (snapshotNumber % 4) * 2.5m);
+            var visibility = Math.Max(0.5m, weather.VisibilityKm - Math.Min(snapshotNumber, 8) * 0.25m);
             var beaufort = ToBeaufort(wind);
-            var snapshot = new CreateSimulationSnapshotReadModel(day, wind, beaufort, rainfall, visibility, null);
-            var risk = EvaluateRisk(new SimulationSnapshotContext(day, wind, beaufort, rainfall, visibility, null));
+            var snapshot = new CreateSimulationSnapshotReadModel(snapshotNumber, wind, beaufort, rainfall, visibility, null);
+            var risk = EvaluateRisk(new SimulationSnapshotContext(snapshotNumber, wind, beaufort, rainfall, visibility, null));
             var operationPlan = risk.FinalRiskLevel switch
             {
                 "CRITICAL" => "Dừng khai thác, bố trí trực chỉ huy và chuẩn bị SOP khẩn cấp.",
@@ -387,7 +388,23 @@ public sealed class SimulationRepository
                 risk.RainRiskLevel,
                 risk.VisibilityRiskLevel,
                 operationPlan,
-                $"Dự báo ngày +{day}: gió Beaufort {beaufort}, mưa {rainfall:0.#} mm/h, tầm nhìn {visibility:0.#} km."));
+                dayOffset == 0
+                    ? $"Dự báo hôm nay: gió cấp {beaufort}, mưa {rainfall:0.#} mm/h, tầm nhìn {visibility:0.#} km."
+                    : $"Dự báo sau {dayOffset} ngày: gió cấp {beaufort}, mưa {rainfall:0.#} mm/h, tầm nhìn {visibility:0.#} km."));
+        }
+
+        const string deactivateOldPlansSql = """
+            UPDATE operational.simulation_datasets
+            SET is_active = FALSE,
+                updated_at = NOW()
+            WHERE is_active = TRUE
+              AND metadata->>'source' = 'forecast-plan'
+              AND UPPER(metadata->>'portCode') = @portCode;
+            """;
+        await using (var deactivateCommand = new NpgsqlCommand(deactivateOldPlansSql, connection, transaction))
+        {
+            deactivateCommand.Parameters.AddWithValue("portCode", port.PortCode);
+            await deactivateCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         const string datasetSql = """
@@ -481,6 +498,7 @@ public sealed class SimulationRepository
         var generatedTaskCount = 0;
         var modeChangeCount = 0;
         var peakRiskLevel = "LOW";
+        string? lastAlertRiskLevel = null;
 
         foreach (var snapshot in snapshots)
         {
@@ -505,12 +523,15 @@ public sealed class SimulationRepository
                 modeChangeCount++;
             }
 
-            if (risk.FinalRiskLevel is "HIGH" or "CRITICAL")
+            if (risk.FinalRiskLevel is "HIGH" or "CRITICAL" &&
+                !string.Equals(lastAlertRiskLevel, risk.FinalRiskLevel, StringComparison.Ordinal))
             {
                 await InsertAlertAsync(connection, transaction, Guid.NewGuid(), port.PortId, zone?.ZoneId, riskAssessmentId, sessionId, port.PortCode, zone?.ZoneName ?? port.PortCode, new SimulationStep(snapshot.SnapshotNumber, risk.WindRiskLevel, risk.RainRiskLevel, risk.VisibilityRiskLevel, risk.FinalRiskLevel, risk.DominantFactor, operationMode, snapshot.WindSpeedMs, snapshot.BeaufortNumber, snapshot.Rainfall1hMm, snapshot.VisibilityKm ?? 0, risk.Summary), observedAt, cancellationToken);
                 generatedAlertCount++;
                 generatedTaskCount += await InsertSimulationTasksAsync(connection, transaction, port.PortId, zone, sessionId, riskAssessmentId, risk.FinalRiskLevel, cancellationToken);
             }
+
+            lastAlertRiskLevel = risk.FinalRiskLevel is "HIGH" or "CRITICAL" ? risk.FinalRiskLevel : null;
 
             await InsertOperationEventAsync(connection, transaction, Guid.NewGuid(), "SIMULATION_STEP", port.PortId, startedByUserId, sessionId, $"Simulation step {snapshot.SnapshotNumber} moved {zone?.ZoneName ?? port.PortCode} to {risk.FinalRiskLevel}.", new
             {
@@ -698,7 +719,9 @@ public sealed class SimulationRepository
         var previousRiskLevel = port.CurrentRiskLevel;
         var previousMode = port.CurrentOperationMode;
         var generatedAlertCount = 0;
+        var generatedTaskCount = 0;
         var modeChangeCount = 0;
+        string? lastAlertRiskLevel = null;
 
         foreach (var step in DemoSteps)
         {
@@ -746,7 +769,8 @@ public sealed class SimulationRepository
                 modeChangeCount++;
             }
 
-            if (step.FinalRiskLevel is "HIGH" or "CRITICAL")
+            if (step.FinalRiskLevel is "HIGH" or "CRITICAL" &&
+                !string.Equals(lastAlertRiskLevel, step.FinalRiskLevel, StringComparison.Ordinal))
             {
                 await InsertAlertAsync(
                     connection,
@@ -763,7 +787,18 @@ public sealed class SimulationRepository
                     cancellationToken);
 
                 generatedAlertCount++;
+                generatedTaskCount += await InsertSimulationTasksAsync(
+                    connection,
+                    transaction,
+                    port.PortId,
+                    null,
+                    sessionId,
+                    riskAssessmentId,
+                    step.FinalRiskLevel,
+                    cancellationToken);
             }
+
+            lastAlertRiskLevel = step.FinalRiskLevel is "HIGH" or "CRITICAL" ? step.FinalRiskLevel : null;
 
             await InsertOperationEventAsync(
                 connection,
@@ -805,6 +840,7 @@ public sealed class SimulationRepository
                 sessionId,
                 peakRiskLevel = DemoSteps[^1].FinalRiskLevel,
                 generatedAlertCount,
+                generatedTaskCount,
                 modeChangeCount
             },
             completedAt,
@@ -820,6 +856,8 @@ public sealed class SimulationRepository
             completedAt,
             cancellationToken);
 
+        await UpdateGeneratedTaskCountAsync(connection, transaction, sessionId, generatedTaskCount, cancellationToken);
+
         await transaction.CommitAsync(cancellationToken);
 
         return new SimulationRunResult(
@@ -830,7 +868,10 @@ public sealed class SimulationRepository
             generatedAlertCount,
             modeChangeCount,
             DemoSteps[^1].FinalRiskLevel,
-            DemoSteps[^1].OperationMode);
+            DemoSteps[^1].OperationMode)
+        {
+            GeneratedTaskCount = generatedTaskCount
+        };
     }
 
     public async Task<SimulationSnapshotReadModel> GetCurrentAsync(CancellationToken cancellationToken)
@@ -1406,7 +1447,7 @@ public sealed class SimulationRepository
                 'demo.operator@porms.local',
                 'PORMS Demo Operator',
                 'demo-not-for-login',
-                'STANDARD_USER',
+                'OPERATOR',
                 'ACTIVE',
                 @portId,
                 NOW()

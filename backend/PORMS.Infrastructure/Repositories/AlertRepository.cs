@@ -27,23 +27,31 @@ public sealed class AlertRepository
                        a.alert_type::text AS alert_type,
                        a.severity::text AS severity,
                        CASE
-                           WHEN a.alert_type = 'SIMULATION' THEN CONCAT('Cảnh báo mô phỏng ', a.severity::text, ' tại ', COALESCE(z.name, p.name))
+                           WHEN a.alert_type = 'SIMULATION' AND a.severity = 'CRITICAL'
+                               THEN CONCAT('Cảnh báo nguy hiểm tại ', p.name)
+                           WHEN a.alert_type = 'SIMULATION' AND a.severity = 'HIGH'
+                               THEN CONCAT('Cảnh báo nguy cơ cao tại ', p.name)
                            ELSE a.title
                        END AS title,
                        CASE
                            WHEN a.alert_type = 'SIMULATION' THEN CONCAT(
-                               COALESCE(z.name, p.name),
-                               ' (',
-                               p.code,
-                               ') đạt mức ',
-                               a.severity::text,
-                               COALESCE(': ' || NULLIF(CASE ra.assessment_summary
-                                   WHEN 'Stable harbor conditions' THEN 'Điều kiện cảng ổn định'
-                                   WHEN 'Increasing wind and moderate rain' THEN 'Gió tăng và mưa vừa'
-                                   WHEN 'Unsafe cargo handling conditions' THEN 'Điều kiện làm hàng không an toàn'
-                                   WHEN 'Operations must stop immediately' THEN 'Phải dừng khai thác ngay lập tức'
-                                   ELSE ra.assessment_summary
-                               END, ''), '.'))
+                               'Tại ', COALESCE(z.name, 'khu vực toàn cảng'), ' thuộc ', p.name,
+                               ' đang có gió cấp ', COALESCE(w.beaufort_number::text, 'chưa xác định'),
+                               COALESCE(', tốc độ ' || TRIM(TO_CHAR(w.wind_speed_ms, 'FM999990D0')) || ' m/s', ''),
+                               COALESCE(', lượng mưa ' || TRIM(TO_CHAR(w.rainfall_1h_mm, 'FM999990D0')) || ' mm/giờ', ''),
+                               COALESCE(' và tầm nhìn ' || TRIM(TO_CHAR(w.visibility_km, 'FM999990D0')) || ' km', ''),
+                               '. Hệ thống đánh giá mức rủi ro ',
+                               CASE a.severity
+                                   WHEN 'CRITICAL' THEN 'rất cao, cần hành động ngay'
+                                   WHEN 'HIGH' THEN 'cao'
+                                   ELSE LOWER(a.severity::text)
+                               END,
+                               '. Theo quy trình ứng phó, ',
+                               CASE a.severity
+                                   WHEN 'CRITICAL' THEN 'đề nghị tạm dừng vận hành tại khu vực và thực hiện ngay nhiệm vụ SOP khẩn cấp.'
+                                   WHEN 'HIGH' THEN 'đề nghị hạn chế vận hành tại khu vực và thực hiện các nhiệm vụ SOP được giao.'
+                                   ELSE 'tiếp tục theo dõi tình hình.'
+                               END)
                            ELSE a.message
                        END AS message,
                        CASE
@@ -55,12 +63,14 @@ public sealed class AlertRepository
                        COUNT(ar.read_at) AS read_count,
                        COUNT(ar.acknowledged_at) AS acknowledged_count
                 FROM operational.alerts a
-                JOIN operational.ports p ON p.id = a.port_id
-                LEFT JOIN operational.risk_assessments ra ON ra.id = a.risk_assessment_id
-                LEFT JOIN operational.zones z ON z.id = COALESCE(a.zone_id, ra.zone_id)
+                 JOIN operational.ports p ON p.id = a.port_id
+                 LEFT JOIN operational.risk_assessments ra ON ra.id = a.risk_assessment_id
+                 LEFT JOIN operational.weather_readings w ON w.id = ra.weather_reading_id
+                 LEFT JOIN operational.zones z ON z.id = COALESCE(a.zone_id, ra.zone_id)
                 LEFT JOIN operational.simulation_sessions s ON s.id = a.simulation_session_id
                 LEFT JOIN operational.alert_receipts ar ON ar.alert_id = a.id
-                GROUP BY a.id, p.code, p.name, ra.zone_id, ra.assessment_summary, z.name, s.created_at, s.started_at
+                 GROUP BY a.id, p.code, p.name, ra.zone_id, z.name, s.created_at, s.started_at,
+                          w.beaufort_number, w.wind_speed_ms, w.rainfall_1h_mm, w.visibility_km
             )
             SELECT id,
                    port_id,
@@ -107,6 +117,50 @@ public sealed class AlertRepository
         }
 
         return results;
+    }
+
+    public async Task<bool> AcknowledgeAlertAsync(
+        Guid alertId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+
+        const string sql = """
+            WITH selected_alert AS (
+                SELECT id
+                FROM operational.alerts
+                WHERE id = @alertId
+            ),
+            upserted_receipt AS (
+                INSERT INTO operational.alert_receipts (
+                    alert_id,
+                    user_id,
+                    delivered_at,
+                    read_at,
+                    acknowledged_at
+                )
+                SELECT
+                    id,
+                    @userId,
+                    NOW(),
+                    NOW(),
+                    NOW()
+                FROM selected_alert
+                ON CONFLICT (alert_id, user_id)
+                DO UPDATE
+                SET read_at = COALESCE(operational.alert_receipts.read_at, NOW()),
+                    acknowledged_at = COALESCE(operational.alert_receipts.acknowledged_at, NOW())
+                RETURNING alert_id
+            )
+            SELECT EXISTS (SELECT 1 FROM upserted_receipt);
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("alertId", alertId);
+        command.Parameters.AddWithValue("userId", userId);
+
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? false);
     }
 }
 

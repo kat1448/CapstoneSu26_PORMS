@@ -6,18 +6,18 @@ import { LoginPage } from "./LoginPage";
 
 const demoUsers: DemoUser[] = [
   {
-    email: "superadmin@porms.vn",
-    initials: "SA",
-    name: "Super Admin",
+    email: "admin@porms.vn",
+    initials: "AD",
+    name: "System Admin",
     portName: "Tat ca",
-    role: "SUPER_ADMIN"
+    role: "ADMIN"
   },
   {
-    email: "standard@porms.vn",
+    email: "operator@porms.vn",
     initials: "MD",
     name: "Pham Minh Duc",
     portName: "Cang Tien Sa",
-    role: "STANDARD_USER"
+    role: "OPERATOR"
   }
 ];
 
@@ -35,13 +35,13 @@ describe("LoginPage", () => {
     expect(passwordInput).not.toBeNull();
 
     await user.clear(emailInput!);
-    await user.type(emailInput!, "standard@porms.vn");
+    await user.type(emailInput!, "operator@porms.vn");
     await user.clear(passwordInput!);
     await user.type(passwordInput!, "Standard@2026!");
     await user.click(screen.getByRole("button", { name: /dang nhap|đăng nhập/i }));
 
     await waitFor(() => {
-      expect(onLogin).toHaveBeenCalledWith("standard@porms.vn", "Standard@2026!");
+      expect(onLogin).toHaveBeenCalledWith("operator@porms.vn", "Standard@2026!");
     });
   });
 
@@ -64,7 +64,7 @@ describe("LoginPage", () => {
 
     await user.click(screen.getByRole("button", { name: /Pham Minh Duc/i }));
 
-    expect(emailInput).toHaveValue("standard@porms.vn");
+    expect(emailInput).toHaveValue("operator@porms.vn");
     expect(passwordInput).toHaveValue("Admin@2026!");
   });
 });

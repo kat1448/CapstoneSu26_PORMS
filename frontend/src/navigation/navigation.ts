@@ -24,40 +24,41 @@ export type NavigationGroup = {
   label: string;
 };
 
-const allRoles: DemoUserRole[] = ["SUPER_ADMIN", "ADMIN", "STANDARD_USER"];
-const superAdminOnly: DemoUserRole[] = ["SUPER_ADMIN"];
-const adminRoles: DemoUserRole[] = ["SUPER_ADMIN", "ADMIN"];
+const allRoles: DemoUserRole[] = ["ADMIN", "PORT_MANAGER", "OPERATOR"];
+const adminOnly: DemoUserRole[] = ["ADMIN"];
+const adminAndPortManager: DemoUserRole[] = ["ADMIN", "PORT_MANAGER"];
 
 export const navigationGroups: NavigationGroup[] = [
   {
     label: "Vận hành",
     items: [
-      { icon: "dashboard", label: "Dashboard", path: "/dashboard", roles: allRoles },
+      { icon: "dashboard", label: "Tổng quan", path: "/dashboard", roles: allRoles },
       { icon: "alert", label: "Cảnh báo", path: "/alerts", roles: allRoles },
-      { icon: "tasks", label: "Nhật ký nhiệm vụ", path: "/tasks", roles: adminRoles },
-      { icon: "log", label: "Nhật ký vận hành", path: "/operation-log", roles: adminRoles }
+      { icon: "tasks", label: "Nhiệm vụ", path: "/tasks", roles: allRoles },
+      { icon: "log", label: "Lịch sử vận hành", path: "/operation-log", roles: allRoles }
     ]
   },
   {
     label: "Quản lý",
     items: [
-      { icon: "port", label: "Cảng & khu vực", path: "/ports", roles: allRoles },
-      { icon: "users", label: "Người dùng", path: "/users", roles: superAdminOnly }
+      { icon: "port", label: "Cảng & khu vực", path: "/ports", roles: adminOnly },
+      { icon: "users", label: "Người dùng", path: "/users", roles: adminOnly }
     ]
   },
   {
     label: "Cấu hình",
     items: [
-      { icon: "settings", label: "Ngưỡng rủi ro", path: "/risk-config", roles: adminRoles },
-      { icon: "rules", label: "Quy tắc SOP", path: "/sop-rules", roles: adminRoles }
+      { icon: "settings", label: "Mức cảnh báo", path: "/risk-config", roles: adminAndPortManager },
+      { icon: "rules", label: "Quy trình ứng phó", path: "/sop-rules", roles: adminAndPortManager }
     ]
   },
   {
-    label: "Công cụ & báo cáo",
+    label: "Phân tích & kế hoạch",
     items: [
-      { icon: "play", label: "Mô phỏng", path: "/simulation", roles: allRoles },
-      { icon: "chart", label: "Dự báo vận hành", path: "/forecast-planning", roles: adminRoles },
-      { icon: "chart", label: "Thống kê và đánh giá", path: "/forecast-evaluation", roles: adminRoles }
+      { icon: "play", label: "Mô phỏng", path: "/simulation", roles: adminOnly },
+      { icon: "chart", label: "Dự báo vận hành", path: "/forecast-planning", roles: adminAndPortManager },
+      { icon: "chart", label: "Dự báo dài hạn", path: "/ai-long-range-forecast", roles: adminAndPortManager },
+      { icon: "chart", label: "Đánh giá dự báo", path: "/forecast-evaluation", roles: adminAndPortManager }
     ]
   }
 ];
@@ -74,11 +75,11 @@ export function isRouteAllowed(role: DemoUserRole, pathname: string): boolean {
   }
 
   if (pathname === "/simulation-results") {
-    return allRoles.includes(role);
+    return adminOnly.includes(role);
   }
 
   if (pathname === "/ports/new") {
-    return superAdminOnly.includes(role);
+    return adminOnly.includes(role);
   }
 
   const normalizedPath = pathname.startsWith("/ports/")

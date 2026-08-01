@@ -58,9 +58,8 @@ describe("TasksPage", () => {
 
     render(<TasksPage />);
 
-    expect(screen.getByRole("heading", { name: "Nhật ký nhiệm vụ" })).toBeInTheDocument();
-    expect(await screen.findByText("TASK-REAL-001")).toBeInTheDocument();
-    expect(screen.getByText("Kiểm tra khu vực rủi ro")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nhiệm vụ cần thực hiện" })).toBeInTheDocument();
+    expect(await screen.findByText("Kiểm tra khu vực rủi ro")).toBeInTheDocument();
     expect(screen.getAllByText("Bến số 1").length).toBeGreaterThan(0);
     expect(screen.getByText("Đội vận hành")).toBeInTheDocument();
     expect(screen.queryByText("TASK-2026-041")).not.toBeInTheDocument();
@@ -73,15 +72,15 @@ describe("TasksPage", () => {
     render(<TasksPage />);
 
     expect(await screen.findByText("Trang 1/2")).toBeInTheDocument();
-    expect(screen.getByText("TASK-PAGE-001")).toBeInTheDocument();
-    expect(screen.getByText("TASK-PAGE-015")).toBeInTheDocument();
-    expect(screen.queryByText("TASK-PAGE-016")).not.toBeInTheDocument();
+    expect(screen.getByText("Task row 1")).toBeInTheDocument();
+    expect(screen.getByText("Task row 15")).toBeInTheDocument();
+    expect(screen.queryByText("Task row 16")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Sau" }));
 
     expect(screen.getByText("Trang 2/2")).toBeInTheDocument();
-    expect(screen.queryByText("TASK-PAGE-001")).not.toBeInTheDocument();
-    expect(screen.getByText("TASK-PAGE-016")).toBeInTheDocument();
+    expect(screen.queryByText("Task row 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Task row 16")).toBeInTheDocument();
   });
 
   it("filters task log by port, zone, date range and risk level before paginating", async () => {
@@ -157,19 +156,19 @@ describe("TasksPage", () => {
     const { container } = render(<TasksPage />);
     const view = within(container);
 
-    expect(await view.findByText("TASK-FILTER-001")).toBeInTheDocument();
+    expect(await view.findByText("Task dung bo loc")).toBeInTheDocument();
 
     await user.selectOptions(view.getByLabelText("Cảng"), "port-target");
     await user.selectOptions(view.getByLabelText("Khu vực"), "Ben so 1");
-    await user.selectOptions(view.getByLabelText("Cấp độ rủi ro"), "CRITICAL");
+    await user.selectOptions(view.getByLabelText("Mức ưu tiên"), "CRITICAL");
     await user.type(view.getByLabelText("Từ ngày"), "2026-07-04");
     await user.type(view.getByLabelText("Đến ngày"), "2026-07-04");
 
-    expect(view.getByText("TASK-FILTER-001")).toBeInTheDocument();
-    expect(view.queryByText("TASK-FILTER-002")).not.toBeInTheDocument();
-    expect(view.queryByText("TASK-FILTER-003")).not.toBeInTheDocument();
-    expect(view.queryByText("TASK-FILTER-004")).not.toBeInTheDocument();
-    expect(view.queryByText("TASK-FILTER-005")).not.toBeInTheDocument();
+    expect(view.getByText("Task dung bo loc")).toBeInTheDocument();
+    expect(view.queryByText("Task sai cang")).not.toBeInTheDocument();
+    expect(view.queryByText("Task sai khu vuc")).not.toBeInTheDocument();
+    expect(view.queryByText("Task sai muc do")).not.toBeInTheDocument();
+    expect(view.queryByText("Task sai ngay")).not.toBeInTheDocument();
     expect(view.queryByText("Trang 1/")).not.toBeInTheDocument();
   });
 });

@@ -110,10 +110,10 @@ describe("LogPage", () => {
 
     expect(screen.getByRole("heading", { name: /Chi tiết nhật ký vận hành/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Cảng Tiên Sa/i).length).toBeGreaterThan(0);
-    const table = screen.getByRole("table", { name: /Bảng sự kiện vận hành trong lần chạy/i });
-    expect(within(table).getAllByRole("row")).toHaveLength(4);
-    expect(within(table).getByText("Simulation started")).toBeInTheDocument();
-    expect(within(table).getAllByText(/Bến số 1/i).length).toBeGreaterThan(0);
+    const eventList = screen.getByRole("list", { name: /Danh sách diễn biến vận hành/i });
+    expect(within(eventList).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(eventList).getByText("Simulation started")).toBeInTheDocument();
+    expect(within(eventList).getAllByText(/Bến số 1/i).length).toBeGreaterThan(0);
   });
 
   it("paginates grouped operation runs fifteen at a time", async () => {
