@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
+using PORMS.API.Services;
 using PORMS.Infrastructure.Repositories;
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace PORMS.API.Controllers;
 
@@ -61,6 +64,87 @@ public sealed class RiskController : ControllerBase
         return Ok(ToResponse(await repository.GetConfigAsync(cancellationToken)));
     }
 
+    /// Tải template Excel chứa cấu hình ngưỡng rủi ro hiện tại
+    [HttpGet("thresholds/import-template")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> DownloadThresholdImportTemplate(
+        [FromServices] RiskThresholdImportService importService,
+        CancellationToken cancellationToken)
+    {
+        var content = await importService.CreateTemplateAsync(
+            cancellationToken);
+
+        return File(
+            content,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "PORMS_RiskThresholds_Template.xlsx");
+    }
+
+    /// Phân tích file Excel và trả về kết quả xem trước
+    /// Endpoint này tuyệt đối không ghi dữ liệu vào database
+    [HttpPost("thresholds/import/preview")]
+    [Authorize(Policy = "AdminOnly")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(2 * 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 2 * 1024 * 1024)]
+    public async Task<ActionResult<RiskThresholdImportPreviewResponse>>
+        PreviewThresholdImport(
+            [FromServices] RiskThresholdImportService importService,
+            [FromForm] RiskThresholdImportRequest request,
+            CancellationToken cancellationToken)
+    {
+        var preview = await importService.PreviewAsync(
+            request.File,
+            cancellationToken);
+
+        // File không hợp lệ vẫn trả 200 để frontend hiển thị chi tiết lỗi
+        return Ok(preview);
+    }
+
+    /// Kiểm tra lại file và lưu toàn bộ thay đổi trong một transaction
+    [HttpPost("thresholds/import")]
+    [Authorize(Policy = "AdminOnly")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(2 * 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 2 * 1024 * 1024)]
+    public async Task<ActionResult<RiskThresholdImportResponse>>
+        ImportThresholds(
+            [FromServices] RiskThresholdImportService importService,
+            [FromForm] RiskThresholdImportRequest request,
+            CancellationToken cancellationToken)
+    {
+        var actorUserId = GetUserId(User);
+
+        if (actorUserId is null)
+        {
+            return Unauthorized(new ErrorResponse
+            {
+                Error = "Không xác định được người dùng từ access token."
+            });
+        }
+
+        var result = await importService.ImportAsync(
+            request.File,
+            request.ChangeReason,
+            actorUserId.Value,
+            cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            // Không có dữ liệu nào được ghi nếu file hoặc request còn lỗi
+            return BadRequest(result.Preview);
+        }
+
+        return Ok(new RiskThresholdImportResponse
+        {
+            FileName = result.Preview.FileName,
+            CreatedCount = result.Preview.CreateCount,
+            UpdatedCount = result.Preview.UpdateCount,
+            UnchangedCount = result.Preview.UnchangedCount,
+            Configuration = ToResponse(result.Configuration!)
+        });
+    }
+
     [HttpPut("zones/{zoneId:guid}/threshold-overrides")]
     [Authorize(Policy = "AdminOrPortManager")]
     public async Task<ActionResult<RiskConfigResponse>> SaveZoneThresholdOverrides(
@@ -99,6 +183,18 @@ public sealed class RiskController : ControllerBase
     {
         var deleted = await repository.DeleteZoneThresholdOverrideAsync(zoneId, overrideId, cancellationToken);
         return deleted ? NoContent() : NotFound(new ErrorResponse { Error = "Zone threshold override was not found." });
+    }
+
+    /// Đọc user ID từ JWT, hỗ trợ cả claim gốc và claim đã được ASP.NET ánh xạ
+    private static Guid? GetUserId(ClaimsPrincipal user)
+    {
+        var rawUserId =
+            user.FindFirstValue(JwtRegisteredClaimNames.Sub)
+            ?? user.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        return Guid.TryParse(rawUserId, out var userId)
+            ? userId
+            : null;
     }
 
     private static RiskConfigResponse ToResponse(RiskConfigReadModel config)
