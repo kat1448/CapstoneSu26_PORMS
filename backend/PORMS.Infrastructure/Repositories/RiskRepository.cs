@@ -1,6 +1,8 @@
 using Npgsql;
+using NpgsqlTypes;
 using PORMS.Infrastructure.Data;
 using System.Data;
+using System.Text.Json;
 
 namespace PORMS.Infrastructure.Repositories;
 
@@ -120,6 +122,54 @@ public sealed class RiskRepository
         return new RiskConfigReadModel(thresholds, overrides, zones);
     }
 
+    /// Chỉ tải cấu hình Version 1 đang được màn hình và importer sử dụng
+    /// Không tải zone override để tránh truy vấn dữ liệu không cần thiết
+    public async Task<IReadOnlyList<RiskThresholdReadModel>>
+        GetVersionOneThresholdsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection =
+            await _connectionFactory.OpenAsync(cancellationToken);
+
+        const string sql = """
+        SELECT id,
+               factor::text,
+               risk_level::text,
+               comparison_operator::text,
+               threshold_value,
+               unit,
+               description,
+               version,
+               is_enabled,
+               updated_at
+        FROM operational.risk_thresholds
+        WHERE version = 1
+        ORDER BY factor, risk_level;
+        """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        var thresholds = new List<RiskThresholdReadModel>();
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            thresholds.Add(new RiskThresholdReadModel(
+                reader.GetGuid(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetDecimal(4),
+                reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.GetInt32(7),
+                reader.GetBoolean(8),
+                reader.GetFieldValue<DateTimeOffset>(9)));
+        }
+
+        return thresholds;
+    }
+
     public async Task SaveThresholdsAsync(
         IReadOnlyList<SaveRiskThresholdReadModel> thresholds,
         string? changeReason,
@@ -179,6 +229,190 @@ public sealed class RiskRepository
         }
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// Ghi các threshold đã thay đổi và nhật ký import trong cùng transaction
+    /// Nếu một thao tác lỗi, toàn bộ import sẽ được rollback
+    public async Task<Guid> ImportThresholdsAsync(
+        IReadOnlyList<SaveRiskThresholdReadModel> thresholds,
+        RiskThresholdImportAuditReadModel audit,
+        CancellationToken cancellationToken)
+    {
+        if (audit.ActorUserId == Guid.Empty)
+            throw new ArgumentException(
+                "Import actor is required.",
+                nameof(audit));
+
+        if (string.IsNullOrWhiteSpace(audit.FileName))
+            throw new ArgumentException(
+                "Import file name is required.",
+                nameof(audit));
+
+        if (string.IsNullOrWhiteSpace(audit.ChangeReason))
+            throw new ArgumentException(
+                "Import change reason is required.",
+                nameof(audit));
+
+        if (thresholds.Any(threshold => threshold.Version != 1))
+            throw new ArgumentException(
+                "Only Version 1 thresholds can be imported.",
+                nameof(thresholds));
+
+        var importBatchId = Guid.NewGuid();
+
+        await using var connection =
+            await _connectionFactory.OpenAsync(cancellationToken);
+
+        await using var transaction =
+            await connection.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+
+        const string upsertSql = """
+        INSERT INTO operational.risk_thresholds (
+            factor,
+            risk_level,
+            comparison_operator,
+            threshold_value,
+            unit,
+            description,
+            version,
+            is_enabled,
+            change_reason,
+            created_by_user_id,
+            updated_by_user_id,
+            updated_at
+        )
+        VALUES (
+            @factor::operational.weather_factor_enum,
+            @riskLevel::operational.risk_level_enum,
+            @comparisonOperator::operational.threshold_operator_enum,
+            @thresholdValue,
+            @unit,
+            @description,
+            1,
+            @isEnabled,
+            @changeReason,
+            @actorUserId,
+            @actorUserId,
+            NOW()
+        )
+        ON CONFLICT (factor, risk_level, version) DO UPDATE
+        SET comparison_operator = EXCLUDED.comparison_operator,
+            threshold_value = EXCLUDED.threshold_value,
+            unit = EXCLUDED.unit,
+            description = EXCLUDED.description,
+            is_enabled = EXCLUDED.is_enabled,
+            change_reason = EXCLUDED.change_reason,
+            updated_by_user_id = EXCLUDED.updated_by_user_id,
+            updated_at = NOW();
+        """;
+
+        foreach (var threshold in thresholds)
+        {
+            await using var command =
+                new NpgsqlCommand(upsertSql, connection, transaction);
+
+            command.Parameters.AddWithValue(
+                "factor",
+                threshold.Factor.Trim().ToUpperInvariant());
+
+            command.Parameters.AddWithValue(
+                "riskLevel",
+                threshold.RiskLevel.Trim().ToUpperInvariant());
+
+            command.Parameters.AddWithValue(
+                "comparisonOperator",
+                NormalizeOperator(threshold.ComparisonOperator));
+
+            command.Parameters.AddWithValue(
+                "thresholdValue",
+                threshold.ThresholdValue);
+
+            command.Parameters.AddWithValue(
+                "unit",
+                threshold.Unit.Trim());
+
+            command.Parameters.AddWithValue(
+                "description",
+                string.IsNullOrWhiteSpace(threshold.Description)
+                    ? DBNull.Value
+                    : threshold.Description.Trim());
+
+            command.Parameters.AddWithValue(
+                "isEnabled",
+                threshold.IsEnabled);
+
+            command.Parameters.AddWithValue(
+                "changeReason",
+                audit.ChangeReason.Trim());
+
+            command.Parameters.AddWithValue(
+                "actorUserId",
+                audit.ActorUserId);
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        const string eventSql = """
+        INSERT INTO operational.operation_events (
+            id,
+            event_type,
+            actor_user_id,
+            entity_type,
+            entity_id,
+            summary,
+            payload,
+            correlation_id,
+            occurred_at
+        )
+        VALUES (
+            @id,
+            'RISK_THRESHOLDS_IMPORTED',
+            @actorUserId,
+            'risk_threshold_import',
+            @entityId,
+            @summary,
+            @payload,
+            @correlationId,
+            NOW()
+        );
+        """;
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            importBatchId,
+            fileName = Path.GetFileName(audit.FileName),
+            changeReason = audit.ChangeReason.Trim(),
+            audit.CreatedCount,
+            audit.UpdatedCount,
+            audit.UnchangedCount,
+            changedRowCount = thresholds.Count
+        });
+
+        await using (var eventCommand =
+            new NpgsqlCommand(eventSql, connection, transaction))
+        {
+            eventCommand.Parameters.AddWithValue("id", Guid.NewGuid());
+            eventCommand.Parameters.AddWithValue("actorUserId", audit.ActorUserId);
+            eventCommand.Parameters.AddWithValue("entityId", importBatchId);
+            eventCommand.Parameters.AddWithValue(
+                "summary",
+                $"Nhập ngưỡng rủi ro từ file {Path.GetFileName(audit.FileName)}.");
+
+            eventCommand.Parameters.Add(
+                "payload",
+                NpgsqlDbType.Jsonb).Value = payload;
+
+            eventCommand.Parameters.AddWithValue(
+                "correlationId",
+                importBatchId);
+
+            await eventCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return importBatchId;
     }
 
     public async Task SaveZoneThresholdOverridesAsync(
@@ -368,3 +602,11 @@ public sealed record SaveZoneThresholdOverrideReadModel(
     decimal ThresholdValue,
     string Unit,
     bool IsEnabled);
+
+public sealed record RiskThresholdImportAuditReadModel(
+    Guid ActorUserId,
+    string FileName,
+    string ChangeReason,
+    int CreatedCount,
+    int UpdatedCount,
+    int UnchangedCount);
