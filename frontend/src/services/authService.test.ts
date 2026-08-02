@@ -43,6 +43,7 @@ describe("authService", () => {
   });
 
   it("surfaces the backend login error message", async () => {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(validSession));
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ message: "Email hoac mat khau khong dung." }), { status: 401 })
     );
@@ -51,7 +52,20 @@ describe("authService", () => {
     expect(localStorage.getItem(SESSION_KEY)).toBeNull();
   });
 
+  it("rejects login responses that contain an obsolete role", async () => {
+    const legacySession = {
+      ...validSession,
+      user: { ...validSession.user, role: "SUPER_ADMIN" }
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(legacySession), { status: 200 }));
+
+    await expect(login("admin@porms.vn", "Admin@2026!"))
+      .rejects.toThrow("Phiên đăng nhập không hợp lệ");
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
   it("reports connection failures without storing a session", async () => {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(validSession));
     vi.mocked(fetch).mockRejectedValueOnce(new Error("network down"));
 
     await expect(login("admin@porms.vn", "Admin@2026!")).rejects.toThrow("Không thể kết nối tới máy chủ.");
@@ -69,6 +83,23 @@ describe("authService", () => {
       SESSION_KEY,
       JSON.stringify({ ...validSession, expiresAt: new Date(Date.now() - 1_000).toISOString() })
     );
+
+    expect(getStoredSession()).toBeNull();
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  it("clears stored sessions that contain an obsolete role", () => {
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ ...validSession, user: { ...validSession.user, role: "SUPER_ADMIN" } })
+    );
+
+    expect(getStoredSession()).toBeNull();
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  it("clears stored sessions that contain an invalid expiration", () => {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...validSession, expiresAt: "not-a-date" }));
 
     expect(getStoredSession()).toBeNull();
     expect(localStorage.getItem(SESSION_KEY)).toBeNull();

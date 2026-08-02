@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RouterProvider } from "react-router-dom";
 import { buildRouter } from "./router";
-import { clearSession, getStoredSession, login } from "./services/authService";
+import { AUTH_SESSION_EXPIRED_EVENT, clearSession, getStoredSession, login } from "./services/authService";
 
 export type DemoUserRole = "ADMIN" | "PORT_MANAGER" | "OPERATOR";
 
@@ -41,6 +41,13 @@ const DEMO_USERS: DemoUser[] = [
 export default function App() {
   const [currentUser, setCurrentUser] = useState<DemoUser | null>(() => getStoredSession()?.user ?? null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    // Đồng bộ React state khi API phát hiện token không còn hợp lệ.
+    const handleSessionExpired = () => setCurrentUser(null);
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+  }, []);
 
   const router = useMemo(
     () =>

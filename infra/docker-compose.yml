@@ -233,11 +233,11 @@ services:
         Username=porms_api;Password=${POSTGRES_API_PASSWORD};
         Include Error Detail=true
       # JWT settings
-      Jwt__Secret:                ${JWT_SECRET}
+      Jwt__SigningKey:            ${JWT_SECRET}
       Jwt__Issuer:                porms-api
       Jwt__Audience:              porms-frontend
-      Jwt__AccessTokenTTLMinutes: 15
-      Jwt__RefreshTokenTTLDays:   7
+      Jwt__AccessTokenMinutes:    15
+      Jwt__RefreshTokenDays:      7
       # OpenWeather (dùng cho manual fetch endpoint)
       OpenWeather__ApiKey:        ${OPENWEATHER_API_KEY}
       OpenWeather__BaseUrl:       https://api.openweathermap.org/data/2.5
