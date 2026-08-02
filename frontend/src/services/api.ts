@@ -1,4 +1,4 @@
-import { getStoredSession } from "./authService";
+import { expireSession, getStoredSession } from "./authService";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000").replace(/\/$/, "");
 const USE_MOCK_FALLBACK = import.meta.env.VITE_USE_MOCK_FALLBACK !== "false";
@@ -18,6 +18,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
     ...init
   });
 
+  if (response.status === 401) expireSession();
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, path));
   }
@@ -36,6 +37,7 @@ export async function requestVoid(path: string, init?: RequestInit): Promise<voi
     ...init
   });
 
+  if (response.status === 401) expireSession();
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, path));
   }
