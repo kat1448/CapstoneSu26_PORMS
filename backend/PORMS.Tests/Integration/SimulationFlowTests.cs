@@ -1,7 +1,10 @@
+using Microsoft.Extensions.DependencyInjection;
+using PORMS.API.Contracts;
+using PORMS.Infrastructure.Repositories;
+using PORMS.Infrastructure.Services;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using PORMS.API.Contracts;
 using Xunit;
 
 namespace PORMS.Tests.Integration;
@@ -433,5 +436,157 @@ public sealed class SimulationFlowTests
         var item = payload.RootElement.GetProperty("items")[0];
         Assert.Equal("MEDIUM", item.GetProperty("ruleRiskLevel").GetString());
         Assert.Equal("NORMAL", item.GetProperty("mlRecommendation").GetString());
+    }
+
+    [Fact]
+    public async Task RunDataset_UsesZoneWindThresholdOverride()
+    {
+        var port = await _factory.GetPrimaryPortAsync();
+        var zone = await _factory.CreateTemporaryZoneWithWindOverrideAsync(
+            port.PortId,
+            mediumWindThreshold: 4m);
+
+        var client = _factory.CreateClient();
+        Guid? datasetId = null;
+
+        try
+        {
+            var createResponse = await client.PostAsJsonAsync(
+                "/api/simulation/datasets",
+                new CreateSimulationDatasetRequest
+                {
+                    Name = $"Zone override test {Guid.NewGuid():N}",
+                    Description =
+                        "Kiểm tra simulation sử dụng threshold riêng của khu vực.",
+                    PortCode = port.PortCode,
+                    Snapshots =
+                    [
+                        new CreateSimulationSnapshotRequest
+                    {
+                        SnapshotNumber = 1,
+
+                        // Beaufort 5 thấp hơn global MEDIUM = 6, nhưng đạt override MEDIUM = 4 của khu vực
+                        WindSpeedMs = 9m,
+                        BeaufortNumber = 5,
+                        Rainfall1hMm = 0m,
+                        VisibilityKm = 20m,
+                        ZoneId = zone.ZoneId
+                    }
+                    ]
+                });
+
+            Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+            var created =
+                await createResponse.Content
+                    .ReadFromJsonAsync<SimulationDatasetSummaryResponse>();
+
+            Assert.NotNull(created);
+            datasetId = created!.DatasetId;
+
+            var runResponse = await client.PostAsJsonAsync(
+                "/api/simulation/run",
+                new RunSimulationDatasetRequest
+                {
+                    DatasetId = created.DatasetId
+                });
+
+            Assert.Equal(HttpStatusCode.OK, runResponse.StatusCode);
+
+            using var payload = JsonDocument.Parse(
+                await runResponse.Content.ReadAsStringAsync());
+
+            Assert.Equal(
+                "MEDIUM",
+                payload.RootElement
+                    .GetProperty("finalRiskLevel")
+                    .GetString());
+        }
+        finally
+        {
+            // Dọn dữ liệu tạm ngay cả khi assertion thất bại
+            if (datasetId.HasValue)
+            {
+                await client.DeleteAsync(
+                    $"/api/simulation/datasets/{datasetId.Value}");
+            }
+
+            await _factory.DeleteTemporaryZoneAsync(zone.ZoneId);
+        }
+    }
+
+    [Fact]
+    public async Task GetForecastEvaluation_UsesConfiguredRiskThresholds()
+    {
+        var port = await _factory.GetPrimaryPortAsync();
+        var dataset =
+            await _factory.SeedFutureForecastEvaluationDatasetAsync(
+                port.PortCode);
+
+        var client = _factory.CreateClient();
+
+        try
+        {
+            // Tính kết quả mong đợi trực tiếp từ cấu hình hiện tại
+            using var scope = _factory.Services.CreateScope();
+
+            var riskRepository =
+                scope.ServiceProvider.GetRequiredService<RiskRepository>();
+
+            var evaluator =
+                scope.ServiceProvider
+                    .GetRequiredService<RiskThresholdEvaluator>();
+
+            var configuredThresholds =
+                await riskRepository.GetVersionOneThresholdsAsync(
+                    CancellationToken.None);
+
+            var evaluatorThresholds = configuredThresholds
+                .Select(item => new RiskThresholdRule(
+                    item.Factor,
+                    item.RiskLevel,
+                    item.ComparisonOperator,
+                    item.ThresholdValue,
+                    item.IsEnabled))
+                .ToList();
+
+            var expectedRisk = evaluator.Evaluate(
+                new WeatherRiskInput(
+                    BeaufortNumber: 3,
+                    Rainfall1hMm: 0m,
+                    VisibilityKm: 1.2m),
+                evaluatorThresholds);
+
+            var response = await client.GetAsync(
+                $"/api/forecast-evaluation?portCode={port.PortCode}");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var report =
+                await response.Content
+                    .ReadFromJsonAsync<ForecastEvaluationResponse>();
+
+            Assert.NotNull(report);
+
+            var row = Assert.Single(
+                report!.Rows.Where(item =>
+                    item.DatasetName == dataset.DatasetName));
+
+            Assert.Equal(1.2m, row.ForecastVisibilityKm);
+            Assert.Equal(
+                expectedRisk.FinalRiskLevel,
+                row.ForecastRiskLevel);
+
+            // Dữ liệu nằm trong tương lai nên chưa được ghép với actual weather
+            Assert.Equal("FUTURE", row.Status);
+            Assert.Null(row.ActualObservedAt);
+            Assert.Null(row.ActualRiskLevel);
+            Assert.Null(row.RiskScoreError);
+        }
+        finally
+        {
+            await _factory.DeleteForecastEvaluationDatasetAsync(
+                dataset.DatasetId);
+        }
     }
 }

@@ -428,6 +428,11 @@ CREATE TABLE IF NOT EXISTS operational.risk_assessments (
     )
 );
 
+-- Mỗi weather reading chỉ được Risk Engine đánh giá một lần.
+-- Unique index giúp endpoint idempotent khi Prefect thực hiện retry.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_risk_assessments_weather_reading
+    ON operational.risk_assessments (weather_reading_id);
+
 -- =============================================================================
 -- OPERATIONAL: SOP AND EXECUTION
 -- =============================================================================

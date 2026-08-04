@@ -3,6 +3,7 @@ using PORMS.API.Middleware;
 using Microsoft.Extensions.Options;
 using PORMS.Infrastructure.Data;
 using PORMS.Infrastructure.Repositories;
+using PORMS.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using PORMS.API.Services;
@@ -18,6 +19,8 @@ builder.Services.Configure<JwtOptions>(
     builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<OpenWeatherOptions>(
     builder.Configuration.GetSection(OpenWeatherOptions.SectionName));
+builder.Services.Configure<InternalApiOptions>(
+    builder.Configuration.GetSection(InternalApiOptions.SectionName));
 builder.Services.Configure<EmailOptions>(
     builder.Configuration.GetSection(EmailOptions.SectionName));
 builder.Services.Configure<LlmOptions>(
@@ -64,8 +67,10 @@ builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<WeatherRepository>();
 builder.Services.AddScoped<ForecastEvaluationRepository>();
 builder.Services.AddScoped<RiskRepository>();
+builder.Services.AddScoped<LiveRiskAssessmentRepository>();
 builder.Services.AddSingleton<RiskThresholdValidator>();
 builder.Services.AddSingleton<RiskThresholdExcelService>();
+builder.Services.AddSingleton<RiskThresholdEvaluator>();
 builder.Services.AddScoped<RiskThresholdImportService>();
 builder.Services.AddScoped<SopRuleRepository>();
 builder.Services.AddScoped<TaskRepository>();

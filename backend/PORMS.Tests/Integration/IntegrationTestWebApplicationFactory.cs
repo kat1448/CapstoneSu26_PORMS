@@ -889,6 +889,222 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
             reader.GetFieldValue<DateTimeOffset>(4));
     }
 
+    public async Task<(Guid ZoneId, string ZoneName)> CreateTemporaryZoneWithWindOverrideAsync(
+    Guid portId,
+    decimal mediumWindThreshold,
+    CancellationToken cancellationToken = default)
+    {
+        var zoneId = Guid.NewGuid();
+        var zoneName = $"Integration Test Zone {zoneId:N}";
+
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        const string insertZoneSql = """
+        INSERT INTO operational.zones (
+            id,
+            port_id,
+            name,
+            zone_type,
+            description,
+            display_order,
+            is_active
+        )
+        VALUES (
+            @zoneId,
+            @portId,
+            @zoneName,
+            'YARD'::operational.zone_type_enum,
+            'Khu vực tạm thời dùng cho integration test.',
+            32767,
+            TRUE
+        );
+        """;
+
+        await using (var zoneCommand = new NpgsqlCommand(
+            insertZoneSql,
+            connection,
+            transaction))
+        {
+            zoneCommand.Parameters.AddWithValue("zoneId", zoneId);
+            zoneCommand.Parameters.AddWithValue("portId", portId);
+            zoneCommand.Parameters.AddWithValue("zoneName", zoneName);
+
+            await zoneCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        const string insertOverrideSql = """
+        INSERT INTO operational.zone_threshold_overrides (
+            id,
+            zone_id,
+            factor,
+            risk_level,
+            comparison_operator,
+            threshold_value,
+            unit,
+            is_enabled,
+            change_reason
+        )
+        VALUES (
+            @id,
+            @zoneId,
+            'WIND'::operational.weather_factor_enum,
+            'MEDIUM'::operational.risk_level_enum,
+            'GTE'::operational.threshold_operator_enum,
+            @thresholdValue,
+            'Beaufort',
+            TRUE,
+            'Integration test: xác minh threshold riêng của khu vực.'
+        );
+        """;
+
+        await using (var overrideCommand = new NpgsqlCommand(
+            insertOverrideSql,
+            connection,
+            transaction))
+        {
+            overrideCommand.Parameters.AddWithValue("id", Guid.NewGuid());
+            overrideCommand.Parameters.AddWithValue("zoneId", zoneId);
+            overrideCommand.Parameters.AddWithValue(
+                "thresholdValue",
+                mediumWindThreshold);
+
+            await overrideCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return (zoneId, zoneName);
+    }
+
+    public async Task DeleteTemporaryZoneAsync(
+        Guid zoneId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+        DELETE FROM operational.zones
+        WHERE id = @zoneId;
+        """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("zoneId", zoneId);
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<(Guid DatasetId, string DatasetName)>
+    SeedFutureForecastEvaluationDatasetAsync(
+        string portCode,
+        CancellationToken cancellationToken = default)
+    {
+        var datasetId = Guid.NewGuid();
+        var datasetName = $"Forecast threshold test {datasetId:N}";
+        var plannedAt = DateTimeOffset.UtcNow.AddDays(30);
+
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var transaction =
+            await connection.BeginTransactionAsync(cancellationToken);
+
+        const string datasetSql = """
+        INSERT INTO operational.simulation_datasets (
+            id,
+            name,
+            description,
+            snapshot_count,
+            starts_at,
+            ends_at,
+            metadata
+        )
+        VALUES (
+            @datasetId,
+            @datasetName,
+            'Dữ liệu tạm dùng để kiểm tra forecast evaluation.',
+            1,
+            @plannedAt,
+            @plannedAt,
+            jsonb_build_object(
+                'source', 'forecast-plan',
+                'portCode', @portCode
+            )
+        );
+        """;
+
+        await using (var command = new NpgsqlCommand(
+            datasetSql,
+            connection,
+            transaction))
+        {
+            command.Parameters.AddWithValue("datasetId", datasetId);
+            command.Parameters.AddWithValue("datasetName", datasetName);
+            command.Parameters.AddWithValue(
+                "plannedAt",
+                plannedAt);
+            command.Parameters.AddWithValue(
+                "portCode",
+                portCode.Trim().ToUpperInvariant());
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        const string snapshotSql = """
+        INSERT INTO operational.simulation_snapshots (
+            dataset_id,
+            snapshot_number,
+            source_observed_at,
+            wind_speed_ms,
+            beaufort_number,
+            rainfall_1h_mm,
+            visibility_km,
+            raw_payload
+        )
+        VALUES (
+            @datasetId,
+            1,
+            @plannedAt,
+            4.5,
+            3,
+            0,
+            1.2,
+            '{"source":"integration-test"}'::jsonb
+        );
+        """;
+
+        await using (var command = new NpgsqlCommand(
+            snapshotSql,
+            connection,
+            transaction))
+        {
+            command.Parameters.AddWithValue("datasetId", datasetId);
+            command.Parameters.AddWithValue("plannedAt", plannedAt);
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return (datasetId, datasetName);
+    }
+
+    public async Task DeleteForecastEvaluationDatasetAsync(
+        Guid datasetId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+
+        // Snapshot được tự động xóa theo ON DELETE CASCADE.
+        const string sql = """
+        DELETE FROM operational.simulation_datasets
+        WHERE id = @datasetId;
+        """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("datasetId", datasetId);
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private async Task<NpgsqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = new NpgsqlConnection(GetConnectionString());
