@@ -3,6 +3,7 @@ import { Badge } from "../components/common/Badge";
 import {
   deleteZoneThresholdOverride,
   getRiskConfig,
+  getRiskThresholdTemplate,
   saveRiskThresholds,
   saveZoneThresholdOverrides,
   type RiskConfigResponse,
@@ -94,6 +95,7 @@ export function RiskConfigPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -139,6 +141,34 @@ export function RiskConfigPage() {
       setError(caught instanceof Error ? caught.message : "Không thể lưu cấu hình ngưỡng.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDownloadTemplate() {
+  try {
+    setIsDownloading(true);
+
+    const file = await getRiskThresholdTemplate();
+    const downloadUrl = URL.createObjectURL(file);
+
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = "PORMS_RiskThresholds_Template.xlsx";
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Không thể tải template.";
+
+    setError(message);
+    } finally {
+    setIsDownloading(false);
     }
   }
 
@@ -197,9 +227,32 @@ export function RiskConfigPage() {
           <p>Thiết lập ngưỡng thời tiết để phân loại rủi ro vận hành cảng</p>
         </div>
         <div className="head-actions">
-          <button className="button button-secondary" onClick={() => setThresholds(cloneThresholds(config))} type="button">Khôi phục</button>
-          <button className="button button-primary" disabled={saving} onClick={handleSaveThresholds} type="button">Lưu cấu hình</button>
-        </div>
+  <button
+    className="button button-secondary"
+    onClick={() => setThresholds(cloneThresholds(config))}
+    type="button"
+  >
+    Khôi phục
+  </button>
+
+  <button
+    className="button button-secondary"
+    type="button"
+    disabled={isDownloading}
+    onClick={handleDownloadTemplate}
+  >
+    {isDownloading ? "Đang tải..." : "Tải template Excel"}
+  </button>
+
+  <button
+    className="button button-primary"
+    disabled={saving}
+    onClick={handleSaveThresholds}
+    type="button"
+  >
+    Lưu cấu hình
+  </button>
+</div>
       </div>
 
       {error ? <div className="form-error" role="alert">{error}</div> : null}

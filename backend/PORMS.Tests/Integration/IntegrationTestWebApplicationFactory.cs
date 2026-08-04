@@ -1138,6 +1138,99 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    /// Tạo weather reading thật để kiểm tra Live Risk Engine
+    public async Task<(Guid PortId, Guid WeatherReadingId)>
+        SeedLiveWeatherReadingAsync(
+            CancellationToken cancellationToken = default)
+    {
+        var port = await GetPrimaryPortAsync(cancellationToken);
+
+        // Đưa cảng về LOW để previous_risk_level có kết quả ổn định
+        await ResetPrimaryPortStateAsync(cancellationToken);
+
+        var weatherReadingId = Guid.NewGuid();
+
+        await using var connection =
+            await OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+            INSERT INTO operational.weather_readings (
+                id,
+                port_id,
+                wind_speed_ms,
+                beaufort_number,
+                rainfall_1h_mm,
+                visibility_km,
+                observed_at,
+                data_source,
+                source_record_key,
+                raw_payload,
+                is_simulation
+            )
+            VALUES (
+                @id,
+                @portId,
+                18.0,
+                8,
+                30.0,
+                2.0,
+                NOW(),
+                'INTEGRATION_TEST',
+                @sourceRecordKey,
+                '{"source":"integration-test"}'::jsonb,
+                FALSE
+            );
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+
+        command.Parameters.AddWithValue("id", weatherReadingId);
+        command.Parameters.AddWithValue("portId", port.PortId);
+        command.Parameters.AddWithValue(
+            "sourceRecordKey",
+            $"live-risk-{weatherReadingId:N}");
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        return (port.PortId, weatherReadingId);
+    }
+
+    /// Xóa dữ liệu tạm của Live Risk Engine và khôi phục trạng thái cảng
+    public async Task CleanupLiveWeatherReadingAsync(
+        Guid portId,
+        Guid weatherReadingId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection =
+            await OpenConnectionAsync(cancellationToken);
+
+        await using var transaction =
+            await connection.BeginTransactionAsync(cancellationToken);
+
+        const string sql = """
+            DELETE FROM operational.risk_assessments
+            WHERE weather_reading_id = @weatherReadingId;
+
+            DELETE FROM operational.weather_readings
+            WHERE id = @weatherReadingId;
+
+            UPDATE operational.ports
+            SET current_risk_level = 'LOW'
+            WHERE id = @portId;
+            """;
+
+        await using var command =
+            new NpgsqlCommand(sql, connection, transaction);
+
+        command.Parameters.AddWithValue(
+            "weatherReadingId",
+            weatherReadingId);
+        command.Parameters.AddWithValue("portId", portId);
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     private async Task<NpgsqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = new NpgsqlConnection(GetConnectionString());

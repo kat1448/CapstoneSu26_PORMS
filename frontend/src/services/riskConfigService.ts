@@ -1,4 +1,6 @@
 import { requestJson, requestVoid } from "./api";
+import { expireSession, getStoredSession } from "./authService";
+import { getApiUrl } from "./api";
 
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type WeatherFactor = "WIND" | "RAIN" | "WAVE" | "VISIBILITY";
@@ -76,4 +78,31 @@ export function deleteZoneThresholdOverride(zoneId: string, overrideId: string):
   return requestVoid(`/api/risk/zones/${zoneId}/threshold-overrides/${overrideId}`, {
     method: "DELETE"
   });
+}
+
+export async function getRiskThresholdTemplate(): Promise<Blob> {
+  const session = getStoredSession();
+
+  if (!session) {
+    throw new Error("Phiên đăng nhập không tồn tại.");
+  }
+
+  const response = await fetch(
+    getApiUrl("/api/risk/thresholds/import-template"),
+    {
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`
+      }
+    }
+  );
+
+  if (response.status === 401) {
+    expireSession();
+  }
+
+  if (!response.ok) {
+    throw new Error("Không thể tải template ngưỡng rủi ro.");
+  }
+
+  return response.blob();
 }

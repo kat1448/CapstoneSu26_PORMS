@@ -1,4 +1,9 @@
-﻿using Microsoft.IdentityModel.Tokens;
+﻿using ClosedXML.Excel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using PORMS.API.Configuration;
+using PORMS.API.Services;
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
@@ -10,8 +15,8 @@ using Xunit;
 
 namespace PORMS.Tests.Integration
 {
-    /// Kiểm tra quyền truy cập các API import ngưỡng rủi ro.
-    /// Các test này bị chặn tại Authorization nên không cần kết nối database.
+    /// Kiểm tra quyền truy cập và luồng tải template Excel ngưỡng rủi ro
+    /// Test tải thành công sử dụng cấu hình threshold thật trong database
     [Collection(DatabaseBackedIntegrationCollection.Name)]
     public sealed class RiskThresholdImportAuthorizationTests
     {
@@ -108,11 +113,16 @@ namespace PORMS.Tests.Integration
             return content;
         }
 
-        private static string CreateToken(string role)
+        /// Tạo JWT bằng đúng cấu hình mà API đang sử dụng
+        /// Tránh test bị lỗi khi Docker hoặc environment thay đổi JWT settings
+        private string CreateToken(string role)
         {
+            var jwtOptions = _factory.Services
+                .GetRequiredService<IOptions<JwtOptions>>()
+                .Value;
+
             var key = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(
-                    "PORMS-development-signing-key-change-in-production-2026"));
+                Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
 
             var credentials = new SigningCredentials(
                 key,
@@ -120,31 +130,76 @@ namespace PORMS.Tests.Integration
 
             var claims = new[]
             {
-            new Claim(
+                new Claim(
                 JwtRegisteredClaimNames.Sub,
                 Guid.NewGuid().ToString()),
 
-            new Claim(
+                new Claim(
                 JwtRegisteredClaimNames.Email,
                 $"{role.ToLowerInvariant()}@porms.vn"),
 
-            new Claim(ClaimTypes.Name, role),
-            new Claim(ClaimTypes.Role, role),
+                new Claim(ClaimTypes.Name, role),
+                new Claim(ClaimTypes.Role, role),
 
-            new Claim(
+                new Claim(
                 JwtRegisteredClaimNames.Jti,
                 Guid.NewGuid().ToString())
-        };
+            };
 
             var token = new JwtSecurityToken(
-                issuer: "PORMS",
-                audience: "PORMS.Frontend",
+                issuer: jwtOptions.Issuer,
+                audience: jwtOptions.Audience,
                 claims: claims,
                 expires: DateTime.UtcNow.AddMinutes(15),
                 signingCredentials: credentials);
 
-            return new JwtSecurityTokenHandler()
-                .WriteToken(token);
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+        [Fact]
+        public async Task Admin_CanDownloadImportTemplate()
+        {
+            using var client = CreateAuthenticatedClient("ADMIN");
+
+            var response = await client.GetAsync(
+                "/api/risk/thresholds/import-template");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            Assert.Equal(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                response.Content.Headers.ContentType?.MediaType);
+
+            Assert.Contains(
+                "PORMS_RiskThresholds_Template.xlsx",
+                response.Content.Headers.ContentDisposition?.ToString()
+                    ?? string.Empty);
+
+            var fileContent = await response.Content.ReadAsByteArrayAsync();
+
+            Assert.NotEmpty(fileContent);
+
+            // Mở file thật để xác nhận response là workbook hợp lệ
+            using var stream = new MemoryStream(fileContent);
+            using var workbook = new XLWorkbook(stream);
+
+            var worksheet = Assert.Single(workbook.Worksheets);
+
+            Assert.Equal(
+                RiskThresholdExcelService.WorksheetName,
+                worksheet.Name);
+
+            Assert.Equal("Factor", worksheet.Cell(1, 1).GetString());
+            Assert.Equal("RiskLevel", worksheet.Cell(1, 2).GetString());
+            Assert.Equal(
+                "ComparisonOperator",
+                worksheet.Cell(1, 3).GetString());
+
+            // Một dòng header và 12 threshold của cấu hình Version 1
+            Assert.Equal(
+                13,
+                worksheet
+                    .LastRowUsed(XLCellsUsedOptions.Contents)?
+                    .RowNumber());
         }
     }
 }
