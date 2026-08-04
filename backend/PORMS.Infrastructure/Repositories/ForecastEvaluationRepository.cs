@@ -1,15 +1,20 @@
 using Npgsql;
 using PORMS.Infrastructure.Data;
+using PORMS.Infrastructure.Services;
 
 namespace PORMS.Infrastructure.Repositories;
 
 public sealed class ForecastEvaluationRepository
 {
     private readonly NpgsqlConnectionFactory _connectionFactory;
+    private readonly RiskThresholdEvaluator _riskThresholdEvaluator;
 
-    public ForecastEvaluationRepository(NpgsqlConnectionFactory connectionFactory)
+    public ForecastEvaluationRepository(
+        NpgsqlConnectionFactory connectionFactory,
+        RiskThresholdEvaluator riskThresholdEvaluator)
     {
         _connectionFactory = connectionFactory;
+        _riskThresholdEvaluator = riskThresholdEvaluator;
     }
 
     public async Task<IReadOnlyList<ForecastEvaluationRowReadModel>> GetRowsAsync(
@@ -19,6 +24,11 @@ public sealed class ForecastEvaluationRepository
         CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+
+        // Cố định cấu hình threshold trong suốt một lần tạo báo cáo.
+        var riskThresholds = await GetGlobalRiskThresholdsAsync(
+            connection,
+            cancellationToken);
 
         const string sql = """
             WITH forecast_candidates AS (
@@ -31,13 +41,7 @@ public sealed class ForecastEvaluationRepository
                        s.wind_speed_ms AS forecast_wind_speed_ms,
                        s.rainfall_1h_mm AS forecast_rainfall_mm,
                        s.visibility_km AS forecast_visibility_km,
-                       s.beaufort_number AS forecast_beaufort_number,
-                       CASE
-                           WHEN s.beaufort_number >= 10 OR s.rainfall_1h_mm >= 50 OR COALESCE(s.visibility_km, 99) <= 1.5 THEN 'CRITICAL'
-                           WHEN s.beaufort_number >= 8 OR s.rainfall_1h_mm >= 25 OR COALESCE(s.visibility_km, 99) <= 5 THEN 'HIGH'
-                           WHEN s.beaufort_number >= 6 OR s.rainfall_1h_mm >= 10 OR COALESCE(s.visibility_km, 99) <= 10 THEN 'MEDIUM'
-                           ELSE 'LOW'
-                       END AS forecast_risk_level
+                       s.beaufort_number AS forecast_beaufort_number
                 FROM operational.simulation_datasets d
                 JOIN operational.simulation_snapshots s ON s.dataset_id = d.id
                 JOIN operational.ports p ON p.code = UPPER(d.metadata->>'portCode')
@@ -53,8 +57,7 @@ public sealed class ForecastEvaluationRepository
                        forecast_wind_speed_ms,
                        forecast_rainfall_mm,
                        forecast_visibility_km,
-                       forecast_beaufort_number,
-                       forecast_risk_level
+                       forecast_beaufort_number
                 FROM (
                     SELECT candidate.*,
                            ROW_NUMBER() OVER (
@@ -83,52 +86,29 @@ public sealed class ForecastEvaluationRepository
                        WHEN f.forecast_visibility_km IS NULL OR actual.visibility_km IS NULL THEN NULL
                        ELSE ABS(f.forecast_visibility_km - actual.visibility_km)
                    END,
-                   f.forecast_risk_level,
-                   actual.actual_risk_level,
-                   CASE
-                       WHEN actual.actual_risk_level IS NULL THEN NULL
-                       ELSE ABS(
-                           CASE f.forecast_risk_level
-                               WHEN 'LOW' THEN 1
-                               WHEN 'MEDIUM' THEN 2
-                               WHEN 'HIGH' THEN 3
-                               ELSE 4
-                           END
-                           -
-                           CASE actual.actual_risk_level
-                               WHEN 'LOW' THEN 1
-                               WHEN 'MEDIUM' THEN 2
-                               WHEN 'HIGH' THEN 3
-                               ELSE 4
-                           END
-                       )
-                   END,
                    actual.data_source,
                    CASE
                        WHEN actual.data_source = 'DEMO_BACKFILL' THEN 'MATCHED_DEMO'
                        WHEN actual.observed_at IS NOT NULL THEN 'MATCHED'
                        WHEN f.planned_at > NOW() THEN 'FUTURE'
                        ELSE 'WAITING_ACTUAL'
-                   END
+                   END,
+                   f.forecast_beaufort_number,
+                   actual.beaufort_number
             FROM forecast_rows f
             LEFT JOIN LATERAL (
                 SELECT candidate.observed_at,
                        candidate.wind_speed_ms,
                        candidate.rainfall_1h_mm,
                        candidate.visibility_km,
-                       candidate.actual_risk_level,
+                       candidate.beaufort_number,
                        candidate.data_source
                 FROM (
                     SELECT w.observed_at,
                            w.wind_speed_ms,
                            w.rainfall_1h_mm,
                            w.visibility_km,
-                           CASE
-                               WHEN w.beaufort_number >= 10 OR w.rainfall_1h_mm >= 50 OR COALESCE(w.visibility_km, 99) <= 1.5 THEN 'CRITICAL'
-                               WHEN w.beaufort_number >= 8 OR w.rainfall_1h_mm >= 25 OR COALESCE(w.visibility_km, 99) <= 5 THEN 'HIGH'
-                               WHEN w.beaufort_number >= 6 OR w.rainfall_1h_mm >= 10 OR COALESCE(w.visibility_km, 99) <= 10 THEN 'MEDIUM'
-                               ELSE 'LOW'
-                           END AS actual_risk_level,
+                           w.beaufort_number,
                            w.data_source,
                            0 AS source_priority,
                            w.recorded_at
@@ -148,7 +128,7 @@ public sealed class ForecastEvaluationRepository
                                WHEN f.forecast_visibility_km IS NULL THEN NULL
                                ELSE GREATEST(0.5, f.forecast_visibility_km + ((f.snapshot_number % 3) - 1) * 0.7)
                            END,
-                           f.forecast_risk_level,
+                           f.forecast_beaufort_number,
                            'DEMO_BACKFILL',
                            1,
                            f.planned_at
@@ -174,6 +154,43 @@ public sealed class ForecastEvaluationRepository
         var rows = new List<ForecastEvaluationRowReadModel>();
         while (await reader.ReadAsync(cancellationToken))
         {
+            // Forecast phải sử dụng cùng Risk Engine với simulation và forecast plan.
+            var forecastRisk = _riskThresholdEvaluator.Evaluate(
+                new WeatherRiskInput(
+                    reader.GetInt16(17),
+                    reader.GetDecimal(9),
+                    reader.IsDBNull(12)
+                        ? null
+                        : reader.GetDecimal(12)),
+                riskThresholds);
+
+            WeatherRiskEvaluation? actualRisk = null;
+
+            if (!reader.IsDBNull(5))
+            {
+                if (reader.IsDBNull(18))
+                {
+                    throw new InvalidOperationException(
+                        "Dữ liệu thời tiết thực tế thiếu chỉ số Beaufort.");
+                }
+
+                // Dữ liệu thực tế phải sử dụng cùng cấu hình với dữ liệu forecast.
+                actualRisk = _riskThresholdEvaluator.Evaluate(
+                    new WeatherRiskInput(
+                        reader.GetInt16(18),
+                        reader.GetDecimal(10),
+                        reader.IsDBNull(13)
+                            ? null
+                            : reader.GetDecimal(13)),
+                    riskThresholds);
+            }
+
+            var riskScoreError = actualRisk is null
+                ? (int?)null
+                : Math.Abs(
+                    RiskScore(forecastRisk.FinalRiskLevel) -
+                    RiskScore(actualRisk.FinalRiskLevel));
+
             rows.Add(new ForecastEvaluationRowReadModel(
                 reader.GetString(0),
                 reader.GetString(1),
@@ -190,14 +207,65 @@ public sealed class ForecastEvaluationRepository
                 reader.IsDBNull(12) ? null : reader.GetDecimal(12),
                 reader.IsDBNull(13) ? null : reader.GetDecimal(13),
                 reader.IsDBNull(14) ? null : reader.GetDecimal(14),
-                reader.GetString(15),
-                reader.IsDBNull(16) ? null : reader.GetString(16),
-                reader.IsDBNull(17) ? null : reader.GetInt32(17),
-                reader.IsDBNull(18) ? null : reader.GetString(18),
-                reader.GetString(19)));
+                forecastRisk.FinalRiskLevel,
+                actualRisk?.FinalRiskLevel,
+                riskScoreError,
+                reader.IsDBNull(15) ? null : reader.GetString(15),
+                reader.GetString(16)));
         }
 
         return rows;
+    }
+
+    /// Chuyển mức rủi ro thành điểm để tính sai lệch forecast
+    private static int RiskScore(string riskLevel)
+    {
+        return riskLevel switch
+        {
+            "LOW" => 1,
+            "MEDIUM" => 2,
+            "HIGH" => 3,
+            "CRITICAL" => 4,
+            _ => throw new InvalidOperationException(
+                $"Mức rủi ro {riskLevel} không được hỗ trợ.")
+        };
+    }
+
+    /// Tải cấu hình threshold global Version 1 để đánh giá forecast và dữ liệu thực tế
+    /// Một request chỉ tải một lần nhằm giữ kết quả nhất quán trong toàn bộ báo cáo
+    private static async Task<IReadOnlyList<RiskThresholdRule>>
+        GetGlobalRiskThresholdsAsync(
+            NpgsqlConnection connection,
+            CancellationToken cancellationToken)
+    {
+        const string sql = """
+        SELECT factor::text,
+               risk_level::text,
+               comparison_operator::text,
+               threshold_value,
+               is_enabled
+        FROM operational.risk_thresholds
+        WHERE version = 1
+        ORDER BY factor, risk_level;
+        """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        var thresholds = new List<RiskThresholdRule>();
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            thresholds.Add(new RiskThresholdRule(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetDecimal(3),
+                reader.GetBoolean(4)));
+        }
+
+        return thresholds;
     }
 }
 

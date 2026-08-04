@@ -2,6 +2,7 @@ using System.Text.Json;
 using Npgsql;
 using NpgsqlTypes;
 using PORMS.Infrastructure.Data;
+using PORMS.Infrastructure.Services;
 
 namespace PORMS.Infrastructure.Repositories;
 
@@ -64,10 +65,14 @@ public sealed class SimulationRepository
     ];
 
     private readonly NpgsqlConnectionFactory _connectionFactory;
+    private readonly RiskThresholdEvaluator _riskThresholdEvaluator;
 
-    public SimulationRepository(NpgsqlConnectionFactory connectionFactory)
+    public SimulationRepository(
+        NpgsqlConnectionFactory connectionFactory,
+        RiskThresholdEvaluator riskThresholdEvaluator)
     {
         _connectionFactory = connectionFactory;
+        _riskThresholdEvaluator = riskThresholdEvaluator;
     }
 
     public async Task<IReadOnlyList<SimulationDatasetSummaryReadModel>> GetDatasetsAsync(CancellationToken cancellationToken)
@@ -355,6 +360,10 @@ public sealed class SimulationRepository
             ?? throw new InvalidOperationException($"Port {requestedPortCode} was not found.");
         var weather = await GetLatestOpenWeatherAsync(connection, transaction, port.PortId, cancellationToken)
             ?? throw new InvalidOperationException($"No OpenWeather data exists for port {port.PortCode}.");
+
+        // Tải một lần để toàn bộ kế hoạch sử dụng cùng một cấu hình
+        var riskThresholds = await GetGlobalRiskThresholdsAsync(connection, transaction, cancellationToken);
+
         var userId = await EnsureDemoUserAsync(connection, transaction, port.PortId, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var datasetId = Guid.NewGuid();
@@ -371,7 +380,17 @@ public sealed class SimulationRepository
             var visibility = Math.Max(0.5m, weather.VisibilityKm - Math.Min(snapshotNumber, 8) * 0.25m);
             var beaufort = ToBeaufort(wind);
             var snapshot = new CreateSimulationSnapshotReadModel(snapshotNumber, wind, beaufort, rainfall, visibility, null);
-            var risk = EvaluateRisk(new SimulationSnapshotContext(snapshotNumber, wind, beaufort, rainfall, visibility, null));
+
+            var risk = EvaluateRisk(
+                new SimulationSnapshotContext(
+                    snapshotNumber,
+                    wind,
+                    beaufort,
+                    rainfall,
+                    visibility,
+                    null),
+                riskThresholds);
+
             var operationPlan = risk.FinalRiskLevel switch
             {
                 "CRITICAL" => "Dừng khai thác, bố trí trực chỉ huy và chuẩn bị SOP khẩn cấp.",
@@ -484,6 +503,20 @@ public sealed class SimulationRepository
             return null;
         }
 
+        // Cố định cấu hình threshold trong suốt một lần chạy simulation
+        var globalRiskThresholds = await GetGlobalRiskThresholdsAsync(
+            connection,
+            transaction,
+            cancellationToken);
+
+        // Guid.Empty đại diện cho cấu hình global
+        // Cache tránh truy vấn lại threshold cho mỗi snapshot cùng khu vực
+        var effectiveThresholdsByZone =
+            new Dictionary<Guid, IReadOnlyList<RiskThresholdRule>>
+            {
+                [Guid.Empty] = globalRiskThresholds
+            };
+
         var firstZone = await GetFirstZoneAsync(connection, transaction, port.PortId, cancellationToken);
         var startedByUserId = await EnsureDemoUserAsync(connection, transaction, port.PortId, cancellationToken);
         var sessionId = Guid.NewGuid();
@@ -502,8 +535,36 @@ public sealed class SimulationRepository
 
         foreach (var snapshot in snapshots)
         {
-            var zone = await GetZoneAsync(connection, transaction, snapshot.ZoneId ?? firstZone?.ZoneId, cancellationToken);
-            var risk = EvaluateRisk(snapshot);
+            var zone = await GetZoneAsync(
+                connection,
+                transaction,
+                snapshot.ZoneId ?? firstZone?.ZoneId,
+                cancellationToken);
+
+            var thresholdCacheKey = zone?.ZoneId ?? Guid.Empty;
+
+            if (!effectiveThresholdsByZone.TryGetValue(
+                    thresholdCacheKey,
+                    out var effectiveThresholds))
+            {
+                var zoneOverrides = await GetZoneRiskThresholdOverridesAsync(
+                    connection,
+                    transaction,
+                    thresholdCacheKey,
+                    cancellationToken);
+
+                effectiveThresholds = MergeRiskThresholds(
+                    globalRiskThresholds,
+                    zoneOverrides);
+
+                effectiveThresholdsByZone[thresholdCacheKey] =
+                    effectiveThresholds;
+            }
+
+            var risk = EvaluateRisk(
+                snapshot,
+                effectiveThresholds);
+
             var operationMode = risk.FinalRiskLevel switch
             {
                 "CRITICAL" => "STOP",
@@ -1237,16 +1298,136 @@ public sealed class SimulationRepository
             reader.IsDBNull(4) ? null : reader.GetDecimal(4));
     }
 
-    private static SimulationRiskContext EvaluateRisk(SimulationSnapshotContext snapshot)
+    /// Tải cấu hình global Version 1 trong transaction hiện tại
+    /// Không mở connection mới để giữ một cấu hình nhất quán trong cả lần chạy
+    private static async Task<IReadOnlyList<RiskThresholdRule>> GetGlobalRiskThresholdsAsync(
+            NpgsqlConnection connection,
+            NpgsqlTransaction transaction,
+            CancellationToken cancellationToken)
     {
-        var windRisk = snapshot.BeaufortNumber >= 10 ? "CRITICAL" : snapshot.BeaufortNumber >= 8 ? "HIGH" : snapshot.BeaufortNumber >= 6 ? "MEDIUM" : "LOW";
-        var rainRisk = snapshot.Rainfall1hMm >= 50 ? "CRITICAL" : snapshot.Rainfall1hMm >= 25 ? "HIGH" : snapshot.Rainfall1hMm >= 10 ? "MEDIUM" : "LOW";
-        var visibilityRisk = snapshot.VisibilityKm <= 1.5m ? "CRITICAL" : snapshot.VisibilityKm <= 5m ? "HIGH" : snapshot.VisibilityKm <= 10m ? "MEDIUM" : "LOW";
+        const string sql = """
+        SELECT factor::text,
+               risk_level::text,
+               comparison_operator::text,
+               threshold_value,
+               is_enabled
+        FROM operational.risk_thresholds
+        WHERE version = 1
+        ORDER BY factor, risk_level;
+        """;
 
-        var final = HigherRisk(HigherRisk(windRisk, rainRisk), visibilityRisk);
-        var dominant = final == windRisk ? "WIND" : final == rainRisk ? "RAIN" : "VISIBILITY";
-        var summary = $"Gió Beaufort {snapshot.BeaufortNumber}, mưa {snapshot.Rainfall1hMm:0.#} mm/h, tầm nhìn {(snapshot.VisibilityKm ?? 0):0.#} km.";
-        return new SimulationRiskContext(windRisk, rainRisk, visibilityRisk, final, dominant, summary);
+        await using var command =
+            new NpgsqlCommand(sql, connection, transaction);
+
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        var thresholds = new List<RiskThresholdRule>();
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            thresholds.Add(new RiskThresholdRule(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetDecimal(3),
+                reader.GetBoolean(4)));
+        }
+
+        return thresholds;
+    }
+
+    /// Tải các threshold override của một khu vực
+    /// Danh sách có thể chỉ chứa một phần của cấu hình đầy đủ
+    private static async Task<IReadOnlyList<RiskThresholdRule>> GetZoneRiskThresholdOverridesAsync(
+            NpgsqlConnection connection,
+            NpgsqlTransaction transaction,
+            Guid zoneId,
+            CancellationToken cancellationToken)
+    {
+        if (zoneId == Guid.Empty)
+        {
+            return [];
+        }
+
+        const string sql = """
+        SELECT factor::text,
+               risk_level::text,
+               comparison_operator::text,
+               threshold_value,
+               is_enabled
+        FROM operational.zone_threshold_overrides
+        WHERE zone_id = @zoneId
+        ORDER BY factor, risk_level;
+        """;
+
+        await using var command =
+            new NpgsqlCommand(sql, connection, transaction);
+
+        command.Parameters.AddWithValue("zoneId", zoneId);
+
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        var overrides = new List<RiskThresholdRule>();
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            overrides.Add(new RiskThresholdRule(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetDecimal(3),
+                reader.GetBoolean(4)));
+        }
+
+        return overrides;
+    }
+
+    /// Ghi đè cấu hình global bằng các rule riêng của khu vực
+    /// Những rule không có override tiếp tục sử dụng giá trị global
+    private static IReadOnlyList<RiskThresholdRule> MergeRiskThresholds(
+        IReadOnlyList<RiskThresholdRule> globalThresholds,
+        IReadOnlyList<RiskThresholdRule> zoneOverrides)
+    {
+        var merged = globalThresholds.ToDictionary(
+            ThresholdKey,
+            StringComparer.Ordinal);
+
+        foreach (var zoneOverride in zoneOverrides)
+        {
+            merged[ThresholdKey(zoneOverride)] = zoneOverride;
+        }
+
+        return merged.Values.ToList();
+    }
+
+    private static string ThresholdKey(RiskThresholdRule threshold)
+    {
+        return
+            $"{threshold.Factor.Trim().ToUpperInvariant()}:" +
+            $"{threshold.RiskLevel.Trim().ToUpperInvariant()}";
+    }
+
+    /// Chuyển dữ liệu simulation sang model chung và sử dụng Risk Engine
+    private SimulationRiskContext EvaluateRisk(
+        SimulationSnapshotContext snapshot,
+        IReadOnlyList<RiskThresholdRule> thresholds)
+    {
+        var evaluation = _riskThresholdEvaluator.Evaluate(
+            new WeatherRiskInput(
+                snapshot.BeaufortNumber,
+                snapshot.Rainfall1hMm,
+                snapshot.VisibilityKm),
+            thresholds);
+
+        return new SimulationRiskContext(
+            evaluation.Wind.RiskLevel,
+            evaluation.Rain.RiskLevel,
+            evaluation.Visibility.RiskLevel,
+            evaluation.FinalRiskLevel,
+            evaluation.DominantFactor,
+            evaluation.Summary);
     }
 
     private static short ToBeaufort(decimal windSpeedMs)
