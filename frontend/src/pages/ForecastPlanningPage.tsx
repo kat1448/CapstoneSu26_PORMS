@@ -6,10 +6,12 @@ import { getPorts } from "../services/portService";
 import { createForecastPlan } from "../services/simulationService";
 import { getOpenWeatherForecast } from "../services/weatherService";
 import { analyzeForecastRisk } from "../services/mlService";
+import { getForecastEvaluation } from "../services/forecastEvaluationService";
 import type { PortSummary } from "../types/port";
 import type { ForecastHorizonDays, ForecastPlan } from "../types/simulation";
 import type { OpenWeatherForecast } from "../types/weather";
 import type { ForecastRiskAnalysis } from "../types/ml";
+import type { ForecastEvaluationSummary } from "../types/forecastEvaluation";
 import { clusterLabel, forecastTextLabel, operationModeLabel, riskLabel, weatherDescriptionLabel } from "../utils/displayLabels";
 
 const FORECAST_AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
@@ -115,6 +117,7 @@ export function ForecastPlanningPage() {
   const [message, setMessage] = useState("");
   const [nextForecastRefreshAt, setNextForecastRefreshAt] = useState<Date | null>(null);
   const [processingStep, setProcessingStep] = useState<ForecastProcessingStep>(null);
+  const [evaluationSummary, setEvaluationSummary] = useState<ForecastEvaluationSummary | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -153,6 +156,29 @@ export function ForecastPlanningPage() {
   useEffect(() => {
     void reloadForecast();
   }, [reloadForecast]);
+
+  useEffect(() => {
+    let active = true;
+    const to = new Date();
+    const from = new Date(to);
+    from.setDate(from.getDate() - 30);
+
+    getForecastEvaluation({
+      from: from.toISOString(),
+      portCode,
+      to: to.toISOString()
+    })
+      .then((response) => {
+        if (active) setEvaluationSummary(response.summary);
+      })
+      .catch(() => {
+        if (active) setEvaluationSummary(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [portCode]);
 
   useEffect(() => {
     const timer = window.setInterval(() => void reloadForecast(), FORECAST_AUTO_REFRESH_MS);
@@ -272,6 +298,21 @@ export function ForecastPlanningPage() {
             {loading ? "Đang phân tích..." : "Cập nhật kế hoạch"}
           </button>
         </div>
+
+        {evaluationSummary ? (
+          <div
+            aria-label="Độ tin cậy lịch sử của dự báo"
+            className={`forecast-plan-confidence-strip ${evaluationSummary.interventionRequired ? "requires-intervention" : ""}`}
+          >
+            <div>
+              <span>Độ tin cậy 30 ngày</span>
+              <strong>{evaluationSummary.confidencePct === null ? "Chưa đủ dữ liệu" : `${evaluationSummary.confidencePct.toFixed(1)}%`}</strong>
+              <small>Dựa trên {evaluationSummary.matchedActualPoints} mốc dự báo đã đối chiếu dữ liệu thật.</small>
+            </div>
+            <p>{evaluationSummary.interventionMessage}</p>
+            <Link className="button button-secondary button-small" to="/forecast-evaluation">Xem kiểm chứng</Link>
+          </div>
+        ) : null}
 
         {message ? <p className="form-success">{message}</p> : null}
         {error ? <p className="form-error">{error}</p> : null}

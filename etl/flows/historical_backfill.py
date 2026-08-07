@@ -118,7 +118,7 @@ def historical_backfill_flow(days_back: int = 30):
     """
     Chạy thủ công một lần trước demo:
         prefect deployment run historical-data-backfill/prod --param days_back=30
-    Sau khi xong: trigger dw_loader để sync vào analytics.
+    Dữ liệu được lưu trực tiếp vào schema operational.
     """
     logger.info("historical_backfill_started", days_back=days_back)
 

@@ -49,8 +49,7 @@ Invoke-PormsCompose -ComposeArguments @("up", "-d", "postgres")
 $databaseReady = $false
 $databaseReadyQuery = @"
 SELECT to_regclass('operational.users') IS NOT NULL
-   AND EXISTS (SELECT 1 FROM operational.ports WHERE code = 'DNTSA' AND deleted_at IS NULL)
-   AND EXISTS (SELECT 1 FROM analytics.dim_time WHERE time_key = 2028123123);
+   AND EXISTS (SELECT 1 FROM operational.ports WHERE code = 'DNTSA' AND deleted_at IS NULL);
 "@
 
 for ($attempt = 1; $attempt -le 60; $attempt++) {

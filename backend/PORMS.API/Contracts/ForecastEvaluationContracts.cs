@@ -9,8 +9,17 @@ public sealed class ForecastEvaluationResponse
 public sealed class ForecastEvaluationSummaryResponse
 {
     public int TotalForecastPoints { get; init; }
+    public int EligiblePastPoints { get; init; }
     public int MatchedActualPoints { get; init; }
     public decimal MatchRatePct { get; init; }
+    public decimal? ConfidencePct { get; init; }
+    public required string ConfidenceLevel { get; init; }
+    public decimal RiskMatchRatePct { get; init; }
+    public int ConsecutiveMismatchCount { get; init; }
+    public int DangerousUnderestimateCount { get; init; }
+    public bool InterventionRequired { get; init; }
+    public required string InterventionMessage { get; init; }
+    public required IReadOnlyList<string> RecommendedActions { get; init; }
     public decimal? AvgWindMae { get; init; }
     public decimal? AvgRainMae { get; init; }
     public decimal? AvgVisibilityMae { get; init; }

@@ -3,8 +3,17 @@ export type ForecastEvaluationSummary = {
   avgRiskScoreError: number | null;
   avgVisibilityMae: number | null;
   avgWindMae: number | null;
+  confidenceLevel: "HIGH" | "INSUFFICIENT" | "LOW" | "MEDIUM";
+  confidencePct: number | null;
+  consecutiveMismatchCount: number;
+  dangerousUnderestimateCount: number;
+  eligiblePastPoints: number;
+  interventionMessage: string;
+  interventionRequired: boolean;
   matchRatePct: number;
   matchedActualPoints: number;
+  recommendedActions: string[];
+  riskMatchRatePct: number;
   totalForecastPoints: number;
 };
 

@@ -20,25 +20,15 @@ $$;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'porms_metabase') THEN
-    CREATE USER porms_metabase WITH PASSWORD 'placeholder';
-  END IF;
-END
-$$;
-
-DO $$
-BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'porms_api') THEN
     CREATE USER porms_api WITH PASSWORD 'placeholder';
   END IF;
 END
 $$;
 
--- ─── 3. Extension cần thiết cho Metabase ────────────────────
+-- ─── 3. Extension hỗ trợ kiểu dữ liệu không phân biệt hoa thường ─
 CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
 
 -- ─── 4. Cấp quyền kết nối và schema ────────────────────────
 GRANT CONNECT ON DATABASE porms_db TO porms_etl;
 GRANT CONNECT ON DATABASE porms_db TO porms_api;
-GRANT CONNECT ON DATABASE porms_db TO porms_metabase;
-GRANT CREATE ON SCHEMA public TO porms_metabase;

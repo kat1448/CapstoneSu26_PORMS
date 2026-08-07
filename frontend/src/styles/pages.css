@@ -1365,6 +1365,61 @@
   min-width: 0;
 }
 
+.forecast-plan-confidence-strip {
+  align-items: center;
+  background: #f2fbf7;
+  border: 1px solid #cce8da;
+  border-left: 4px solid #159463;
+  border-radius: 10px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(230px, .8fr) minmax(300px, 1.5fr) auto;
+  margin-top: 14px;
+  padding: 14px 16px;
+}
+
+.forecast-plan-confidence-strip.requires-intervention {
+  background: #fff6f5;
+  border-color: #f1c4c0;
+  border-left-color: #d64545;
+}
+
+.forecast-plan-confidence-strip > div {
+  display: grid;
+  gap: 4px;
+}
+
+.forecast-plan-confidence-strip span {
+  color: #60758a;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.forecast-plan-confidence-strip strong {
+  color: #123b58;
+  font-size: 24px;
+}
+
+.forecast-plan-confidence-strip small,
+.forecast-plan-confidence-strip p {
+  color: #52677a;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .forecast-plan-confidence-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .forecast-plan-confidence-strip .button {
+    justify-self: start;
+  }
+}
+
 .simulation-forecast-panel .card-head h3,
 .forecast-ml-card .card-head h3,
 .forecast-llm-head h3 {
@@ -3414,6 +3469,110 @@
   gap: 16px;
 }
 
+.forecast-confidence-card {
+  align-items: stretch;
+  border: 1px solid #cfe4d8;
+  border-left: 5px solid #159463;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(220px, .8fr) minmax(320px, 1fr) minmax(360px, 1.4fr);
+  padding: 20px;
+}
+
+.forecast-confidence-card.requires-intervention {
+  background: #fff8f7;
+  border-color: #f4c7c3;
+  border-left-color: #d64545;
+}
+
+.forecast-confidence-primary,
+.forecast-confidence-details,
+.forecast-intervention-guidance {
+  min-width: 0;
+}
+
+.forecast-confidence-primary {
+  align-content: start;
+  display: grid;
+  gap: 7px;
+}
+
+.forecast-confidence-primary > span,
+.forecast-intervention-guidance span,
+.forecast-confidence-details span {
+  color: #60758a;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.forecast-confidence-primary > strong {
+  color: #102a43;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.forecast-confidence-primary .badge {
+  justify-self: start;
+}
+
+.forecast-confidence-primary small,
+.forecast-confidence-details small {
+  color: #60758a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.forecast-confidence-details {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.forecast-confidence-details > div {
+  align-content: start;
+  background: #f7fafc;
+  border: 1px solid #dce8f0;
+  border-radius: 9px;
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+}
+
+.forecast-confidence-details strong {
+  color: #163a59;
+  font-size: 20px;
+}
+
+.forecast-intervention-guidance {
+  border-left: 1px solid #dbe7ef;
+  display: grid;
+  gap: 10px;
+  padding-left: 18px;
+}
+
+.forecast-intervention-guidance > div {
+  display: grid;
+  gap: 6px;
+}
+
+.forecast-intervention-guidance strong {
+  color: #20384d;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.forecast-intervention-guidance ul {
+  color: #52677a;
+  display: grid;
+  font-size: 13px;
+  gap: 5px;
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .forecast-evaluation-page .bi-table-head {
   align-items: center;
   background: linear-gradient(135deg, #f8fbff 0%, #eef6fc 100%);
@@ -3537,6 +3696,7 @@
 }
 
 @media (max-width: 1100px) {
+  .forecast-confidence-card,
   .bi-filter-bar,
   .forecast-analysis-steps,
   .forecast-plan-visual-grid,
@@ -3546,6 +3706,19 @@
   .bi-main-grid,
   .bi-ops-grid,
   .simulation-results-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .forecast-intervention-guidance {
+    border-left: 0;
+    border-top: 1px solid #dbe7ef;
+    padding-left: 0;
+    padding-top: 16px;
+  }
+}
+
+@media (max-width: 680px) {
+  .forecast-confidence-details {
     grid-template-columns: 1fr;
   }
 }
