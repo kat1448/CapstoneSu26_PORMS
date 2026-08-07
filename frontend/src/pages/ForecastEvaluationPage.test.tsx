@@ -85,8 +85,17 @@ beforeEach(() => {
       avgRiskScoreError: 0,
       avgVisibilityMae: 1,
       avgWindMae: 2,
+      confidenceLevel: "INSUFFICIENT",
+      confidencePct: 100,
+      consecutiveMismatchCount: 0,
+      dangerousUnderestimateCount: 0,
+      eligiblePastPoints: 2,
+      interventionMessage: "Mới có 2 mốc dữ liệu thật; cần ít nhất 3 mốc để kết luận độ tin cậy.",
+      interventionRequired: false,
       matchRatePct: 100,
       matchedActualPoints: 2,
+      recommendedActions: ["Tiếp tục thu thập dữ liệu thật."],
+      riskMatchRatePct: 100,
       totalForecastPoints: 2
     }
   });
@@ -106,14 +115,16 @@ describe("ForecastEvaluationPage", () => {
     expect(screen.getByText("Sai số gió (m/s)")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "1 tuần" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "1 tháng" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Độ tin cậy và khuyến nghị can thiệp")).toBeInTheDocument();
+    expect(screen.getAllByText("100.0%").length).toBeGreaterThan(0);
   });
 
-  it("reloads evaluation data when the user selects the one month range", async () => {
+  it("reloads evaluation data when the user selects the one week range", async () => {
     const user = userEvent.setup();
     render(<ForecastEvaluationPage />);
 
     await screen.findByLabelText("Biểu đồ tương quan dữ liệu thật và sai số");
-    await user.click(screen.getByRole("button", { name: "1 tháng" }));
+    await user.click(screen.getByRole("button", { name: "1 tuần" }));
 
     await waitFor(() => {
       expect(getForecastEvaluation).toHaveBeenCalledTimes(2);

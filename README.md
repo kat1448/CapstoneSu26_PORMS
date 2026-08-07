@@ -52,9 +52,8 @@ Hệ thống thu thập dữ liệu thời tiết mỗi 15 phút, tự động �
 | F9 | **Alert & Notification** | Cảnh báo real-time qua polling, mark-read, lọc theo mức độ |
 | F10 | **Operation Logging** | Audit trail toàn bộ events, filter theo ngày/loại/zone |
 | F11 | **Realtime Dashboard** | Weather card, Risk badge (đổi màu), Mode indicator, Chart.js |
-| F12 | **BI Dashboard** | Metabase: Risk Trend, Weather Impact, KPI — embed vào portal |
-| F13 | **Data Warehouse & ETL** | Prefect flows + PostgreSQL DW schema (fact/dim tables) |
-| F14 | **Simulation Mode** | Replay dữ liệu lịch sử với speed multiplier — dùng cho demo |
+| F12 | **Weather Orchestration** | Prefect thu thập thời tiết định kỳ và gọi Risk Engine |
+| F13 | **Simulation Mode** | Replay dữ liệu lịch sử với speed multiplier — dùng cho demo |
 
 ---
 
@@ -68,7 +67,7 @@ Hệ thống thu thập dữ liệu thời tiết mỗi 15 phút, tự động �
                      │
 ┌────────────────────▼────────────────────────────────────────┐
 │                    ETL PIPELINE (Prefect)                    │
-│  weather_collector → weather_transformer → dw_loader        │
+│  weather_collector → operational.weather_readings           │
 └────────────────────┬────────────────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────────────────┐
@@ -84,18 +83,16 @@ Hệ thống thu thập dữ liệu thời tiết mỗi 15 phút, tự động �
                      │
 ┌────────────────────▼────────────────────────────────────────┐
 │                    PERSISTENCE                               │
-│  PostgreSQL: schema operational + schema analytics (DW)     │
-└──────────┬──────────────────────────────┬───────────────────┘
-           │                              │
-┌──────────▼──────────┐       ┌───────────▼─────────────────┐
-│   React Dashboard   │       │   Metabase BI Dashboard      │
-│   (Realtime UI)     │       │   (Analytics + KPI)          │
-└─────────────────────┘       └─────────────────────────────┘
+│  PostgreSQL: schema operational                            │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────────┐
+│   React Dashboard — theo dõi và xử lý nghiệp vụ vận hành   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Hai mặt phẳng tách biệt:**
-- **Operational Plane** — xử lý real-time, latency thấp, ASP.NET Core + PostgreSQL operational schema
-- **Analytics Plane** — xử lý batch/BI, Prefect ETL + PostgreSQL analytics schema + Metabase
+Hệ thống dùng một luồng dữ liệu vận hành thống nhất: Prefect thu thập thời tiết,
+ASP.NET Core đánh giá rủi ro và PostgreSQL lưu dữ liệu trong schema `operational`.
 
 ---
 
@@ -109,7 +106,6 @@ Hệ thống thu thập dữ liệu thời tiết mỗi 15 phút, tự động �
 | Backend | Entity Framework Core, PostgreSQL | 8.0 / 16 |
 | ETL | Python + Prefect + Pandas | 3.11 / 2.x |
 | Database | PostgreSQL | 16 |
-| BI | Metabase | latest |
 | DevOps | Docker + Compose, GitHub Actions | — |
 | Hosting | Vercel (FE) + AWS EC2 t3.small (BE/DB) | — |
 
@@ -152,15 +148,12 @@ POSTGRES_PASSWORD=your_password_here
 JWT_SECRET=your_secret_key_min_32_chars
 JWT_EXPIRY_MINUTES=60
 
-# Metabase
-METABASE_SITE_URL=http://localhost:3000
-METABASE_SECRET_KEY=your_metabase_secret
 ```
 
 ### Bước 2 — Khởi động services nền
 
 ```bash
-# Khởi động PostgreSQL, Prefect Server, Metabase
+# Khởi động PostgreSQL và Prefect
 docker compose up -d
 
 # Kiểm tra tất cả services đang chạy
@@ -233,7 +226,7 @@ Demo sử dụng **Simulation Mode** để replay dữ liệu bão Đà Nẵng t
 3–5 phút   Theo dõi Risk badge: LOW → MEDIUM → HIGH → CRITICAL (real-time)
 5–6 phút   Operation Mode tự động: NORMAL → LIMITED → STOP, alert bell đổ thông báo
 6–7 phút   Mở SOP/Task log: xem actions được tạo tự động (dừng bốc xếp Dock A...)
-7–9 phút   Chuyển sang Metabase: Risk Trend chart, Weather Impact, KPI overview
+7–9 phút   Xem lịch sử vận hành, dự báo và báo cáo trên cổng PORMS
 9–10 phút  Admin UI: chỉnh ngưỡng Beaufort từ 8→7, replay lại sim, thấy hệ thống phản ứng khác
 ```
 
@@ -243,7 +236,7 @@ Demo sử dụng **Simulation Mode** để replay dữ liệu bão Đà Nẵng t
 
 | Vai trò | Họ tên | MSSV | Module phụ trách |
 |---------|--------|------|-----------------|
-| PM · DE | Nguyễn Phan Anh Minh | HE153552 | Project Management, ETL Pipeline, Data Warehouse, Metabase |
+| PM · DE | Nguyễn Phan Anh Minh | HE153552 | Project Management, ETL Pipeline |
 | FE — A | Nguyễn Anh Kiệt | DE170152 | Toàn bộ Frontend: Dashboard, Auth, Port/Zone, Alert, Chart.js |
 | BE — B | Trần Quang Dũng | DE170780 | Auth (JWT/RBAC), Port & Zone CRUD, Zone Control, User Management |
 | BE — C | Đinh Hải Quân | DE180741 | Weather Integration, Risk Engine, BackgroundService, Simulation Mode |
@@ -262,7 +255,7 @@ Demo sử dụng **Simulation Mode** để replay dữ liệu bão Đà Nẵng t
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Cấu trúc folder chi tiết + Git Workflow |
 | [`docs/PORMS_Project_Overview.docx`](./docs/PORMS_Project_Overview.docx) | Kiến trúc, feature list, risk management |
 | [`docs/api-contracts/`](./docs/api-contracts/) | Swagger YAML cho từng module |
-| [`docs/database/schema.sql`](./docs/database/schema.sql) | DDL đầy đủ cho cả hai schema |
+| [`docs/database/schema.sql`](./docs/database/schema.sql) | DDL cho schema nghiệp vụ `operational` |
 
 ---
 
@@ -273,7 +266,7 @@ Demo sử dụng **Simulation Mode** để replay dữ liệu bão Đà Nẵng t
 | T1 | Kickoff Complete | API contracts chốt, DB schema merged, docker-compose chạy |
 | T3 | Auth & ETL Live | JWT login hoạt động, Prefect fetch weather data |
 | T5 | Core Chain Working | Weather → Risk → SOP → Mode trigger end-to-end |
-| T7 | Dashboard Live | React dashboard realtime + Metabase 3 dashboards |
+| T7 | Dashboard Live | React dashboard kết nối dữ liệu vận hành |
 | T9 | Feature Complete | F1–F14 hoàn thành, FE kết nối API thật toàn bộ |
 | T10 | Release Ready | Deploy production, demo rehearse ≥ 3 lần thành công |
 

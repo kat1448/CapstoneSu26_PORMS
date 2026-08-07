@@ -4,6 +4,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
+using PORMS.API.Services;
 using PORMS.Infrastructure.Repositories;
 
 namespace PORMS.API.Controllers;
@@ -41,17 +42,7 @@ public sealed class ForecastEvaluationController : ControllerBase
 
     private static ForecastEvaluationResponse ToResponse(IReadOnlyList<ForecastEvaluationRowReadModel> rows)
     {
-        var matchedRows = rows.Where(item => item.ActualObservedAt is not null).ToList();
-        var summary = new ForecastEvaluationSummaryResponse
-        {
-            TotalForecastPoints = rows.Count,
-            MatchedActualPoints = matchedRows.Count,
-            MatchRatePct = rows.Count == 0 ? 0 : Math.Round(matchedRows.Count * 100m / rows.Count, 1),
-            AvgWindMae = Average(matchedRows.Select(item => item.WindAbsError)),
-            AvgRainMae = Average(matchedRows.Select(item => item.RainAbsError)),
-            AvgVisibilityMae = Average(matchedRows.Select(item => item.VisibilityAbsError)),
-            AvgRiskScoreError = Average(matchedRows.Select(item => item.RiskScoreError.HasValue ? (decimal?)item.RiskScoreError.Value : null))
-        };
+        var summary = ForecastConfidenceCalculator.Calculate(rows);
 
         return new ForecastEvaluationResponse
         {
@@ -80,12 +71,6 @@ public sealed class ForecastEvaluationController : ControllerBase
                 Status = item.Status
             }).ToList()
         };
-    }
-
-    private static decimal? Average(IEnumerable<decimal?> values)
-    {
-        var concreteValues = values.Where(item => item.HasValue).Select(item => item!.Value).ToList();
-        return concreteValues.Count == 0 ? null : Math.Round(concreteValues.Average(), 2);
     }
 
     private static string BuildCsv(IReadOnlyList<ForecastEvaluationRowReadModel> rows)

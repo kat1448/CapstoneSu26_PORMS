@@ -7,6 +7,7 @@ import { createForecastPlan } from "../services/simulationService";
 import { getPorts } from "../services/portService";
 import { getOpenWeatherForecast } from "../services/weatherService";
 import { analyzeForecastRisk } from "../services/mlService";
+import { getForecastEvaluation } from "../services/forecastEvaluationService";
 import type { OpenWeatherForecast } from "../types/weather";
 
 vi.mock("../services/simulationService", () => ({
@@ -23,6 +24,10 @@ vi.mock("../services/portService", () => ({
 
 vi.mock("../services/mlService", () => ({
   analyzeForecastRisk: vi.fn()
+}));
+
+vi.mock("../services/forecastEvaluationService", () => ({
+  getForecastEvaluation: vi.fn()
 }));
 
 const forecast: OpenWeatherForecast = {
@@ -57,6 +62,27 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  vi.mocked(getForecastEvaluation).mockResolvedValue({
+    rows: [],
+    summary: {
+      avgRainMae: 1.2,
+      avgRiskScoreError: 0.2,
+      avgVisibilityMae: 0.8,
+      avgWindMae: 1.4,
+      confidenceLevel: "HIGH",
+      confidencePct: 90,
+      consecutiveMismatchCount: 0,
+      dangerousUnderestimateCount: 0,
+      eligiblePastPoints: 10,
+      interventionMessage: "Dự báo đang khớp tốt với mức rủi ro thực tế; tiếp tục theo dõi định kỳ.",
+      interventionRequired: false,
+      matchRatePct: 100,
+      matchedActualPoints: 10,
+      recommendedActions: ["Tiếp tục đối chiếu hằng ngày."],
+      riskMatchRatePct: 90,
+      totalForecastPoints: 10
+    }
+  });
   vi.mocked(getPorts).mockResolvedValue([
     {
       activeAlertCount: 1,

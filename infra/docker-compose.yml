@@ -17,7 +17,6 @@
 # PORTS:
 #   PostgreSQL   → localhost:55432
 #   Prefect UI   → localhost:4200
-#   Metabase     → localhost:3000
 #   Backend API  → localhost:5000  (profile: app)
 #   Frontend     → localhost:5173  (profile: app)
 #
@@ -39,8 +38,6 @@ volumes:
     driver: local
   prefect_data:
     driver: local
-  metabase_data:
-    driver: local
 
 # ─── Services ─────────────────────────────────────────────────────────────────
 services:
@@ -60,7 +57,6 @@ services:
       # Passwords cho các dedicated users — đọc bởi init-db.sql
       POSTGRES_ETL_PASSWORD:      ${POSTGRES_ETL_PASSWORD}
       POSTGRES_API_PASSWORD:      ${POSTGRES_API_PASSWORD}
-      POSTGRES_METABASE_PASSWORD: ${POSTGRES_METABASE_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Init scripts chạy theo thứ tự alphabet khi container tạo lần đầu
@@ -116,8 +112,6 @@ services:
   #
   # Flows:
   #   - weather_collector   : fetch OpenWeather mỗi 10 phút/port
-  #   - weather_transformer : normalize m/s → Beaufort, m → km
-  #   - dw_loader           : load operational → analytics schema (mỗi giờ)
   #   - historical_backfill : one-time backfill 30 ngày dữ liệu lịch sử
   # ════════════════════════════════════════════════════════════════════════════
   prefect-worker:
@@ -169,45 +163,6 @@ services:
         condition: service_healthy
       prefect-server:
         condition: service_started
-    networks:
-      - porms-net
-
-  # ════════════════════════════════════════════════════════════════════════════
-  # Metabase v0.50 — BI Dashboard (embedded vào React portal qua iframe)
-  # UI: http://localhost:3000
-  # Kết nối tới analytics schema trong porms_db (user read-only: porms_metabase)
-  # ════════════════════════════════════════════════════════════════════════════
-  metabase:
-    image: metabase/metabase:v0.50.17
-    container_name: porms-metabase
-    restart: unless-stopped
-    environment:
-      # Metabase lưu config nội bộ của nó vào porms_db
-      MB_DB_TYPE:              postgres
-      MB_DB_HOST:              postgres
-      MB_DB_PORT:              5432
-      MB_DB_DBNAME:            porms_db
-      MB_DB_USER:              porms_metabase
-      MB_DB_PASS:              ${POSTGRES_METABASE_PASSWORD}
-      # Secret key để signed embedding — phải khớp với key trong React frontend
-      MB_EMBEDDING_SECRET_KEY: ${METABASE_SECRET_KEY}
-      # Tắt telemetry
-      MB_SEND_EMAIL_ON_FIRST_LOGIN: "false"
-      MB_ANON_TRACKING_ENABLED:     "false"
-      JAVA_TIMEZONE:           Asia/Ho_Chi_Minh
-    ports:
-      - "3000:3000"
-    volumes:
-      - metabase_data:/metabase-data
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
     networks:
       - porms-net
 
@@ -290,7 +245,6 @@ services:
     environment:
       VITE_API_BASE_URL:  http://localhost:5000
       VITE_USE_MOCK_FALLBACK: "false"
-      VITE_METABASE_URL:  http://localhost:3000
       NODE_ENV:           development
     ports:
       - "5173:5173"

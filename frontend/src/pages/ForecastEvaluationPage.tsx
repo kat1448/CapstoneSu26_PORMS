@@ -68,12 +68,26 @@ function riskTone(riskLevel: string | null): "danger" | "info" | "muted" | "succ
   return "muted";
 }
 
+function confidenceLabel(level: ForecastEvaluationResponse["summary"]["confidenceLevel"]) {
+  if (level === "HIGH") return "Tin cậy cao";
+  if (level === "MEDIUM") return "Cần theo dõi";
+  if (level === "LOW") return "Tin cậy thấp";
+  return "Chưa đủ dữ liệu";
+}
+
+function confidenceTone(level: ForecastEvaluationResponse["summary"]["confidenceLevel"]): "danger" | "info" | "muted" | "success" | "warning" {
+  if (level === "HIGH") return "success";
+  if (level === "MEDIUM") return "warning";
+  if (level === "LOW") return "danger";
+  return "muted";
+}
+
 export function ForecastEvaluationPage() {
   const [ports, setPorts] = useState<PortSummary[]>([]);
   const [data, setData] = useState<ForecastEvaluationResponse | null>(null);
   const [portCode, setPortCode] = useState("ALL");
-  const [fromDate, setFromDate] = useState(today(-7));
-  const [toDate, setToDate] = useState(today(7));
+  const [fromDate, setFromDate] = useState(today(-29));
+  const [toDate, setToDate] = useState(today(0));
   const [chartMetric, setChartMetric] = useState<EvaluationChartMetric>("wind");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -268,7 +282,7 @@ export function ForecastEvaluationPage() {
         <article className="card bi-kpi-card bi-card-pad">
           <span>Tỷ lệ đối chiếu</span>
           <strong>{data?.summary.matchRatePct.toFixed(1) ?? "0.0"}%</strong>
-          <small>Dự báo đã khớp với dữ liệu thời tiết thật</small>
+          <small>{data?.summary.matchedActualPoints ?? 0}/{data?.summary.eligiblePastPoints ?? 0} mốc quá khứ có dữ liệu thật</small>
         </article>
         <article className="card bi-kpi-card bi-card-pad risk">
           <span>Sai số gió trung bình</span>
@@ -286,6 +300,44 @@ export function ForecastEvaluationPage() {
           <small>Sai số tầm nhìn</small>
         </article>
       </div>
+
+      {data ? (
+        <article
+          aria-label="Độ tin cậy và khuyến nghị can thiệp"
+          className={`card forecast-confidence-card ${data.summary.interventionRequired ? "requires-intervention" : "is-stable"}`}
+        >
+          <div className="forecast-confidence-primary">
+            <span>Độ tin cậy thực nghiệm</span>
+            <strong>{data.summary.confidencePct === null ? "Chưa đủ" : `${data.summary.confidencePct.toFixed(1)}%`}</strong>
+            <Badge tone={confidenceTone(data.summary.confidenceLevel)}>{confidenceLabel(data.summary.confidenceLevel)}</Badge>
+            <small>Tỷ lệ dự báo khớp đúng mức rủi ro trên {data.summary.matchedActualPoints} mốc dữ liệu thật.</small>
+          </div>
+          <div className="forecast-confidence-details">
+            <div>
+              <span>Khớp mức rủi ro</span>
+              <strong>{data.summary.riskMatchRatePct.toFixed(1)}%</strong>
+            </div>
+            <div>
+              <span>Sai liên tiếp gần nhất</span>
+              <strong>{data.summary.consecutiveMismatchCount} lần</strong>
+            </div>
+            <div>
+              <span>Đánh giá thấp nguy hiểm</span>
+              <strong>{data.summary.dangerousUnderestimateCount} lần</strong>
+              <small>Trong tối đa 5 mốc thật gần nhất</small>
+            </div>
+          </div>
+          <div className="forecast-intervention-guidance">
+            <div>
+              <span>{data.summary.interventionRequired ? "Yêu cầu can thiệp" : "Trạng thái kiểm soát"}</span>
+              <strong>{data.summary.interventionMessage}</strong>
+            </div>
+            <ul>
+              {data.summary.recommendedActions.map((action) => <li key={action}>{action}</li>)}
+            </ul>
+          </div>
+        </article>
+      ) : null}
 
       <article className="card bi-card-pad forecast-evaluation-chart-card">
         <div className="card-head bi-table-head">

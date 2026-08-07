@@ -1,4 +1,4 @@
--- =============================================================================
+﻿-- =============================================================================
 -- PORMS - Port Operation Risk Management System
 -- PostgreSQL 16 fresh-install schema, version 2.0.0
 -- =============================================================================
@@ -14,7 +14,6 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE SCHEMA IF NOT EXISTS operational;
-CREATE SCHEMA IF NOT EXISTS analytics;
 
 -- =============================================================================
 -- ENUMS
@@ -610,178 +609,6 @@ CREATE TABLE IF NOT EXISTS operational.weather_fetch_jobs (
     )
 );
 
--- =============================================================================
--- ANALYTICS DIMENSIONS
--- =============================================================================
-
-CREATE TABLE IF NOT EXISTS analytics.dim_time (
-    time_key                 INTEGER PRIMARY KEY,
-    full_datetime            TIMESTAMPTZ NOT NULL,
-    date_value               DATE NOT NULL,
-    year                     SMALLINT NOT NULL,
-    quarter                  SMALLINT NOT NULL CHECK (quarter BETWEEN 1 AND 4),
-    month                    SMALLINT NOT NULL CHECK (month BETWEEN 1 AND 12),
-    month_name               VARCHAR(20) NOT NULL,
-    week_of_year             SMALLINT NOT NULL,
-    day_of_month             SMALLINT NOT NULL CHECK (day_of_month BETWEEN 1 AND 31),
-    day_of_week              SMALLINT NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
-    day_name                 VARCHAR(20) NOT NULL,
-    hour                     SMALLINT NOT NULL CHECK (hour BETWEEN 0 AND 23),
-    is_weekend               BOOLEAN NOT NULL,
-    is_business_hour         BOOLEAN NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS analytics.dim_port (
-    port_key                 BIGSERIAL PRIMARY KEY,
-    source_port_id           UUID NOT NULL UNIQUE,
-    port_code                VARCHAR(20) NOT NULL,
-    port_name                VARCHAR(255) NOT NULL,
-    address                  TEXT,
-    latitude                 NUMERIC(9,6),
-    longitude                NUMERIC(9,6),
-    timezone                 VARCHAR(64),
-    is_active                BOOLEAN NOT NULL,
-    last_synced_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS analytics.dim_zone (
-    zone_key                 BIGSERIAL PRIMARY KEY,
-    source_zone_id           UUID NOT NULL UNIQUE,
-    source_port_id           UUID NOT NULL,
-    port_code                VARCHAR(20) NOT NULL,
-    port_name                VARCHAR(255) NOT NULL,
-    zone_name                VARCHAR(255) NOT NULL,
-    zone_type                VARCHAR(30) NOT NULL,
-    is_active                BOOLEAN NOT NULL,
-    last_synced_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS analytics.dim_risk_level (
-    risk_level_key           SMALLINT PRIMARY KEY,
-    risk_level               VARCHAR(20) NOT NULL UNIQUE,
-    display_label            VARCHAR(50) NOT NULL,
-    color_hex                VARCHAR(7) NOT NULL,
-    sort_order               SMALLINT NOT NULL UNIQUE,
-    beaufort_min             SMALLINT NOT NULL,
-    beaufort_max             SMALLINT NOT NULL,
-    description              TEXT
-);
-
-CREATE TABLE IF NOT EXISTS analytics.dim_sop_action (
-    sop_action_key           SMALLINT PRIMARY KEY,
-    action_type              VARCHAR(50) NOT NULL UNIQUE,
-    display_label            VARCHAR(100) NOT NULL,
-    description              TEXT
-);
-
--- =============================================================================
--- ANALYTICS FACTS AND ETL STATE
--- =============================================================================
-
-CREATE TABLE IF NOT EXISTS analytics.fact_weather_hourly (
-    id                       BIGSERIAL PRIMARY KEY,
-    source_group_key         VARCHAR(180) NOT NULL UNIQUE,
-    time_key                 INTEGER NOT NULL REFERENCES analytics.dim_time(time_key),
-    port_key                 BIGINT NOT NULL REFERENCES analytics.dim_port(port_key),
-    zone_key                 BIGINT REFERENCES analytics.dim_zone(zone_key),
-    source_port_id           UUID NOT NULL,
-    source_zone_id           UUID,
-    reading_count            INTEGER NOT NULL DEFAULT 0,
-    avg_wind_speed_ms        NUMERIC(8,2),
-    max_wind_speed_ms        NUMERIC(8,2),
-    max_beaufort             SMALLINT,
-    total_rainfall_mm        NUMERIC(10,2),
-    avg_temperature_c        NUMERIC(6,2),
-    avg_visibility_km        NUMERIC(8,2),
-    min_visibility_km        NUMERIC(8,2),
-    minutes_at_low           SMALLINT NOT NULL DEFAULT 0,
-    minutes_at_medium        SMALLINT NOT NULL DEFAULT 0,
-    minutes_at_high          SMALLINT NOT NULL DEFAULT 0,
-    minutes_at_critical      SMALLINT NOT NULL DEFAULT 0,
-    final_risk_level_key     SMALLINT REFERENCES analytics.dim_risk_level(risk_level_key),
-    is_simulation            BOOLEAN NOT NULL DEFAULT FALSE,
-    etl_batch_id             VARCHAR(120),
-    etl_loaded_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS analytics.fact_risk_assessment (
-    id                       BIGSERIAL PRIMARY KEY,
-    source_assessment_id     UUID NOT NULL UNIQUE,
-    time_key                 INTEGER NOT NULL REFERENCES analytics.dim_time(time_key),
-    port_key                 BIGINT NOT NULL REFERENCES analytics.dim_port(port_key),
-    zone_key                 BIGINT REFERENCES analytics.dim_zone(zone_key),
-    risk_level_key           SMALLINT NOT NULL REFERENCES analytics.dim_risk_level(risk_level_key),
-    previous_risk_level_key  SMALLINT REFERENCES analytics.dim_risk_level(risk_level_key),
-    dominant_factor          VARCHAR(20) NOT NULL,
-    level_changed            BOOLEAN NOT NULL,
-    evaluated_at             TIMESTAMPTZ NOT NULL,
-    is_simulation            BOOLEAN NOT NULL DEFAULT FALSE,
-    etl_batch_id             VARCHAR(120),
-    etl_loaded_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS analytics.fact_sop_execution (
-    id                       BIGSERIAL PRIMARY KEY,
-    source_execution_id      UUID NOT NULL UNIQUE,
-    time_key                 INTEGER NOT NULL REFERENCES analytics.dim_time(time_key),
-    port_key                 BIGINT NOT NULL REFERENCES analytics.dim_port(port_key),
-    zone_key                 BIGINT REFERENCES analytics.dim_zone(zone_key),
-    sop_action_key           SMALLINT NOT NULL REFERENCES analytics.dim_sop_action(sop_action_key),
-    risk_level_key           SMALLINT NOT NULL REFERENCES analytics.dim_risk_level(risk_level_key),
-    status                   VARCHAR(20) NOT NULL,
-    duration_ms              BIGINT CHECK (duration_ms IS NULL OR duration_ms >= 0),
-    is_simulation            BOOLEAN NOT NULL DEFAULT FALSE,
-    executed_at              TIMESTAMPTZ NOT NULL,
-    etl_batch_id             VARCHAR(120),
-    etl_loaded_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS analytics.fact_alert (
-    id                       BIGSERIAL PRIMARY KEY,
-    source_alert_id          UUID NOT NULL UNIQUE,
-    time_key                 INTEGER NOT NULL REFERENCES analytics.dim_time(time_key),
-    port_key                 BIGINT NOT NULL REFERENCES analytics.dim_port(port_key),
-    zone_key                 BIGINT REFERENCES analytics.dim_zone(zone_key),
-    severity_key             SMALLINT NOT NULL REFERENCES analytics.dim_risk_level(risk_level_key),
-    alert_type               VARCHAR(40) NOT NULL,
-    recipient_count          INTEGER NOT NULL DEFAULT 0,
-    read_count               INTEGER NOT NULL DEFAULT 0,
-    acknowledged_count       INTEGER NOT NULL DEFAULT 0,
-    avg_read_seconds         NUMERIC(12,2),
-    created_at               TIMESTAMPTZ NOT NULL,
-    is_simulation            BOOLEAN NOT NULL DEFAULT FALSE,
-    etl_batch_id             VARCHAR(120),
-    etl_loaded_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS analytics.fact_operation_event (
-    id                       BIGSERIAL PRIMARY KEY,
-    source_event_id          UUID NOT NULL UNIQUE,
-    time_key                 INTEGER NOT NULL REFERENCES analytics.dim_time(time_key),
-    port_key                 BIGINT REFERENCES analytics.dim_port(port_key),
-    zone_key                 BIGINT REFERENCES analytics.dim_zone(zone_key),
-    event_type               VARCHAR(80) NOT NULL,
-    actor_role               VARCHAR(30),
-    risk_level_before        VARCHAR(20),
-    risk_level_after         VARCHAR(20),
-    mode_before              VARCHAR(20),
-    mode_after               VARCHAR(20),
-    occurred_at              TIMESTAMPTZ NOT NULL,
-    is_simulation            BOOLEAN NOT NULL DEFAULT FALSE,
-    etl_batch_id             VARCHAR(120),
-    etl_loaded_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS analytics.etl_watermarks (
-    flow_name                VARCHAR(120) PRIMARY KEY,
-    last_loaded_at           TIMESTAMPTZ,
-    last_batch_id            VARCHAR(120),
-    last_status              operational.job_status_enum NOT NULL DEFAULT 'PENDING',
-    last_row_count           BIGINT NOT NULL DEFAULT 0 CHECK (last_row_count >= 0),
-    error_detail             TEXT,
-    updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS public.schema_migrations (
     version                  VARCHAR(50) PRIMARY KEY,
     description              TEXT NOT NULL,
@@ -849,16 +676,6 @@ CREATE INDEX IF NOT EXISTS idx_simulation_sessions_port_status
 CREATE INDEX IF NOT EXISTS idx_fetch_jobs_failures
     ON operational.weather_fetch_jobs (port_id, scheduled_at DESC)
     WHERE status = 'FAILED';
-CREATE INDEX IF NOT EXISTS idx_fact_weather_time_port
-    ON analytics.fact_weather_hourly (time_key DESC, port_key, zone_key);
-CREATE INDEX IF NOT EXISTS idx_fact_risk_time_port
-    ON analytics.fact_risk_assessment (time_key DESC, port_key, risk_level_key);
-CREATE INDEX IF NOT EXISTS idx_fact_sop_time_port
-    ON analytics.fact_sop_execution (time_key DESC, port_key, sop_action_key);
-CREATE INDEX IF NOT EXISTS idx_fact_alert_time_port
-    ON analytics.fact_alert (time_key DESC, port_key, severity_key);
-CREATE INDEX IF NOT EXISTS idx_fact_event_time_type
-    ON analytics.fact_operation_event (time_key DESC, event_type);
 
 -- =============================================================================
 -- FUNCTIONS AND TRIGGERS
@@ -906,10 +723,6 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_etl_watermarks_updated_at ON analytics.etl_watermarks;
-CREATE TRIGGER trg_etl_watermarks_updated_at
-    BEFORE UPDATE ON analytics.etl_watermarks
-    FOR EACH ROW EXECUTE FUNCTION operational.set_updated_at();
 
 CREATE OR REPLACE FUNCTION operational.protect_port_code()
 RETURNS TRIGGER
@@ -1099,40 +912,8 @@ JOIN operational.ports p ON p.id = s.port_id
 JOIN operational.users u ON u.id = s.started_by_user_id;
 
 -- =============================================================================
--- SEED: DIMENSIONS AND CONFIGURATION
+-- SEED: OPERATIONAL CONFIGURATION
 -- =============================================================================
-
-INSERT INTO analytics.dim_risk_level (
-    risk_level_key, risk_level, display_label, color_hex,
-    sort_order, beaufort_min, beaufort_max, description
-)
-VALUES
-    (1, 'LOW', 'Low Risk', '#19A66A', 1, 0, 5, 'Normal operations'),
-    (2, 'MEDIUM', 'Medium Risk', '#E9A11B', 2, 6, 7, 'Enhanced monitoring'),
-    (3, 'HIGH', 'High Risk', '#EE7623', 3, 8, 9, 'Restricted operations'),
-    (4, 'CRITICAL', 'Critical Risk', '#D94848', 4, 10, 12, 'Stop operations')
-ON CONFLICT (risk_level_key) DO UPDATE SET
-    display_label = EXCLUDED.display_label,
-    color_hex = EXCLUDED.color_hex,
-    sort_order = EXCLUDED.sort_order,
-    beaufort_min = EXCLUDED.beaufort_min,
-    beaufort_max = EXCLUDED.beaufort_max,
-    description = EXCLUDED.description;
-
-INSERT INTO analytics.dim_sop_action (
-    sop_action_key, action_type, display_label, description
-)
-VALUES
-    (1, 'CREATE_TASK', 'Create Task', 'Generate an operational task'),
-    (2, 'SEND_ALERT', 'Send Alert', 'Notify affected users'),
-    (3, 'RESTRICT_ZONE', 'Restrict Zone', 'Restrict a port zone'),
-    (4, 'UNRESTRICT_ZONE', 'Unrestrict Zone', 'Remove a zone restriction'),
-    (5, 'SET_NORMAL_MODE', 'Set Normal Mode', 'Set port operation mode to NORMAL'),
-    (6, 'SET_LIMITED_MODE', 'Set Limited Mode', 'Set port operation mode to LIMITED'),
-    (7, 'STOP_OPERATIONS', 'Stop Operations', 'Set port operation mode to STOP')
-ON CONFLICT (sop_action_key) DO UPDATE SET
-    display_label = EXCLUDED.display_label,
-    description = EXCLUDED.description;
 
 INSERT INTO operational.risk_thresholds (
     factor, risk_level, comparison_operator, threshold_value,
@@ -1246,52 +1027,14 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO analytics.etl_watermarks (
-    flow_name, last_status, last_row_count
-)
-VALUES
-    ('dimensional-sync', 'PENDING', 0),
-    ('fact-weather-hourly', 'PENDING', 0),
-    ('fact-operational-events', 'PENDING', 0)
-ON CONFLICT (flow_name) DO NOTHING;
 
 INSERT INTO public.schema_migrations (version, description)
 VALUES (
     '2.0.0',
-    'Fresh PORMS operational and analytics schema aligned with SRS and design demo'
+    'Fresh PORMS operational schema aligned with SRS and design demo'
 )
 ON CONFLICT (version) DO NOTHING;
 
--- Populate hourly time dimension for 2025-2028.
-INSERT INTO analytics.dim_time (
-    time_key, full_datetime, date_value, year, quarter, month,
-    month_name, week_of_year, day_of_month, day_of_week,
-    day_name, hour, is_weekend, is_business_hour
-)
-SELECT
-    TO_CHAR(ts AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYYMMDDHH24')::INTEGER,
-    ts,
-    (ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::DATE,
-    EXTRACT(YEAR FROM ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::SMALLINT,
-    EXTRACT(QUARTER FROM ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::SMALLINT,
-    EXTRACT(MONTH FROM ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::SMALLINT,
-    TO_CHAR(ts AT TIME ZONE 'Asia/Ho_Chi_Minh', 'FMMonth'),
-    EXTRACT(WEEK FROM ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::SMALLINT,
-    EXTRACT(DAY FROM ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::SMALLINT,
-    (EXTRACT(ISODOW FROM ts AT TIME ZONE 'Asia/Ho_Chi_Minh'))::SMALLINT,
-    TO_CHAR(ts AT TIME ZONE 'Asia/Ho_Chi_Minh', 'FMDay'),
-    EXTRACT(HOUR FROM ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::SMALLINT,
-    EXTRACT(ISODOW FROM ts AT TIME ZONE 'Asia/Ho_Chi_Minh') IN (6, 7),
-    (
-        EXTRACT(ISODOW FROM ts AT TIME ZONE 'Asia/Ho_Chi_Minh') BETWEEN 1 AND 5
-        AND EXTRACT(HOUR FROM ts AT TIME ZONE 'Asia/Ho_Chi_Minh') BETWEEN 8 AND 17
-    )
-FROM generate_series(
-    '2025-01-01 00:00:00+07'::TIMESTAMPTZ,
-    '2028-12-31 23:00:00+07'::TIMESTAMPTZ,
-    INTERVAL '1 hour'
-) AS ts
-ON CONFLICT (time_key) DO NOTHING;
 
 -- =============================================================================
 -- END OF PORMS SCHEMA 2.0.0
