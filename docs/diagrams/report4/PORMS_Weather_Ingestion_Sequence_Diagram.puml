@@ -1,0 +1,78 @@
+@startuml
+title Weather Ingestion Sequence Diagram
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam sequence {
+  ArrowColor #1F2937
+  LifeLineBorderColor #6B7280
+  LifeLineBackgroundColor white
+  ParticipantBorderColor #374151
+  ParticipantBackgroundColor white
+  ParticipantFontColor #111827
+  ActorBorderColor #111827
+  ActorBackgroundColor white
+  DatabaseBorderColor #374151
+  DatabaseBackgroundColor white
+  GroupBorderColor #6B7280
+  GroupBackgroundColor white
+}
+skinparam sequenceParticipant underline false
+skinparam responseMessageBelowArrow true
+actor "Users\n(Admin / Port Manager / Operator)" as Users
+participant "WeatherUpdateWorker /\nPrefect Worker" as Worker
+participant "OpenWeather\nAPI" as OpenWeather
+database "Database" as Database
+participant "RiskEngine" as RiskEngine
+participant "OperationEventService" as EventService
+
+Users -> Worker : 1. Trigger weather collection\n(scheduled flow or manual refresh)
+activate Worker
+Worker -> Database : 2. Load active ports\n(code, latitude, longitude)
+Database --> Worker : 3. Return active port list
+
+loop For each active port
+  Worker -> OpenWeather : 4. GET current weather\n(lat, lon, units=metric)
+  activate OpenWeather
+  OpenWeather --> Worker : 5. Return JSON weather payload
+  deactivate OpenWeather
+
+  Worker -> Worker : 6. Normalize payload\nwind, rain, visibility, temperature\nconvert wind speed to Beaufort
+  Worker -> Database : 7. Save weather_reading\nsource = OPENWEATHER_API
+  Database --> Worker : 8. Return reading_id\nor duplicate / no change
+
+  alt New reading inserted
+    Worker -> RiskEngine : 9. Trigger risk evaluation\n(portId, weatherReadingId)
+    activate RiskEngine
+    RiskEngine -> Database : 10. Load risk thresholds
+    Database --> RiskEngine : 11. Return active thresholds
+    RiskEngine -> RiskEngine : 12. Evaluate wind, rain\nand visibility factors
+    RiskEngine -> Database : 13. Save risk assessment
+    opt Risk is HIGH or CRITICAL
+      RiskEngine -> Database : 14. Create alert / task\napply active SOP
+    end
+    RiskEngine --> Worker : 15. Return evaluation result
+    deactivate RiskEngine
+  else Duplicate reading
+    Worker -> Worker : Skip risk evaluation\n(idempotent ingestion)
+  end
+
+  Worker -> EventService : 16. Log operation event\nWEATHER_FETCHED
+  activate EventService
+  EventService -> Database : 17. Save event status\nand flow_run_id
+  Database --> EventService : 18. Event recorded
+  deactivate EventService
+end
+
+alt OpenWeather timeout or HTTP error
+  Worker -> OpenWeather : 19. Retry request with backoff\n(up to 3 attempts)
+  OpenWeather --> Worker : 20. Return payload or error
+  Worker -> EventService : 21. Log PARTIAL_FAILURE\n(port-level error)
+end
+
+Worker --> Users : 22. Return flow summary\n(updated / skipped / failed)
+deactivate Worker
+
+@enduml
