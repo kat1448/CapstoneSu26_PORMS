@@ -65,7 +65,34 @@ public static class ForecastConfidenceCalculator
             AvgRainMae = Average(realMatchedRows.Select(item => item.RainAbsError)),
             AvgVisibilityMae = Average(realMatchedRows.Select(item => item.VisibilityAbsError)),
             AvgRiskScoreError = Average(realMatchedRows.Select(item =>
-                item.RiskScoreError.HasValue ? (decimal?)item.RiskScoreError.Value : null))
+                item.RiskScoreError.HasValue ? (decimal?)item.RiskScoreError.Value : null)),
+            HorizonConfidence = Enumerable.Range(1, 5)
+                .Select(horizonDay => HorizonConfidence(realMatchedRows, horizonDay))
+                .ToList()
+        };
+    }
+
+    private static ForecastHorizonConfidenceResponse HorizonConfidence(
+        IReadOnlyList<ForecastEvaluationRowReadModel> realMatchedRows,
+        int horizonDay)
+    {
+        var rows = realMatchedRows
+            .Where(item => item.SnapshotNumber == horizonDay)
+            .ToList();
+        var matchedRiskCount = rows.Count(item => item.RiskScoreError == 0);
+        var confidencePct = rows.Count == 0
+            ? (decimal?)null
+            : Math.Round(matchedRiskCount * 100m / rows.Count, 1);
+
+        return new ForecastHorizonConfidenceResponse
+        {
+            HorizonDay = horizonDay,
+            SampleCount = rows.Count,
+            ConfidencePct = confidencePct,
+            ConfidenceLevel = ConfidenceLevel(confidencePct, rows.Count),
+            AvgWindMae = Average(rows.Select(item => item.WindAbsError)),
+            AvgRainMae = Average(rows.Select(item => item.RainAbsError)),
+            AvgVisibilityMae = Average(rows.Select(item => item.VisibilityAbsError))
         };
     }
 

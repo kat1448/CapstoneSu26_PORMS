@@ -28,6 +28,9 @@ public sealed class ForecastConfidenceCalculatorTests
         Assert.Equal(3, summary.ConsecutiveMismatchCount);
         Assert.Equal(3, summary.DangerousUnderestimateCount);
         Assert.True(summary.InterventionRequired);
+        Assert.Equal(40m, summary.HorizonConfidence.Single(item => item.HorizonDay == 1).ConfidencePct);
+        Assert.Equal(5, summary.HorizonConfidence.Single(item => item.HorizonDay == 1).SampleCount);
+        Assert.Null(summary.HorizonConfidence.Single(item => item.HorizonDay == 2).ConfidencePct);
     }
 
     [Fact]

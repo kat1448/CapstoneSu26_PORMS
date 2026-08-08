@@ -23,6 +23,10 @@ export function getForecastEvaluation(filters: ForecastEvaluationFilters): Promi
   return requestJson<ForecastEvaluationResponse>(`/api/forecast-evaluation${buildQuery(filters)}`);
 }
 
+export function getForecastInterventionDemo(): Promise<ForecastEvaluationResponse> {
+  return requestJson<ForecastEvaluationResponse>("/api/forecast-evaluation/demo");
+}
+
 export async function exportForecastEvaluation(filters: ForecastEvaluationFilters): Promise<void> {
   const session = getStoredSession();
   const response = await fetch(`${API_BASE_URL}/api/forecast-evaluation/export${buildQuery(filters)}`, {

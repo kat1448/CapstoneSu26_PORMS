@@ -40,6 +40,19 @@ public sealed class ForecastEvaluationController : ControllerBase
         return File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray(), "text/csv; charset=utf-8", fileName);
     }
 
+    [HttpGet("demo")]
+    public ActionResult<ForecastEvaluationResponse> GetInterventionDemo()
+    {
+        var response = ToResponse(BuildInterventionDemoRows());
+        return Ok(new ForecastEvaluationResponse
+        {
+            Summary = response.Summary,
+            Rows = response.Rows,
+            IsDemonstration = true,
+            DataNotice = "DỮ LIỆU MÔ PHỎNG - chỉ dùng để trình diễn quy trình kiểm chứng và can thiệp; không lưu database, không tính vào độ tin cậy thực tế."
+        });
+    }
+
     private static ForecastEvaluationResponse ToResponse(IReadOnlyList<ForecastEvaluationRowReadModel> rows)
     {
         var summary = ForecastConfidenceCalculator.Calculate(rows);
@@ -47,6 +60,7 @@ public sealed class ForecastEvaluationController : ControllerBase
         return new ForecastEvaluationResponse
         {
             Summary = summary,
+            IsDemonstration = false,
             Rows = rows.Select(item => new ForecastEvaluationRowResponse
             {
                 DatasetName = item.DatasetName,
@@ -72,6 +86,64 @@ public sealed class ForecastEvaluationController : ControllerBase
             }).ToList()
         };
     }
+
+    private static IReadOnlyList<ForecastEvaluationRowReadModel> BuildInterventionDemoRows()
+    {
+        var today = DateTimeOffset.UtcNow.Date;
+        return new[]
+        {
+            DemoRow(1, today.AddDays(-5), 6, 6.5m, 0, 0, 10, 10, "LOW", "LOW"),
+            DemoRow(2, today.AddDays(-4), 10, 10.5m, 8, 9, 7, 6.5m, "MEDIUM", "MEDIUM"),
+            DemoRow(3, today.AddDays(-3), 7, 18, 1, 35, 10, 3, "LOW", "HIGH"),
+            DemoRow(4, today.AddDays(-2), 11, 20, 8, 42, 7, 2.5m, "MEDIUM", "HIGH"),
+            DemoRow(5, today.AddDays(-1), 16, 27, 18, 75, 5, 1, "HIGH", "CRITICAL")
+        };
+    }
+
+    private static ForecastEvaluationRowReadModel DemoRow(
+        int snapshot,
+        DateTimeOffset plannedAt,
+        decimal forecastWind,
+        decimal actualWind,
+        decimal forecastRain,
+        decimal actualRain,
+        decimal forecastVisibility,
+        decimal actualVisibility,
+        string forecastRisk,
+        string actualRisk)
+    {
+        var riskError = Math.Abs(RiskScore(actualRisk) - RiskScore(forecastRisk));
+        return new ForecastEvaluationRowReadModel(
+            "Kịch bản kiểm chứng sai liên tiếp",
+            "DNTSA-DEMO",
+            "Cảng Tiên Sa (mô phỏng)",
+            snapshot,
+            plannedAt,
+            plannedAt.AddMinutes(10),
+            forecastWind,
+            actualWind,
+            Math.Abs(actualWind - forecastWind),
+            forecastRain,
+            actualRain,
+            Math.Abs(actualRain - forecastRain),
+            forecastVisibility,
+            actualVisibility,
+            Math.Abs(actualVisibility - forecastVisibility),
+            forecastRisk,
+            actualRisk,
+            riskError,
+            "FORECAST_VERIFICATION_DEMO",
+            "MATCHED");
+    }
+
+    private static int RiskScore(string riskLevel) => riskLevel switch
+    {
+        "LOW" => 1,
+        "MEDIUM" => 2,
+        "HIGH" => 3,
+        "CRITICAL" => 4,
+        _ => 0
+    };
 
     private static string BuildCsv(IReadOnlyList<ForecastEvaluationRowReadModel> rows)
     {

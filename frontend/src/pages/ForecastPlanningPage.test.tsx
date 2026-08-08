@@ -76,6 +76,13 @@ beforeEach(() => {
       eligiblePastPoints: 10,
       interventionMessage: "Dự báo đang khớp tốt với mức rủi ro thực tế; tiếp tục theo dõi định kỳ.",
       interventionRequired: false,
+      horizonConfidence: [
+        { avgRainMae: 2.5, avgVisibilityMae: 0.8, avgWindMae: 1.4, confidenceLevel: "HIGH", confidencePct: 90, horizonDay: 1, sampleCount: 10 },
+        { avgRainMae: 3.2, avgVisibilityMae: 1.1, avgWindMae: 1.8, confidenceLevel: "MEDIUM", confidencePct: 75, horizonDay: 2, sampleCount: 8 },
+        { avgRainMae: 4.1, avgVisibilityMae: 1.4, avgWindMae: 2.2, confidenceLevel: "LOW", confidencePct: 60, horizonDay: 3, sampleCount: 7 },
+        { avgRainMae: null, avgVisibilityMae: null, avgWindMae: null, confidenceLevel: "INSUFFICIENT", confidencePct: null, horizonDay: 4, sampleCount: 0 },
+        { avgRainMae: null, avgVisibilityMae: null, avgWindMae: null, confidenceLevel: "INSUFFICIENT", confidencePct: null, horizonDay: 5, sampleCount: 0 }
+      ],
       matchRatePct: 100,
       matchedActualPoints: 10,
       recommendedActions: ["Tiếp tục đối chiếu hằng ngày."],
@@ -231,6 +238,9 @@ describe("ForecastPlanningPage", () => {
     await user.click(await screen.findByRole("button", { name: "Cập nhật kế hoạch" }));
 
     expect(await screen.findByLabelText("Timeline dự báo vận hành 5 ngày")).toBeInTheDocument();
+    expect(screen.getByText("Độ tin cậy D+1")).toBeInTheDocument();
+    expect(screen.getAllByText("90.0%").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Biên sai số: gió ±1.4 m\/s/)).toBeInTheDocument();
     expect(screen.getByLabelText("Biểu đồ rủi ro dự báo 5 ngày")).toBeInTheDocument();
     expect(await screen.findByLabelText("Phân tích mức rủi ro dự báo 5 ngày")).toBeInTheDocument();
     expect(screen.getByLabelText("Biểu đồ điểm rủi ro 5 ngày")).toBeInTheDocument();
