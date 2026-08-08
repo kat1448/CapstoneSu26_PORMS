@@ -1,18 +1,22 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "../components/common/Badge";
+import type { DemoUser } from "../App";
 import {
+  confirmRiskThresholdImport,
   deleteZoneThresholdOverride,
   getRiskConfig,
   getRiskThresholdTemplate,
+  previewRiskThresholdImport,
   saveRiskThresholds,
   saveZoneThresholdOverrides,
   type RiskConfigResponse,
   type RiskLevel,
   type RiskThreshold,
+  type RiskThresholdImportPreview,
   type ThresholdOperator,
   type WeatherFactor
 } from "../services/riskConfigService";
-import type { CSSProperties } from "react";
+import type { ChangeEvent, CSSProperties, FormEvent } from "react";
 
 const riskLevels = [
   { color: "var(--green)", label: "LOW", note: "Vận hành bình thường", range: "0 - 24" },
@@ -85,7 +89,11 @@ function previewRisk(beaufort: number, rain: number, visibility: number, thresho
   return result;
 }
 
-export function RiskConfigPage() {
+type RiskConfigPageProps = {
+  currentUser: DemoUser;
+};
+
+export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
   const [config, setConfig] = useState<RiskConfigResponse | null>(null);
   const [thresholds, setThresholds] = useState<RiskThreshold[]>([]);
   const [overrideForm, setOverrideForm] = useState<OverrideForm>(emptyOverride);
@@ -96,6 +104,13 @@ export function RiskConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<RiskThresholdImportPreview | null>(null);
+  const [previewingImport, setPreviewingImport] = useState(false);
+  const [importReason, setImportReason] = useState("");
+  const [confirmingImport, setConfirmingImport] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -145,31 +160,145 @@ export function RiskConfigPage() {
   }
 
   async function handleDownloadTemplate() {
-  try {
     setIsDownloading(true);
+    setError(null);
 
-    const file = await getRiskThresholdTemplate();
-    const downloadUrl = URL.createObjectURL(file);
+    try {
+      const file = await getRiskThresholdTemplate();
+      const downloadUrl = URL.createObjectURL(file);
+      const link = document.createElement("a");
 
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = "PORMS_RiskThresholds_Template.xlsx";
+      // Tạo liên kết tạm để trình duyệt tải file Excel xuống.
+      link.href = downloadUrl;
+      link.download = "PORMS_RiskThresholds_Template.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
 
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    URL.revokeObjectURL(downloadUrl);
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Không thể tải template.";
-
-    setError(message);
+      URL.revokeObjectURL(downloadUrl);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Không thể tải template ngưỡng rủi ro."
+      );
     } finally {
-    setIsDownloading(false);
+      setIsDownloading(false);
     }
+  }
+
+  function handleImportFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFile = event.target.files?.[0] ?? null;
+
+    setImportPreview(null);
+    setError(null);
+    setSuccess(null);
+
+    if (!selectedFile) {
+      setImportFile(null);
+      return;
+    }
+
+    // Đồng bộ định dạng và giới hạn dung lượng với Excel parser ở backend.
+    if (!selectedFile.name.toLowerCase().endsWith(".xlsx")) {
+      setImportFile(null);
+      event.target.value = "";
+      setError("Chỉ chấp nhận file Excel có định dạng .xlsx.");
+      return;
+    }
+
+    if (selectedFile.size > 1024 * 1024) {
+      setImportFile(null);
+      event.target.value = "";
+      setError("File Excel không được lớn hơn 1 MB.");
+      return;
+    }
+
+    setImportFile(selectedFile);
+  }
+
+  async function handlePreviewImport() {
+    if (!importFile) {
+      setError("Vui lòng chọn file Excel trước khi kiểm tra.");
+      return;
+    }
+
+    setPreviewingImport(true);
+    setImportPreview(null);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const previewResult = await previewRiskThresholdImport(importFile);
+      setImportPreview(previewResult);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Không thể kiểm tra file ngưỡng rủi ro."
+      );
+    } finally {
+      setPreviewingImport(false);
+    }
+  }
+
+  async function handleConfirmImport() {
+    const reason = importReason.trim();
+
+    if (!importFile || !importPreview?.canImport) {
+      setError("File phải được kiểm tra và hợp lệ trước khi nhập.");
+      return;
+    }
+
+    if (reason.length < 5 || reason.length > 500) {
+      setError("Lý do thay đổi phải có từ 5 đến 500 ký tự.");
+      return;
+    }
+
+    setConfirmingImport(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      // Backend kiểm tra lại file và database trong cùng transaction.
+      const result = await confirmRiskThresholdImport(importFile, reason);
+
+      if (!result.succeeded) {
+        setImportPreview(result.preview);
+        setError("File không còn hợp lệ. Vui lòng kiểm tra lại các lỗi.");
+        return;
+      }
+
+      // Response chứa cấu hình mới nhất nên không cần gọi GET lần nữa.
+      setConfig(result.response.configuration);
+      setThresholds(cloneThresholds(result.response.configuration));
+      setSuccess(
+        `Nhập ngưỡng thành công: ${result.response.createdCount} tạo mới, `
+        + `${result.response.updatedCount} cập nhật, `
+        + `${result.response.unchangedCount} không thay đổi.`
+      );
+
+      setShowImportPanel(false);
+      setImportFile(null);
+      setImportPreview(null);
+      setImportReason("");
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Không thể nhập ngưỡng rủi ro."
+      );
+    } finally {
+      setConfirmingImport(false);
+    }
+  }
+
+  function closeImportPanel() {
+    setShowImportPanel(false);
+    setImportFile(null);
+    setImportPreview(null);
+    setImportReason("");
+    setError(null);
   }
 
   async function handleSaveOverride(event: FormEvent<HTMLFormElement>) {
@@ -227,35 +356,203 @@ export function RiskConfigPage() {
           <p>Thiết lập ngưỡng thời tiết để phân loại rủi ro vận hành cảng</p>
         </div>
         <div className="head-actions">
-  <button
-    className="button button-secondary"
-    onClick={() => setThresholds(cloneThresholds(config))}
-    type="button"
-  >
-    Khôi phục
-  </button>
+          <button
+            className="button button-secondary"
+            onClick={() => setThresholds(cloneThresholds(config))}
+            type="button"
+          >
+            Khôi phục
+          </button>
 
-  <button
-    className="button button-secondary"
-    type="button"
-    disabled={isDownloading}
-    onClick={handleDownloadTemplate}
-  >
-    {isDownloading ? "Đang tải..." : "Tải template Excel"}
-  </button>
+          {currentUser.role === "ADMIN" ? (
+            <>
+              <button
+                className="button button-secondary"
+                disabled={isDownloading}
+                onClick={handleDownloadTemplate}
+                type="button"
+              >
+                {isDownloading ? "Đang tải..." : "Tải template Excel"}
+              </button>
 
-  <button
-    className="button button-primary"
-    disabled={saving}
-    onClick={handleSaveThresholds}
-    type="button"
-  >
-    Lưu cấu hình
-  </button>
-</div>
+              <button
+                className="button button-primary"
+                onClick={() => {
+                  setShowImportPanel(true);
+                  setImportFile(null);
+                  setImportPreview(null);
+                  setImportReason("");
+                  setError(null);
+                  setSuccess(null);
+                }}
+                type="button"
+              >
+                Nhập Excel
+              </button>
+            </>
+          ) : null}
+
+          <button
+            className="button button-primary"
+            disabled={saving}
+            onClick={handleSaveThresholds}
+            type="button"
+          >
+            Lưu cấu hình
+          </button>
+        </div>
       </div>
 
       {error ? <div className="form-error" role="alert">{error}</div> : null}
+
+      {success ? (
+        <div className="form-success" role="status">
+          {success}
+        </div>
+      ) : null}
+
+      {currentUser.role === "ADMIN" && showImportPanel ? (
+        <article className="card card-pad sop-rule-form">
+          <div className="card-head">
+            <div>
+              <h3>Nhập ngưỡng rủi ro từ Excel</h3>
+              <p>Kiểm tra toàn bộ file trước khi xác nhận ghi dữ liệu.</p>
+            </div>
+            <button
+              className="button button-secondary button-small"
+              onClick={closeImportPanel}
+              type="button"
+            >
+              Đóng
+            </button>
+          </div>
+
+          <label>
+            <span>File Excel ngưỡng rủi ro (.xlsx, tối đa 1 MB)</span>
+            <input
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              aria-label="File Excel ngưỡng rủi ro"
+              onChange={handleImportFileChange}
+              type="file"
+            />
+          </label>
+
+          {importFile ? <p>Đã chọn: <strong>{importFile.name}</strong></p> : null}
+
+          <div className="form-actions">
+            <button
+              className="button button-primary"
+              disabled={!importFile || previewingImport || confirmingImport}
+              onClick={handlePreviewImport}
+              type="button"
+            >
+              {previewingImport ? "Đang kiểm tra..." : "Kiểm tra file"}
+            </button>
+          </div>
+
+          {importPreview ? (
+            <>
+              <div className={`risk-preview-result ${importPreview.canImport ? "tone-success" : "tone-warning"}`}>
+                <strong>
+                  {importPreview.canImport
+                    ? "File hợp lệ và có thể nhập."
+                    : "File còn lỗi và chưa thể nhập."}
+                </strong>
+              </div>
+
+              <div className="stats-grid">
+                {[
+                  ["Tổng dòng", importPreview.totalRows],
+                  ["Tạo mới", importPreview.createCount],
+                  ["Cập nhật", importPreview.updateCount],
+                  ["Không đổi", importPreview.unchangedCount],
+                  ["Không hợp lệ", importPreview.invalidRows]
+                ].map(([label, value]) => (
+                  <article className="card card-pad stat-card" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </article>
+                ))}
+              </div>
+
+              {importPreview.errors.length > 0 ? (
+                <div className="form-error" role="alert">
+                  {importPreview.errors.map((item, index) => (
+                    <div key={`${item.rowNumber}-${item.column}-${index}`}>
+                      Dòng {item.rowNumber}, cột {item.column}: {item.message}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="table-card">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Dòng</th>
+                      <th>Yếu tố</th>
+                      <th>Mức rủi ro</th>
+                      <th>Ngưỡng</th>
+                      <th>Hành động</th>
+                      <th>Kết quả</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.rows.map((row) => (
+                      <tr key={row.rowNumber}>
+                        <td>{row.rowNumber}</td>
+                        <td>{row.factor ?? "-"}</td>
+                        <td>{row.riskLevel ?? "-"}</td>
+                        <td>
+                          {row.comparisonOperator ?? "-"} {row.thresholdValue ?? "-"} {row.unit ?? ""}
+                        </td>
+                        <td>{row.action}</td>
+                        <td>{row.errors.map((item) => item.message).join("; ") || "Hợp lệ"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {importPreview.canImport ? (
+                <>
+                  <div className="config-form-grid">
+                    <label className="wide-field">
+                      <span>Lý do thay đổi</span>
+                      <textarea
+                        aria-label="Lý do thay đổi khi nhập ngưỡng"
+                        maxLength={500}
+                        onChange={(event) => setImportReason(event.target.value)}
+                        placeholder="Ví dụ: Cập nhật ngưỡng thời tiết theo bộ tài liệu đã phê duyệt"
+                        rows={3}
+                        value={importReason}
+                      />
+                      <small>
+                        {importReason.trim().length}/500 ký tự, tối thiểu 5 ký tự
+                      </small>
+                    </label>
+                  </div>
+
+                  <div className="form-actions">
+                    <button
+                      className="button button-primary"
+                      disabled={
+                        confirmingImport
+                        || importReason.trim().length < 5
+                        || importReason.trim().length > 500
+                      }
+                      onClick={handleConfirmImport}
+                      type="button"
+                    >
+                      {confirmingImport ? "Đang nhập..." : "Xác nhận nhập dữ liệu"}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : null}
+        </article>
+      ) : null}
 
       <div className="stats-grid risk-level-grid">
         {riskLevels.map((level) => (

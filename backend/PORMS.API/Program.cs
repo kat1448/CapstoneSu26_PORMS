@@ -71,8 +71,15 @@ builder.Services.AddScoped<LiveRiskAssessmentRepository>();
 builder.Services.AddSingleton<RiskThresholdValidator>();
 builder.Services.AddSingleton<RiskThresholdExcelService>();
 builder.Services.AddSingleton<RiskThresholdEvaluator>();
+
 builder.Services.AddScoped<RiskThresholdImportService>();
+
+// Các thành phần phục vụ import SOP từ Excel
+builder.Services.AddSingleton<SopRuleImportValidator>();
+builder.Services.AddSingleton<SopRuleExcelService>();
 builder.Services.AddScoped<SopRuleRepository>();
+builder.Services.AddScoped<SopRuleImportService>();
+
 builder.Services.AddScoped<TaskRepository>();
 builder.Services.AddScoped<ReportRepository>();
 builder.Services.AddScoped<AuthService>();

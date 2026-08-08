@@ -3,10 +3,8 @@ using PORMS.Infrastructure.Repositories;
 
 namespace PORMS.API.Services;
 
-/// <summary>
-/// Đánh giá độ tin cậy thực nghiệm từ forecast đã được đối chiếu với dữ liệu thật.
-/// Dữ liệu mô phỏng/backfill không được dùng để tính độ tin cậy.
-/// </summary>
+/// Đánh giá độ tin cậy thực nghiệm từ forecast đã được đối chiếu với dữ liệu thật
+/// Dữ liệu mô phỏng/backfill không được dùng để tính độ tin cậy
 public static class ForecastConfidenceCalculator
 {
     private const int MinimumReliableSampleSize = 3;
