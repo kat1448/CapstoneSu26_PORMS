@@ -57,8 +57,11 @@ public sealed class SaveSopRuleRequest
     public string? PreviousRiskLevel { get; init; }
     public string? AppliesToZoneType { get; init; }
     public required string ActionType { get; init; }
-    public required string ActionConfigText { get; init; }
-    public short ExecutionOrder { get; init; } = 100;
+    // Bỏ trống để backend sinh cấu hình phù hợp với ActionType.
+    public string? ActionConfigText { get; init; }
+
+    // Bỏ trống để backend áp dụng thứ tự thực thi mặc định.
+    public short? ExecutionOrder { get; init; }
     public bool IsActive { get; init; } = true;
     public string? ChangeReason { get; init; }
 }

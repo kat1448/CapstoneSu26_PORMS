@@ -40,6 +40,7 @@ public sealed class ForecastEvaluationController : ControllerBase
         return File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray(), "text/csv; charset=utf-8", fileName);
     }
 
+    // Tạo dữ liệu trình diễn trong bộ nhớ; không ghi vào database
     [HttpGet("demo")]
     public ActionResult<ForecastEvaluationResponse> GetInterventionDemo()
     {
@@ -89,7 +90,10 @@ public sealed class ForecastEvaluationController : ControllerBase
 
     private static IReadOnlyList<ForecastEvaluationRowReadModel> BuildInterventionDemoRows()
     {
-        var today = DateTimeOffset.UtcNow.Date;
+        // Giữ thời điểm mô phỏng ở UTC để kết quả nhất quán giữa Windows và Docker.
+        var today = new DateTimeOffset(
+            DateTime.UtcNow.Date,
+            TimeSpan.Zero);
         return new[]
         {
             DemoRow(1, today.AddDays(-5), 6, 6.5m, 0, 0, 10, 10, "LOW", "LOW"),

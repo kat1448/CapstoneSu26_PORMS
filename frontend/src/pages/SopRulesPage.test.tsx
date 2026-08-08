@@ -2,15 +2,38 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SopRulesPage } from "./SopRulesPage";
-import { createSopRule, deleteSopRule, getSopRules } from "../services/sopRulesService";
-import type { SopRule, SopRulesResponse } from "../services/sopRulesService";
+import {
+  confirmSopRuleImport,
+  createSopRule,
+  deleteSopRule,
+  getSopRules,
+  previewSopRuleImport,
+  updateSopRule
+} from "../services/sopRulesService";
+import type {
+  SopRule,
+  SopRuleImportPreview,
+  SopRulesResponse
+} from "../services/sopRulesService";
+import type { DemoUser } from "../App";
 
 vi.mock("../services/sopRulesService", () => ({
+  confirmSopRuleImport: vi.fn(),
+  previewSopRuleImport: vi.fn(),
+  getSopRuleImportTemplate: vi.fn(),
   createSopRule: vi.fn(),
   deleteSopRule: vi.fn(),
   getSopRules: vi.fn(),
   updateSopRule: vi.fn()
 }));
+
+const adminUser: DemoUser = {
+  email: "admin@porms.vn",
+  initials: "AD",
+  name: "Admin",
+  portName: "Toàn hệ thống",
+  role: "ADMIN"
+};
 
 function rule(overrides: Partial<SopRule>): SopRule {
   return {
@@ -44,6 +67,19 @@ const response: SopRulesResponse = {
   summary: { activeRules: 4, automatedTasks: 3, recentExecutions: 10, totalRules: 4 }
 };
 
+const validImportPreview: SopRuleImportPreview = {
+  canImport: true,
+  createCount: 1,
+  errors: [],
+  fileName: "sop-rules.xlsx",
+  invalidRows: 0,
+  rows: [],
+  totalRows: 1,
+  unchangedCount: 0,
+  updateCount: 0,
+  validRows: 1
+};
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -54,7 +90,7 @@ describe("SopRulesPage", () => {
     const user = userEvent.setup();
     vi.mocked(getSopRules).mockResolvedValue(response);
 
-    render(<SopRulesPage />);
+    render(<SopRulesPage currentUser={adminUser} />);
 
     const riskGrid = await screen.findByLabelText("Nhóm quy tắc SOP theo mức rủi ro");
     for (const risk of ["LOW", "MEDIUM", "HIGH", "CRITICAL"]) {
@@ -82,7 +118,7 @@ describe("SopRulesPage", () => {
     const user = userEvent.setup();
     vi.mocked(getSopRules).mockResolvedValue(response);
 
-    render(<SopRulesPage />);
+    render(<SopRulesPage currentUser={adminUser} />);
 
     await screen.findByLabelText("Nhóm quy tắc SOP theo mức rủi ro");
     expect(screen.getByText("Tổng quy tắc")).toBeInTheDocument();
@@ -98,7 +134,7 @@ describe("SopRulesPage", () => {
     vi.mocked(deleteSopRule).mockResolvedValue(undefined);
     vi.spyOn(window, "confirm").mockReturnValueOnce(true);
 
-    render(<SopRulesPage />);
+    render(<SopRulesPage currentUser={adminUser} />);
 
     const riskGrid = await screen.findByLabelText("Nhóm quy tắc SOP theo mức rủi ro");
     await user.click(screen.getByRole("button", { name: "Thêm quy tắc" }));
@@ -113,5 +149,99 @@ describe("SopRulesPage", () => {
     await user.click(screen.getByRole("button", { name: "Xóa" }));
 
     expect(deleteSopRule).toHaveBeenCalledWith("rule-high");
+  });
+
+  it("preserves hidden technical values during an ordinary edit", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getSopRules).mockResolvedValue(response);
+    vi.mocked(updateSopRule).mockResolvedValue(response.rules[2]);
+
+    render(<SopRulesPage currentUser={adminUser} />);
+
+    const riskGrid = await screen.findByLabelText(
+      "Nhóm quy tắc SOP theo mức rủi ro"
+    );
+    const highCard = within(riskGrid)
+      .getByRole("heading", { name: "HIGH" })
+      .closest("article");
+
+    await user.click(
+      within(highCard as HTMLElement)
+        .getByRole("button", { name: "Chi tiết" })
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Chỉnh sửa" })
+    );
+
+    const description = screen.getByLabelText("Mô tả");
+    await user.clear(description);
+    await user.type(description, "Mô tả đã cập nhật");
+    await user.click(
+      screen.getByRole("button", { name: "Lưu thay đổi" })
+    );
+
+    await waitFor(() => {
+      expect(updateSopRule).toHaveBeenCalledWith(
+        "rule-high",
+        expect.objectContaining({
+          actionConfigText: "{\"task\":\"inspect\"}",
+          executionOrder: 2
+        })
+      );
+    });
+  });
+
+  it("previews and confirms a valid SOP Excel import", async () => {
+    const user = userEvent.setup();
+    const importedConfiguration: SopRulesResponse = {
+      ...response,
+      summary: { ...response.summary, totalRules: 5 }
+    };
+
+    vi.mocked(getSopRules).mockResolvedValue(response);
+    vi.mocked(previewSopRuleImport).mockResolvedValue(validImportPreview);
+    vi.mocked(confirmSopRuleImport).mockResolvedValue({
+      succeeded: true,
+      response: {
+        configuration: importedConfiguration,
+        createdCount: 1,
+        fileName: "sop-rules.xlsx",
+        importBatchId: "batch-1",
+        unchangedCount: 0,
+        updatedCount: 0
+      }
+    });
+
+    render(<SopRulesPage currentUser={adminUser} />);
+
+    await screen.findByLabelText("Nhóm quy tắc SOP theo mức rủi ro");
+    await user.click(screen.getByRole("button", { name: "Nhập Excel" }));
+
+    const file = new File(["excel-content"], "sop-rules.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+
+    await user.upload(screen.getByLabelText("File Excel SOP"), file);
+    await user.click(screen.getByRole("button", { name: "Kiểm tra file" }));
+
+    expect(await screen.findByText("File hợp lệ và có thể nhập.")).toBeInTheDocument();
+
+    await user.type(
+      screen.getByLabelText("Lý do thay đổi khi nhập SOP"),
+      "Cập nhật SOP phục vụ kiểm thử"
+    );
+    await user.click(screen.getByRole("button", { name: "Xác nhận nhập dữ liệu" }));
+
+    await waitFor(() => {
+      expect(confirmSopRuleImport).toHaveBeenCalledWith(
+        file,
+        "Cập nhật SOP phục vụ kiểm thử"
+      );
+    });
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Nhập SOP thành công");
+
+    // Cấu hình mới có sẵn trong response import, không cần gọi GET lần hai.
+    expect(getSopRules).toHaveBeenCalledTimes(1);
   });
 });
