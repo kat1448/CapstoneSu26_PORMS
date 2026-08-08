@@ -15,6 +15,17 @@ export type ForecastEvaluationSummary = {
   recommendedActions: string[];
   riskMatchRatePct: number;
   totalForecastPoints: number;
+  horizonConfidence?: ForecastHorizonConfidence[];
+};
+
+export type ForecastHorizonConfidence = {
+  avgRainMae: number | null;
+  avgVisibilityMae: number | null;
+  avgWindMae: number | null;
+  confidenceLevel: "HIGH" | "INSUFFICIENT" | "LOW" | "MEDIUM";
+  confidencePct: number | null;
+  horizonDay: number;
+  sampleCount: number;
 };
 
 export type ForecastEvaluationRow = {
@@ -41,6 +52,8 @@ export type ForecastEvaluationRow = {
 };
 
 export type ForecastEvaluationResponse = {
+  dataNotice?: string | null;
+  isDemonstration?: boolean;
   rows: ForecastEvaluationRow[];
   summary: ForecastEvaluationSummary;
 };

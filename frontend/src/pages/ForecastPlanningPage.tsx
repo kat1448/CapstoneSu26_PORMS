@@ -11,7 +11,7 @@ import type { PortSummary } from "../types/port";
 import type { ForecastHorizonDays, ForecastPlan } from "../types/simulation";
 import type { OpenWeatherForecast } from "../types/weather";
 import type { ForecastRiskAnalysis } from "../types/ml";
-import type { ForecastEvaluationSummary } from "../types/forecastEvaluation";
+import type { ForecastEvaluationSummary, ForecastHorizonConfidence } from "../types/forecastEvaluation";
 import { clusterLabel, forecastTextLabel, operationModeLabel, riskLabel, weatherDescriptionLabel } from "../utils/displayLabels";
 
 const FORECAST_AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
@@ -99,6 +99,34 @@ function delay(ms: number) {
 
 function processingStepIndex(step: ForecastProcessingStep) {
   return Math.max(0, forecastProcessingSteps.findIndex((item) => item.key === step));
+}
+
+function confidenceTone(level: ForecastHorizonConfidence["confidenceLevel"]): "danger" | "muted" | "success" | "warning" {
+  if (level === "HIGH") return "success";
+  if (level === "MEDIUM") return "warning";
+  if (level === "LOW") return "danger";
+  return "muted";
+}
+
+function errorBand(value: number | null, unit: string) {
+  return value === null ? "chưa có" : `±${value.toFixed(1)} ${unit}`;
+}
+
+function ForecastDayConfidence({ confidence, day }: { confidence?: ForecastHorizonConfidence; day: number }) {
+  const insufficient = !confidence || confidence.sampleCount < 3;
+  return (
+    <div className={`forecast-day-confidence ${confidence?.confidenceLevel === "LOW" ? "is-low" : insufficient ? "is-insufficient" : ""}`}>
+      <div>
+        <span>Độ tin cậy D+{day}</span>
+        <strong>{confidence?.confidencePct === null || confidence?.confidencePct === undefined ? "Chưa đủ dữ liệu" : `${confidence.confidencePct.toFixed(1)}%`}</strong>
+        {confidence ? <Badge tone={confidenceTone(confidence.confidenceLevel)}>{confidence.sampleCount} mẫu lịch sử</Badge> : null}
+      </div>
+      <p>
+        Biên sai số: gió {errorBand(confidence?.avgWindMae ?? null, "m/s")}, mưa {errorBand(confidence?.avgRainMae ?? null, "mm")}, tầm nhìn {errorBand(confidence?.avgVisibilityMae ?? null, "km")}.
+      </p>
+      {insufficient || confidence?.confidenceLevel === "LOW" ? <small>Cần xác nhận lại gần giờ vận hành và giữ phương án an toàn hơn.</small> : null}
+    </div>
+  );
 }
 
 export function ForecastPlanningPage() {
@@ -355,7 +383,7 @@ export function ForecastPlanningPage() {
             </div>
             <div className="forecast-plan-visual-grid">
               <div aria-label="Timeline dự báo vận hành 5 ngày" className="forecast-plan-timeline">
-                {plan.items.map((item) => (
+                {plan.items.map((item, index) => (
                   <div className={`forecast-plan-timeline-item risk-${item.riskLevel.toLowerCase()}`} key={item.plannedAt}>
                     <div className="forecast-plan-time-marker">
                       <span />
@@ -371,6 +399,10 @@ export function ForecastPlanningPage() {
                         <small>Mưa: {riskLabel(item.rainRiskLevel)}</small>
                         <small>Tầm nhìn: {riskLabel(item.visibilityRiskLevel)}</small>
                       </div>
+                      <ForecastDayConfidence
+                        confidence={evaluationSummary?.horizonConfidence?.find((entry) => entry.horizonDay === index + 1)}
+                        day={index + 1}
+                      />
                       <div className="forecast-plan-operation">
                         <span>Khuyến nghị vận hành</span>
                         <strong>{operationModeLabel(operationRecommendation(item.riskLevel))}</strong>

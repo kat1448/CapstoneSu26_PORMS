@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { LineChart } from "@mui/x-charts";
 import { Badge } from "../components/common/Badge";
-import { exportForecastEvaluation, getForecastEvaluation } from "../services/forecastEvaluationService";
+import { exportForecastEvaluation, getForecastEvaluation, getForecastInterventionDemo } from "../services/forecastEvaluationService";
 import { getPorts } from "../services/portService";
 import type { ForecastEvaluationResponse } from "../types/forecastEvaluation";
 import { dataSourceLabel, riskLabel } from "../utils/displayLabels";
@@ -9,6 +9,7 @@ import type { PortSummary } from "../types/port";
 
 const PAGE_SIZE = 50;
 type EvaluationChartMetric = "rain" | "visibility" | "wind";
+type DemoInterventionStep = "DETECTED" | "REVIEWED" | "SAFE_MODE_APPLIED";
 
 const CHART_METRICS: Record<EvaluationChartMetric, {
   actualLabel: string;
@@ -85,6 +86,9 @@ function confidenceTone(level: ForecastEvaluationResponse["summary"]["confidence
 export function ForecastEvaluationPage() {
   const [ports, setPorts] = useState<PortSummary[]>([]);
   const [data, setData] = useState<ForecastEvaluationResponse | null>(null);
+  const [demoData, setDemoData] = useState<ForecastEvaluationResponse | null>(null);
+  const [demoStep, setDemoStep] = useState<DemoInterventionStep | null>(null);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [portCode, setPortCode] = useState("ALL");
   const [fromDate, setFromDate] = useState(today(-29));
   const [toDate, setToDate] = useState(today(0));
@@ -101,7 +105,8 @@ export function ForecastEvaluationPage() {
     to: toIsoDate(toDate, true)
   }), [fromDate, portCode, toDate]);
 
-  const rows = data?.rows ?? [];
+  const activeData = demoData ?? data;
+  const rows = activeData?.rows ?? [];
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const visibleRows = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
@@ -188,6 +193,8 @@ export function ForecastEvaluationPage() {
   }, []);
 
   async function loadEvaluation() {
+    setDemoData(null);
+    setDemoStep(null);
     setLoading(true);
     setError("");
     setMessage("");
@@ -227,6 +234,28 @@ export function ForecastEvaluationPage() {
     }
   }
 
+  async function handleStartInterventionDemo() {
+    setDemoLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await getForecastInterventionDemo();
+      setDemoData(response);
+      setDemoStep("DETECTED");
+      setCurrentPage(1);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Không chạy được kịch bản kiểm chứng mô phỏng");
+    } finally {
+      setDemoLoading(false);
+    }
+  }
+
+  function handleCloseDemo() {
+    setDemoData(null);
+    setDemoStep(null);
+    setMessage("Đã quay lại dữ liệu kiểm chứng thực tế.");
+  }
+
   return (
     <section className="page-grid forecast-evaluation-page">
       <div className="section-heading">
@@ -235,9 +264,14 @@ export function ForecastEvaluationPage() {
           <h1>Thống kê và đánh giá</h1>
           <p>So sánh dữ liệu dự đoán 5 ngày với dữ liệu thời tiết thật để đo sai số và điều chỉnh mô hình.</p>
         </div>
-        <button className="button button-primary" disabled={exporting || !rows.length} onClick={handleExport} type="button">
-          {exporting ? "Đang xuất..." : "Xuất báo cáo CSV"}
-        </button>
+        <div className="forecast-evaluation-heading-actions">
+          <button className="button button-secondary" disabled={demoLoading} onClick={() => void handleStartInterventionDemo()} type="button">
+            {demoLoading ? "Đang tạo kịch bản..." : "Demo dự báo sai liên tiếp"}
+          </button>
+          <button className="button button-primary" disabled={exporting || !rows.length || Boolean(demoData)} onClick={handleExport} type="button">
+            {exporting ? "Đang xuất..." : "Xuất báo cáo CSV"}
+          </button>
+        </div>
       </div>
 
       <article aria-label="Bộ lọc thống kê và đánh giá" className="card bi-filter-bar bi-card-pad">
@@ -273,67 +307,103 @@ export function ForecastEvaluationPage() {
       {message ? <p className="form-success">{message}</p> : null}
       {error ? <p className="form-error">{error}</p> : null}
 
+      {demoData && demoStep ? (
+        <article aria-label="Kịch bản mô phỏng can thiệp dự báo" className="card forecast-intervention-demo">
+          <div className="forecast-demo-banner">
+            <div>
+              <Badge tone="warning">Dữ liệu mô phỏng</Badge>
+              <h2>Kiểm chứng dự báo sai liên tiếp</h2>
+              <p>{demoData.dataNotice}</p>
+            </div>
+            <button className="button button-secondary button-small" onClick={handleCloseDemo} type="button">Thoát demo</button>
+          </div>
+          <div className="forecast-demo-workflow">
+            <div className="forecast-demo-state">
+              <span>Trạng thái can thiệp</span>
+              <strong>{demoStep === "DETECTED" ? "Đã phát hiện sai lệch" : demoStep === "REVIEWED" ? "Đã xác nhận rà soát" : "Đã áp dụng chế độ an toàn"}</strong>
+              <small>Chế độ vận hành mô phỏng: {demoStep === "SAFE_MODE_APPLIED" ? "Hạn chế vận hành" : "Vận hành bình thường"}</small>
+            </div>
+            <ol className="forecast-demo-timeline">
+              <li className="done"><strong>Phát hiện</strong><span>40% tin cậy, sai 3 lần liên tiếp</span></li>
+              <li className={demoStep !== "DETECTED" ? "done" : "current"}><strong>Rà soát</strong><span>Người quản lý xác nhận kiểm tra dữ liệu và ngưỡng</span></li>
+              <li className={demoStep === "SAFE_MODE_APPLIED" ? "done" : demoStep === "REVIEWED" ? "current" : ""}><strong>Can thiệp</strong><span>Áp dụng phương án vận hành an toàn hơn</span></li>
+            </ol>
+            <div className="forecast-demo-actions">
+              {demoStep === "DETECTED" ? (
+                <button className="button button-primary" onClick={() => setDemoStep("REVIEWED")} type="button">Xác nhận rà soát</button>
+              ) : null}
+              {demoStep === "REVIEWED" ? (
+                <button className="button button-danger" onClick={() => setDemoStep("SAFE_MODE_APPLIED")} type="button">Áp dụng chế độ an toàn tạm thời</button>
+              ) : null}
+              {demoStep === "SAFE_MODE_APPLIED" ? (
+                <button className="button button-secondary" onClick={() => setDemoStep("DETECTED")} type="button">Chạy lại kịch bản</button>
+              ) : null}
+            </div>
+          </div>
+        </article>
+      ) : null}
+
       <div className="bi-kpi-grid">
         <article className="card bi-kpi-card bi-card-pad">
           <span>Điểm dự báo</span>
-          <strong>{data?.summary.totalForecastPoints ?? 0}</strong>
-          <small>{data?.summary.matchedActualPoints ?? 0} điểm đã có dữ liệu thật</small>
+          <strong>{activeData?.summary.totalForecastPoints ?? 0}</strong>
+          <small>{activeData?.summary.matchedActualPoints ?? 0} điểm đã có dữ liệu {demoData ? "mô phỏng" : "thật"}</small>
         </article>
         <article className="card bi-kpi-card bi-card-pad">
           <span>Tỷ lệ đối chiếu</span>
-          <strong>{data?.summary.matchRatePct.toFixed(1) ?? "0.0"}%</strong>
-          <small>{data?.summary.matchedActualPoints ?? 0}/{data?.summary.eligiblePastPoints ?? 0} mốc quá khứ có dữ liệu thật</small>
+          <strong>{activeData?.summary.matchRatePct.toFixed(1) ?? "0.0"}%</strong>
+          <small>{activeData?.summary.matchedActualPoints ?? 0}/{activeData?.summary.eligiblePastPoints ?? 0} mốc quá khứ đã đối chiếu</small>
         </article>
         <article className="card bi-kpi-card bi-card-pad risk">
           <span>Sai số gió trung bình</span>
-          <strong>{formatNumber(data?.summary.avgWindMae, " m/s")}</strong>
+          <strong>{formatNumber(activeData?.summary.avgWindMae, " m/s")}</strong>
           <small>Sai số tuyệt đối trung bình</small>
         </article>
         <article className="card bi-kpi-card bi-card-pad">
           <span>Sai số mưa trung bình</span>
-          <strong>{formatNumber(data?.summary.avgRainMae, " mm")}</strong>
+          <strong>{formatNumber(activeData?.summary.avgRainMae, " mm")}</strong>
           <small>Sai số lượng mưa 1h</small>
         </article>
         <article className="card bi-kpi-card bi-card-pad">
           <span>Sai số tầm nhìn trung bình</span>
-          <strong>{formatNumber(data?.summary.avgVisibilityMae, " km")}</strong>
+          <strong>{formatNumber(activeData?.summary.avgVisibilityMae, " km")}</strong>
           <small>Sai số tầm nhìn</small>
         </article>
       </div>
 
-      {data ? (
+      {activeData ? (
         <article
           aria-label="Độ tin cậy và khuyến nghị can thiệp"
-          className={`card forecast-confidence-card ${data.summary.interventionRequired ? "requires-intervention" : "is-stable"}`}
+          className={`card forecast-confidence-card ${activeData.summary.interventionRequired ? "requires-intervention" : "is-stable"}`}
         >
           <div className="forecast-confidence-primary">
             <span>Độ tin cậy thực nghiệm</span>
-            <strong>{data.summary.confidencePct === null ? "Chưa đủ" : `${data.summary.confidencePct.toFixed(1)}%`}</strong>
-            <Badge tone={confidenceTone(data.summary.confidenceLevel)}>{confidenceLabel(data.summary.confidenceLevel)}</Badge>
-            <small>Tỷ lệ dự báo khớp đúng mức rủi ro trên {data.summary.matchedActualPoints} mốc dữ liệu thật.</small>
+            <strong>{activeData.summary.confidencePct === null ? "Chưa đủ" : `${activeData.summary.confidencePct.toFixed(1)}%`}</strong>
+            <Badge tone={confidenceTone(activeData.summary.confidenceLevel)}>{confidenceLabel(activeData.summary.confidenceLevel)}</Badge>
+            <small>Tỷ lệ dự báo khớp đúng mức rủi ro trên {activeData.summary.matchedActualPoints} mốc {demoData ? "mô phỏng" : "dữ liệu thật"}.</small>
           </div>
           <div className="forecast-confidence-details">
             <div>
               <span>Khớp mức rủi ro</span>
-              <strong>{data.summary.riskMatchRatePct.toFixed(1)}%</strong>
+              <strong>{activeData.summary.riskMatchRatePct.toFixed(1)}%</strong>
             </div>
             <div>
               <span>Sai liên tiếp gần nhất</span>
-              <strong>{data.summary.consecutiveMismatchCount} lần</strong>
+              <strong>{activeData.summary.consecutiveMismatchCount} lần</strong>
             </div>
             <div>
               <span>Đánh giá thấp nguy hiểm</span>
-              <strong>{data.summary.dangerousUnderestimateCount} lần</strong>
+              <strong>{activeData.summary.dangerousUnderestimateCount} lần</strong>
               <small>Trong tối đa 5 mốc thật gần nhất</small>
             </div>
           </div>
           <div className="forecast-intervention-guidance">
             <div>
-              <span>{data.summary.interventionRequired ? "Yêu cầu can thiệp" : "Trạng thái kiểm soát"}</span>
-              <strong>{data.summary.interventionMessage}</strong>
+              <span>{activeData.summary.interventionRequired ? "Yêu cầu can thiệp" : "Trạng thái kiểm soát"}</span>
+              <strong>{activeData.summary.interventionMessage}</strong>
             </div>
             <ul>
-              {data.summary.recommendedActions.map((action) => <li key={action}>{action}</li>)}
+              {activeData.summary.recommendedActions.map((action) => <li key={action}>{action}</li>)}
             </ul>
           </div>
         </article>
@@ -367,7 +437,7 @@ export function ForecastEvaluationPage() {
             <div className="forecast-evaluation-chart-summary" aria-label="Tóm tắt biểu đồ tương quan">
               <span><strong>{formatNumber(averageMetricError, selectedMetric.suffix)}</strong> sai số TB/ngày</span>
               <span><strong>{formatNumber(maxMetricError, selectedMetric.suffix)}</strong> sai số lớn nhất/ngày</span>
-              <span><strong>{data?.summary.matchedActualPoints ?? 0}</strong> điểm đã đối chiếu</span>
+              <span><strong>{activeData?.summary.matchedActualPoints ?? 0}</strong> điểm đã đối chiếu</span>
             </div>
             <div className="forecast-evaluation-chart" aria-label="Biểu đồ tương quan dữ liệu thật và sai số">
               <LineChart
@@ -448,7 +518,7 @@ export function ForecastEvaluationPage() {
                     <small>Thực tế: {row.actualRiskLevel ? riskLabel(row.actualRiskLevel) : "Chưa có"}</small>
                     <small>Lệch mức: {row.riskScoreError ?? "Chưa tính"}</small>
                   </td>
-                  <td>{row.status === "MATCHED" ? "Đã đối chiếu dữ liệu thật" : row.status === "MATCHED_DEMO" ? "Đã bù bằng dữ liệu mô phỏng" : row.status === "FUTURE" ? "Chưa đến thời điểm đối chiếu" : "Đang chờ dữ liệu đối chiếu"}</td>
+                  <td>{demoData ? "Đối chiếu trong kịch bản mô phỏng" : row.status === "MATCHED" ? "Đã đối chiếu dữ liệu thật" : row.status === "MATCHED_DEMO" ? "Đã bù bằng dữ liệu mô phỏng" : row.status === "FUTURE" ? "Chưa đến thời điểm đối chiếu" : "Đang chờ dữ liệu đối chiếu"}</td>
                 </tr>
               ))}
               {!loading && rows.length === 0 ? (

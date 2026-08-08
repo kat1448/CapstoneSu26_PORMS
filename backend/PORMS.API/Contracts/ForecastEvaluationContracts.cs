@@ -4,6 +4,8 @@ public sealed class ForecastEvaluationResponse
 {
     public required ForecastEvaluationSummaryResponse Summary { get; init; }
     public required IReadOnlyList<ForecastEvaluationRowResponse> Rows { get; init; }
+    public bool IsDemonstration { get; init; }
+    public string? DataNotice { get; init; }
 }
 
 public sealed class ForecastEvaluationSummaryResponse
@@ -24,6 +26,18 @@ public sealed class ForecastEvaluationSummaryResponse
     public decimal? AvgRainMae { get; init; }
     public decimal? AvgVisibilityMae { get; init; }
     public decimal? AvgRiskScoreError { get; init; }
+    public IReadOnlyList<ForecastHorizonConfidenceResponse> HorizonConfidence { get; init; } = Array.Empty<ForecastHorizonConfidenceResponse>();
+}
+
+public sealed class ForecastHorizonConfidenceResponse
+{
+    public int HorizonDay { get; init; }
+    public int SampleCount { get; init; }
+    public decimal? ConfidencePct { get; init; }
+    public required string ConfidenceLevel { get; init; }
+    public decimal? AvgWindMae { get; init; }
+    public decimal? AvgRainMae { get; init; }
+    public decimal? AvgVisibilityMae { get; init; }
 }
 
 public sealed class ForecastEvaluationRowResponse

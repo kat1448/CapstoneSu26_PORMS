@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getPorts } from "../services/portService";
-import { getForecastEvaluation } from "../services/forecastEvaluationService";
+import { getForecastEvaluation, getForecastInterventionDemo } from "../services/forecastEvaluationService";
 import { ForecastEvaluationPage } from "./ForecastEvaluationPage";
 
 vi.mock("@mui/x-charts", () => ({
@@ -19,7 +19,8 @@ vi.mock("../services/portService", () => ({
 
 vi.mock("../services/forecastEvaluationService", () => ({
   exportForecastEvaluation: vi.fn(),
-  getForecastEvaluation: vi.fn()
+  getForecastEvaluation: vi.fn(),
+  getForecastInterventionDemo: vi.fn()
 }));
 
 beforeEach(() => {
@@ -99,6 +100,29 @@ beforeEach(() => {
       totalForecastPoints: 2
     }
   });
+  vi.mocked(getForecastInterventionDemo).mockResolvedValue({
+    dataNotice: "DỮ LIỆU MÔ PHỎNG - không tính vào độ tin cậy thực tế.",
+    isDemonstration: true,
+    rows: [],
+    summary: {
+      avgRainMae: 27,
+      avgRiskScoreError: 1,
+      avgVisibilityMae: 3,
+      avgWindMae: 8,
+      confidenceLevel: "LOW",
+      confidencePct: 40,
+      consecutiveMismatchCount: 3,
+      dangerousUnderestimateCount: 3,
+      eligiblePastPoints: 5,
+      interventionMessage: "Cần rà soát vì dự báo sai liên tiếp.",
+      interventionRequired: true,
+      matchRatePct: 100,
+      matchedActualPoints: 5,
+      recommendedActions: ["Kiểm tra dữ liệu và ngưỡng rủi ro."],
+      riskMatchRatePct: 40,
+      totalForecastPoints: 5
+    }
+  });
 });
 
 afterEach(() => {
@@ -133,5 +157,21 @@ describe("ForecastEvaluationPage", () => {
       from: expect.stringMatching(/T00:00:00Z$/),
       to: expect.stringMatching(/T23:59:59Z$/)
     }));
+  });
+
+  it("runs the intervention demonstration without mixing it with official data", async () => {
+    const user = userEvent.setup();
+    render(<ForecastEvaluationPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Demo dự báo sai liên tiếp" }));
+    expect(await screen.findByLabelText("Kịch bản mô phỏng can thiệp dự báo")).toBeInTheDocument();
+    expect(screen.getByText("Dữ liệu mô phỏng")).toBeInTheDocument();
+    expect(screen.getAllByText("40.0%").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: "Xác nhận rà soát" }));
+    expect(screen.getByText("Đã xác nhận rà soát")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Áp dụng chế độ an toàn tạm thời" }));
+    expect(screen.getByText("Đã áp dụng chế độ an toàn")).toBeInTheDocument();
+    expect(screen.getByText(/Chế độ vận hành mô phỏng: Hạn chế vận hành/)).toBeInTheDocument();
   });
 });
