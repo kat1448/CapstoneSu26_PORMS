@@ -38,10 +38,10 @@ public sealed class UserRepository
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("search", string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim());
-        command.Parameters.AddWithValue("role", string.IsNullOrWhiteSpace(role) ? DBNull.Value : role.Trim().ToUpperInvariant());
-        command.Parameters.AddWithValue("status", string.IsNullOrWhiteSpace(status) ? DBNull.Value : status.Trim().ToUpperInvariant());
-        command.Parameters.AddWithValue("portCode", string.IsNullOrWhiteSpace(portCode) ? DBNull.Value : portCode.Trim().ToUpperInvariant());
+        AddNullableTextParameter(command, "search", search?.Trim());
+        AddNullableTextParameter(command, "role", role?.Trim().ToUpperInvariant());
+        AddNullableTextParameter(command, "status", status?.Trim().ToUpperInvariant());
+        AddNullableTextParameter(command, "portCode", portCode?.Trim().ToUpperInvariant());
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var results = new List<UserSummaryReadModel>();
@@ -308,6 +308,14 @@ public sealed class UserRepository
         command.Parameters.Add(new NpgsqlParameter("portId", NpgsqlDbType.Uuid)
         {
             Value = portId.HasValue ? portId.Value : DBNull.Value
+        });
+    }
+
+    private static void AddNullableTextParameter(NpgsqlCommand command, string name, string? value)
+    {
+        command.Parameters.Add(new NpgsqlParameter(name, NpgsqlDbType.Text)
+        {
+            Value = string.IsNullOrWhiteSpace(value) ? DBNull.Value : value
         });
     }
 }
