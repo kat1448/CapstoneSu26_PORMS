@@ -186,6 +186,19 @@ describe("LogPage", () => {
         zoneName: "Ben so 1"
       },
       {
+        ...makeRunEvent(6),
+        eventType: "USER_LOGIN",
+        occurredAt: "04/07/2026 18:40:00",
+        occurredAtRaw: "2026-07-04T18:40:00Z",
+        portCode: "DNTSA",
+        portId: "port-target",
+        portName: "Cang Tien Sa",
+        summary: "Log sai loai su kien",
+        tone: "warning",
+        zoneId: "zone-target",
+        zoneName: "Ben so 1"
+      },
+      {
         ...makeRunEvent(5),
         occurredAt: "05/07/2026 09:00:00",
         occurredAtRaw: "2026-07-05T09:00:00Z",
@@ -207,6 +220,7 @@ describe("LogPage", () => {
     await user.selectOptions(view.getByLabelText(/Cảng/i), "port-target");
     await user.selectOptions(view.getByLabelText(/Khu vực/i), "Ben so 1");
     await user.selectOptions(view.getByLabelText(/Cấp độ/i), "warning");
+    await user.selectOptions(view.getByLabelText(/Loại sự kiện/i), "MODE_CHANGED");
     await user.type(view.getByLabelText(/Từ ngày/i), "2026-07-04");
     await user.type(view.getByLabelText(/Đến ngày/i), "2026-07-04");
 
@@ -218,6 +232,7 @@ describe("LogPage", () => {
     expect(view.queryByText("Log sai cang")).not.toBeInTheDocument();
     expect(view.queryByText("Log sai khu vuc")).not.toBeInTheDocument();
     expect(view.queryByText("Log sai muc")).not.toBeInTheDocument();
+    expect(view.queryByText("Log sai loai su kien")).not.toBeInTheDocument();
     expect(view.queryByText("Log sai ngay")).not.toBeInTheDocument();
     expect(view.queryByText("Trang 1/")).not.toBeInTheDocument();
   });
