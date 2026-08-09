@@ -2984,6 +2984,17 @@
   min-height: 36px;
 }
 
+.filter-result-summary {
+  color: var(--muted);
+  font-size: 14px;
+  margin-top: -4px;
+  padding: 0 4px;
+}
+
+.filter-result-summary strong {
+  color: #173b58;
+}
+
 .sop-risk-grid {
   display: grid;
   gap: 14px;
