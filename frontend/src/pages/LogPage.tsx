@@ -122,7 +122,8 @@ export function LogPage({ refreshKey }: LogPageProps) {
   const [selectedPortId, setSelectedPortId] = useState("");
   const [selectedZoneName, setSelectedZoneName] = useState("");
   const [selectedTone, setSelectedTone] = useState("");
-  const [simulationSearchTerm, setSimulationSearchTerm] = useState("");
+  const [selectedEventType, setSelectedEventType] = useState("");
+  const [logSearchTerm, setLogSearchTerm] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
@@ -133,7 +134,7 @@ export function LogPage({ refreshKey }: LogPageProps) {
   useEffect(() => {
     setCurrentPage(1);
     setSelectedRunKey(null);
-    setSimulationSearchTerm("");
+    setLogSearchTerm("");
     loadEvents();
   }, [loadEvents, refreshKey]);
 
@@ -156,6 +157,11 @@ export function LogPage({ refreshKey }: LogPageProps) {
       : events;
     return [...new Set(scopedEvents.map(zoneLabel).filter(Boolean))].sort();
   }, [events, selectedPortId]);
+  const eventTypeOptions = useMemo(
+    () => [...new Set(events.map((event) => event.eventType).filter(Boolean))]
+      .sort((a, b) => operationEventLabel(a).localeCompare(operationEventLabel(b), "vi-VN")),
+    [events]
+  );
 
   useEffect(() => {
     if (selectedZoneName && !zoneOptions.includes(selectedZoneName)) {
@@ -166,26 +172,34 @@ export function LogPage({ refreshKey }: LogPageProps) {
   const filteredRuns = useMemo(() => runs.filter((run) => {
     const runPortId = run.events[0]?.portId ?? run.portCode;
     const matchesZone = !selectedZoneName || run.events.some((event) => zoneLabel(event) === selectedZoneName);
+    const matchesEventType = !selectedEventType || run.events.some((event) => event.eventType === selectedEventType);
     const matchesDateRange = run.events.some((event) => {
       const eventDate = eventDateValue(event);
       return (!fromDate || eventDate >= fromDate) && (!toDate || eventDate <= toDate);
     });
-    const searchTerm = simulationSearchTerm.trim().toLocaleLowerCase("vi-VN");
-    const matchesSimulationSearch = !searchTerm
+    const searchTerm = logSearchTerm.trim().toLocaleLowerCase("vi-VN");
+    const matchesSearch = !searchTerm
+      || includesSearch(run.portCode, searchTerm)
+      || includesSearch(run.portName, searchTerm)
       || includesSearch(run.scenarioName, searchTerm)
       || includesSearch(run.runLabel, searchTerm)
       || run.events.some((event) => (
         includesSearch(event.simulationSessionId, searchTerm)
         || includesSearch(event.simulationDatasetName, searchTerm)
+        || includesSearch(operationEventLabel(event.eventType), searchTerm)
+        || includesSearch(event.eventType, searchTerm)
         || includesSearch(event.summary, searchTerm)
+        || includesSearch(event.actorName, searchTerm)
+        || includesSearch(event.zoneName, searchTerm)
       ));
 
     return (!selectedPortId || runPortId === selectedPortId)
       && matchesZone
+      && matchesEventType
       && (!selectedTone || run.riskTone === selectedTone)
       && matchesDateRange
-      && (scope !== "simulation" || matchesSimulationSearch);
-  }), [fromDate, runs, scope, selectedPortId, selectedTone, selectedZoneName, simulationSearchTerm, toDate]);
+      && matchesSearch;
+  }), [fromDate, logSearchTerm, runs, selectedEventType, selectedPortId, selectedTone, selectedZoneName, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRuns.length / PAGE_SIZE));
   const visibleRuns = useMemo(() => {
@@ -201,13 +215,14 @@ export function LogPage({ refreshKey }: LogPageProps) {
   useEffect(() => {
     setCurrentPage(1);
     setSelectedRunKey(null);
-  }, [fromDate, selectedPortId, selectedTone, selectedZoneName, simulationSearchTerm, toDate]);
+  }, [fromDate, logSearchTerm, selectedEventType, selectedPortId, selectedTone, selectedZoneName, toDate]);
 
   function resetFilters() {
     setSelectedPortId("");
     setSelectedZoneName("");
     setSelectedTone("");
-    setSimulationSearchTerm("");
+    setSelectedEventType("");
+    setLogSearchTerm("");
     setFromDate("");
     setToDate("");
   }
@@ -279,19 +294,31 @@ export function LogPage({ refreshKey }: LogPageProps) {
               ))}
             </select>
           </label>
+          <label>
+            <span>Loại sự kiện</span>
+            <select className="select-input" onChange={(event) => setSelectedEventType(event.target.value)} value={selectedEventType}>
+              <option value="">Tất cả loại sự kiện</option>
+              {eventTypeOptions.map((eventType) => (
+                <option key={eventType} value={eventType}>{operationEventLabel(eventType)}</option>
+              ))}
+            </select>
+          </label>
           {scope === "simulation" ? (
             <label>
               <span>Phiên/kịch bản</span>
               <input
                 className="input"
-                onChange={(event) => setSimulationSearchTerm(event.target.value)}
+                onChange={(event) => setLogSearchTerm(event.target.value)}
                 placeholder="Nhập mã phiên hoặc tên kịch bản"
                 type="search"
-                value={simulationSearchTerm}
+                value={logSearchTerm}
               />
             </label>
           ) : null}
           <button className="button button-secondary button-small" onClick={resetFilters} type="button">Xóa lọc</button>
+        </div>
+        <div className="filter-result-summary" role="status">
+          Đang hiển thị <strong>{filteredRuns.length}</strong>/{runs.length} lần vận hành
         </div>
         <article className="card timeline-card">
           {filteredRuns.length === 0 ? (
