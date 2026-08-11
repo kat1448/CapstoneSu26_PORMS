@@ -1,0 +1,6 @@
+# API_DOMAIN chi chua hostname, khong kem https:// va khong co dau / o cuoi.
+# Vi du: porms-api.malaysiawest.cloudapp.azure.com
+{$API_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy backend:5000
+}

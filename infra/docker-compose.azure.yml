@@ -1,0 +1,230 @@
+# ================================================================
+# PORMS - Docker Compose danh rieng cho Azure VM
+# ================================================================
+#
+# File nay doc lap voi docker-compose.yml dung cho development.
+# Frontend duoc trien khai tren Vercel nen khong chay trong Azure VM.
+# Chi Caddy duoc phep mo cong 80/443 ra Internet.
+#
+# Chay tu thu muc infra/:
+#   docker compose --env-file ../.env -f docker-compose.azure.yml up -d --build
+#
+# Tao tai khoan demo mot lan sau khi database san sang:
+#   docker compose --env-file ../.env -f docker-compose.azure.yml \
+#     --profile tools run --rm demo-user-seed
+# ================================================================
+
+name: porms-azure
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+networks:
+  porms-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+services:
+  # PostgreSQL chi truy cap trong Docker network, khong public cong 5432.
+  postgres:
+    image: postgres:16-alpine
+    container_name: porms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: porms_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_ETL_PASSWORD: ${POSTGRES_ETL_PASSWORD:?POSTGRES_ETL_PASSWORD is required}
+      POSTGRES_API_PASSWORD: ${POSTGRES_API_PASSWORD:?POSTGRES_API_PASSWORD is required}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init-db.sql:/docker-entrypoint-initdb.d/00_init_db.sql:ro
+      - ./postgres/init-passwords.sh:/docker-entrypoint-initdb.d/01_init_passwords.sh:ro
+      - ../docs/database/schema.sql:/docker-entrypoint-initdb.d/02_schema.sql:ro
+      - ./postgres/init-grants.sql:/docker-entrypoint-initdb.d/03_grants.sql:ro
+      - ../scripts/seed_data.sql:/docker-entrypoint-initdb.d/04_seed_data.sql:ro
+      - ../scripts/seed_sop_rules.sql:/docker-entrypoint-initdb.d/05_seed_sop_rules.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d porms_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - porms-net
+    logging: *default-logging
+
+  # Prefect luu metadata trong database prefect_db tren cung PostgreSQL.
+  # UI khong duoc public; worker giao tiep qua Docker network noi bo.
+  prefect-server:
+    image: prefecthq/prefect:2-python3.11
+    container_name: porms-prefect-server
+    restart: unless-stopped
+    command: prefect server start --host 0.0.0.0
+    environment:
+      PREFECT_UI_URL: http://prefect-server:4200
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_SERVER_API_PORT: 4200
+      PREFECT_API_DATABASE_CONNECTION_URL: >-
+        postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/prefect_db
+      PREFECT_API_DATABASE_MIGRATE_ON_START: "true"
+      PREFECT_TELEMETRY_ENABLED: "false"
+      TZ: Asia/Ho_Chi_Minh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - porms-net
+    logging: *default-logging
+
+  # Source ETL duoc copy vao image; production khong bind-mount source tu host.
+  prefect-worker:
+    build:
+      context: ../etl
+      dockerfile: Dockerfile
+    container_name: porms-prefect-worker
+    restart: unless-stopped
+    command: >
+      bash -c "
+        echo '[worker] Waiting for Prefect server...' &&
+        sleep 15 &&
+        prefect work-pool create porms-pool --type process 2>/dev/null || true &&
+        echo '[worker] Deploying flows...' &&
+        python -m deployments.deploy_all &&
+        echo '[worker] Starting worker...' &&
+        prefect worker start --pool porms-pool --type process
+      "
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      POSTGRES_DSN: >-
+        postgresql://porms_etl:${POSTGRES_ETL_PASSWORD}@postgres:5432/porms_db
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: porms_db
+      POSTGRES_USER: porms_etl
+      POSTGRES_PASSWORD: ${POSTGRES_ETL_PASSWORD}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:?OPENWEATHER_API_KEY is required}
+      OW_BASE_URL: https://api.openweathermap.org/data/2.5
+      BACKEND_TRIGGER_URL: http://backend:5000/api/internal/trigger-risk-engine
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
+      LOG_LEVEL: INFO
+      TZ: Asia/Ho_Chi_Minh
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prefect-server:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    networks:
+      - porms-net
+    logging: *default-logging
+
+  # ASP.NET chay bang runtime image, khong kem SDK va khong public cong 5000.
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: porms-backend
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5000
+      ConnectionStrings__DefaultConnection: >-
+        Host=postgres;Port=5432;Database=porms_db;
+        Username=porms_api;Password=${POSTGRES_API_PASSWORD};
+        Include Error Detail=false;Maximum Pool Size=20
+      Cors__AllowedOrigins__0: ${FRONTEND_BASE_URL:?FRONTEND_BASE_URL is required}
+      Jwt__SigningKey: ${JWT_SECRET:?JWT_SECRET is required}
+      Jwt__Issuer: porms-api
+      Jwt__Audience: porms-frontend
+      Jwt__AccessTokenMinutes: ${JWT_ACCESS_TOKEN_MINUTES:-15}
+      Jwt__RefreshTokenDays: ${JWT_REFRESH_TOKEN_DAYS:-7}
+      OpenWeather__ApiKey: ${OPENWEATHER_API_KEY}
+      OpenWeather__BaseUrl: https://api.openweathermap.org/data/2.5
+      LLM__Provider: ${LLM_PROVIDER:-Gemini}
+      LLM__ApiKey: ${LLM_API_KEY:-}
+      LLM__Model: ${LLM_MODEL:-gemini-flash-latest}
+      LLM__BaseUrl: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
+      Email__Smtp__Enabled: ${SMTP_ENABLED:-false}
+      Email__Smtp__Host: ${SMTP_HOST:-}
+      Email__Smtp__Port: ${SMTP_PORT:-587}
+      Email__Smtp__EnableSsl: ${SMTP_ENABLE_SSL:-true}
+      Email__Smtp__Username: ${SMTP_USERNAME:-}
+      Email__Smtp__Password: ${SMTP_PASSWORD:-}
+      Email__Smtp__FromEmail: ${SMTP_FROM_EMAIL:-}
+      Email__Smtp__FromName: ${SMTP_FROM_NAME:-PORMS}
+      Frontend__BaseUrl: ${FRONTEND_BASE_URL}
+      InternalApi__Key: ${INTERNAL_API_KEY}
+      TZ: Asia/Ho_Chi_Minh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - porms-net
+    logging: *default-logging
+
+  # Caddy la diem vao duy nhat va tu dong quan ly chung chi HTTPS.
+  caddy:
+    image: caddy:2-alpine
+    container_name: porms-caddy
+    restart: unless-stopped
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is required}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - porms-net
+    logging: *default-logging
+
+  # Utility chay mot lan de tao tai khoan demo voi mat khau nam trong .env.
+  # Profile tools ngan service nay tu dong chay cung he thong chinh.
+  demo-user-seed:
+    image: postgres:16-alpine
+    profiles:
+      - tools
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-}
+    volumes:
+      - ../scripts/seed_deployment_users.sql:/scripts/seed_deployment_users.sql:ro
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        test -n "$${DEMO_USER_PASSWORD}" ||
+        { echo 'DEMO_USER_PASSWORD is required.' >&2; exit 1; };
+        psql --host=postgres --username=postgres --dbname=porms_db
+        --set=ON_ERROR_STOP=1
+        --set=demo_user_password="$${DEMO_USER_PASSWORD}"
+        --file=/scripts/seed_deployment_users.sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - porms-net
+    logging: *default-logging
