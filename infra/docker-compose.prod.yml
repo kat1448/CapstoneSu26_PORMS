@@ -19,7 +19,7 @@ services:
   # ─── Override Backend cho Production ────────────────────────────
   backend:
     build:
-      target: production
+      target: runtime
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS:        http://+:5000
@@ -31,12 +31,19 @@ services:
   # ─── Override Frontend cho Production ───────────────────────────
   frontend:
     build:
-      target: production
+      target: runtime
+      args:
+        # Use the same public origin as the web app. Nginx proxies /api to
+        # the backend, so browsers outside the Docker host never call
+        # localhost:5000.
+        VITE_API_BASE_URL: ""
+        VITE_USE_MOCK_FALLBACK: "false"
     environment:
       NODE_ENV: production
-    # Không expose port ra ngoài — Nginx sẽ proxy
-    ports: []
-    volumes: []   # Không mount source code trong prod
+    # The production frontend is only reached through the outer reverse proxy.
+    # !override removes the development mapping 5173:5173.
+    ports: !override []
+    volumes: !override []   # Không mount source code trong prod
     profiles:
       - ""
 
@@ -47,6 +54,9 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      # Keep the familiar Vite URL for local demos, but route it through the
+      # same proxy so /api requests still reach the backend.
+      - "5173:80"
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro

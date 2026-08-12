@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import type { DemoUser } from "../App";
 import { Badge } from "../components/common/Badge";
 import { deleteUser, getUsers, type UserRecord, type UserStatus } from "../services/userService";
 
-type UsersPageProps = { refreshKey: number };
+type UsersPageProps = { currentUser: DemoUser; refreshKey: number };
 
 const PAGE_SIZES = [5, 10, 20];
 
@@ -36,7 +37,8 @@ function visiblePageNumbers(currentPage: number, totalPages: number) {
   return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => start + index);
 }
 
-export function UsersPage({ refreshKey }: UsersPageProps) {
+export function UsersPage({ currentUser, refreshKey }: UsersPageProps) {
+  const isPortManager = currentUser.role === "PORT_MANAGER";
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,12 +87,17 @@ export function UsersPage({ refreshKey }: UsersPageProps) {
   useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages); }, [currentPage, totalPages]);
 
   async function handleDelete(user: UserRecord) {
-    if (user.role === "ADMIN" || !window.confirm(`Xóa người dùng ${user.fullName}?`)) return;
+    const confirmation = isPortManager
+      ? `Gỡ ${user.fullName} khỏi ${currentUser.portName}?`
+      : `Xóa người dùng ${user.fullName}?`;
+    if (user.role === "ADMIN" || !window.confirm(confirmation)) return;
     setError(null);
     setMessage(null);
     try {
       await deleteUser(user.userId);
-      setMessage(`Đã xóa tài khoản ${user.fullName}.`);
+      setMessage(isPortManager
+        ? `Đã gỡ ${user.fullName} khỏi ${currentUser.portName}.`
+        : `Đã xóa tài khoản ${user.fullName}.`);
       await loadUsers();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Không thể xóa người dùng.");
@@ -113,9 +120,9 @@ export function UsersPage({ refreshKey }: UsersPageProps) {
     <section className="page-grid users-page">
       <div className="section-heading users-heading">
         <div>
-          <span className="page-eyebrow">QUẢN TRỊ HỆ THỐNG</span>
-          <h2>Người dùng</h2>
-          <p>Quản lý tài khoản, vai trò và phạm vi cảng được phân công.</p>
+          <span className="page-eyebrow">{isPortManager ? "QUẢN LÝ NHÂN SỰ CẢNG" : "QUẢN TRỊ HỆ THỐNG"}</span>
+          <h2>{isPortManager ? "Nhân sự cảng" : "Người dùng"}</h2>
+          <p>{isPortManager ? `Quản lý Operator thuộc ${currentUser.portName} và tiếp nhận nhân sự chưa phân cảng.` : "Quản lý tài khoản, vai trò và phạm vi cảng được phân công."}</p>
         </div>
         <Link aria-label="Thêm người dùng" className="btn primary" to="/users/new">+ Thêm người dùng</Link>
       </div>
@@ -131,17 +138,19 @@ export function UsersPage({ refreshKey }: UsersPageProps) {
       <div className="user-stat-grid" aria-label="Tổng quan tài khoản">
         <article><span>Tổng tài khoản</span><strong>{loading ? "—" : allUsers.length}</strong><small>Đang được quản lý</small></article>
         <article><span>Đang hoạt động</span><strong>{loading ? "—" : activeCount}</strong><small>Tài khoản có thể đăng nhập</small></article>
-        <article><span>Quản lý cảng</span><strong>{loading ? "—" : managerCount}</strong><small>Phụ trách điều phối tại cảng</small></article>
+        {isPortManager
+          ? <article><span>Phạm vi quản lý</span><strong>1 cảng</strong><small>{currentUser.portName}</small></article>
+          : <article><span>Quản lý cảng</span><strong>{loading ? "—" : managerCount}</strong><small>Phụ trách điều phối tại cảng</small></article>}
         <article><span>Nhân viên vận hành</span><strong>{loading ? "—" : operatorCount}</strong><small>Tiếp nhận và xử lý nhiệm vụ</small></article>
       </div>
 
-      <div aria-label="Bộ lọc người dùng" className="card user-filter-card">
+      <div aria-label="Bộ lọc người dùng" className={`card user-filter-card${isPortManager ? " is-port-manager" : ""}`}>
         <div className="user-filter-head">
           <div><span className="user-filter-eyebrow">BỘ LỌC TÀI KHOẢN</span><h3>Tìm đúng người dùng cần quản lý</h3><p>Kết quả được cập nhật ngay khi bạn thay đổi điều kiện lọc.</p></div>
           <button className="btn ghost user-reset-button" disabled={!search && roleFilter === "ALL" && statusFilter === "ALL" && portFilter === "ALL"} onClick={resetFilters} type="button">Xóa bộ lọc</button>
         </div>
         <label className="user-search-field"><span>Tìm người dùng</span><input aria-label="Tìm người dùng" className="input" onChange={(event) => setSearch(event.target.value)} placeholder="Nhập tên, email hoặc cảng..." value={search} /></label>
-        <label><span>Vai trò</span><select aria-label="Lọc theo vai trò" className="input" onChange={(event) => setRoleFilter(event.target.value)} value={roleFilter}><option value="ALL">Tất cả vai trò</option><option value="ADMIN">Quản trị viên</option><option value="PORT_MANAGER">Quản lý cảng</option><option value="OPERATOR">Nhân viên vận hành</option></select></label>
+        {!isPortManager ? <label><span>Vai trò</span><select aria-label="Lọc theo vai trò" className="input" onChange={(event) => setRoleFilter(event.target.value)} value={roleFilter}><option value="ALL">Tất cả vai trò</option><option value="ADMIN">Quản trị viên</option><option value="PORT_MANAGER">Quản lý cảng</option><option value="OPERATOR">Nhân viên vận hành</option></select></label> : null}
         <label><span>Cảng phụ trách</span><select aria-label="Lọc theo cảng" className="input" onChange={(event) => setPortFilter(event.target.value)} value={portFilter}><option value="ALL">Tất cả cảng</option>{portNames.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
         <label><span>Trạng thái</span><select aria-label="Lọc theo trạng thái" className="input" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}><option value="ALL">Tất cả trạng thái</option><option value="ACTIVE">Đang hoạt động</option><option value="INACTIVE">Tạm ngưng</option><option value="LOCKED">Đang khóa</option></select></label>
       </div>
@@ -162,7 +171,7 @@ export function UsersPage({ refreshKey }: UsersPageProps) {
                   <td><span className="user-port-label">{user.portName}</span></td>
                   <td><Badge tone={statusTone(user.status)}>{statusLabel(user.status)}</Badge></td>
                   <td><span className="user-last-login">{user.lastLoginLabel}</span></td>
-                  <td><div className="table-actions"><Link aria-label={`Sửa ${user.fullName}`} className="btn ghost btn-small" to={`/users/${user.userId}/edit`}>Sửa</Link>{user.role !== "ADMIN" ? <button aria-label={`Xóa ${user.fullName}`} className="btn danger btn-small" onClick={() => void handleDelete(user)} type="button">Xóa</button> : null}</div></td>
+                  <td><div className="table-actions"><Link aria-label={`Sửa ${user.fullName}`} className="btn ghost btn-small" to={`/users/${user.userId}/edit`}>Sửa</Link>{user.role !== "ADMIN" && (!isPortManager || user.portId === currentUser.portId) ? <button aria-label={`${isPortManager ? "Gỡ khỏi cảng" : "Xóa"} ${user.fullName}`} className="btn danger btn-small" onClick={() => void handleDelete(user)} type="button">{isPortManager ? "Gỡ khỏi cảng" : "Xóa"}</button> : null}</div></td>
                 </tr>
               ))}
             </tbody>

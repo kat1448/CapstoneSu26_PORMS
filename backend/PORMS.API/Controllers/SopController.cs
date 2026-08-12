@@ -10,7 +10,7 @@ using System.Security.Claims;
 namespace PORMS.API.Controllers;
 
 [ApiController]
-[Authorize(Policy = "AdminOrPortManager")]
+[Authorize(Policy = "AdminOnly")]
 [Route("api/sop-rules")]
 public sealed class SopController : ControllerBase
 {

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import type { DemoUser } from "../App";
 import { getPorts } from "../services/portService";
 import {
   createUser,
@@ -13,6 +14,7 @@ import {
 } from "../services/userService";
 
 type UserFormPageProps = {
+  currentUser: DemoUser;
   mode: "create" | "edit";
 };
 
@@ -70,7 +72,8 @@ function formFromUser(user: UserRecord, fallbackPortId: string): UserFormState {
   };
 }
 
-export function UserFormPage({ mode }: UserFormPageProps) {
+export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
+  const isPortManager = currentUser.role === "PORT_MANAGER";
   const navigate = useNavigate();
   const { userId } = useParams();
   const [form, setForm] = useState<UserFormState>(emptyForm);
@@ -86,7 +89,10 @@ export function UserFormPage({ mode }: UserFormPageProps) {
     getPorts()
       .then((ports) => {
         if (!active) return;
-        const options = ports.map((port) => ({ label: port.portName, value: port.portId }));
+        const visiblePorts = isPortManager && currentUser.portId
+          ? ports.filter((port) => port.portId === currentUser.portId)
+          : ports;
+        const options = visiblePorts.map((port) => ({ label: port.portName, value: port.portId }));
         setPortOptions(options);
         setForm((value) => {
           if (value.role === "ADMIN" || value.portId.trim() || options.length === 0) {
@@ -104,7 +110,7 @@ export function UserFormPage({ mode }: UserFormPageProps) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentUser.portId, isPortManager]);
 
   useEffect(() => {
     if (mode !== "edit") {
@@ -150,7 +156,7 @@ export function UserFormPage({ mode }: UserFormPageProps) {
         email: form.email.trim(),
         fullName: form.fullName.trim(),
         portId: toNullablePortId(form.portId),
-        role: form.role,
+        role: isPortManager ? "OPERATOR" : form.role,
         status: form.status
       };
 
@@ -241,7 +247,7 @@ export function UserFormPage({ mode }: UserFormPageProps) {
               }}
               value={form.role}
             >
-              {roleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              {(isPortManager ? roleOptions.filter((option) => option.value === "OPERATOR") : roleOptions).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
           <label>
@@ -259,7 +265,7 @@ export function UserFormPage({ mode }: UserFormPageProps) {
               onChange={(event) => setForm((value) => ({ ...value, portId: event.target.value }))}
               value={form.portId}
             >
-              <option disabled={form.role !== "ADMIN"} value="">Tất cả</option>
+              <option disabled={!isPortManager && form.role !== "ADMIN"} value="">{isPortManager ? "Chưa phân cảng" : "Tất cả"}</option>
               {portOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
