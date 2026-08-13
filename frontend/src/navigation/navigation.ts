@@ -42,14 +42,14 @@ export const navigationGroups: NavigationGroup[] = [
     label: "Quản lý",
     items: [
       { icon: "port", label: "Cảng & khu vực", path: "/ports", roles: adminOnly },
-      { icon: "users", label: "Người dùng", path: "/users", roles: adminOnly }
+      { icon: "users", label: "Nhân sự cảng", path: "/users", roles: adminAndPortManager }
     ]
   },
   {
     label: "Cấu hình",
     items: [
-      { icon: "settings", label: "Mức cảnh báo", path: "/risk-config", roles: adminAndPortManager },
-      { icon: "rules", label: "Quy trình ứng phó", path: "/sop-rules", roles: adminAndPortManager }
+      { icon: "settings", label: "Mức cảnh báo", path: "/risk-config", roles: adminOnly },
+      { icon: "rules", label: "Quy trình ứng phó", path: "/sop-rules", roles: adminOnly }
     ]
   },
   {

@@ -7,6 +7,14 @@ import { createUser, getUsers, updateUser } from "../services/userService";
 import type { UserRecord } from "../services/userService";
 import { UserFormPage } from "./UserFormPage";
 
+const adminUser = {
+  email: "admin@porms.vn",
+  initials: "AD",
+  name: "System Administrator",
+  portName: "Tất cả",
+  role: "ADMIN" as const
+};
+
 vi.mock("../services/portService", () => ({
   getPorts: vi.fn()
 }));
@@ -50,8 +58,8 @@ function renderRoutes(initialPath: string, mode: "create" | "edit") {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
-        <Route path="/users/new" element={<UserFormPage mode={mode} />} />
-        <Route path="/users/:userId/edit" element={<UserFormPage mode={mode} />} />
+        <Route path="/users/new" element={<UserFormPage currentUser={adminUser} mode={mode} />} />
+        <Route path="/users/:userId/edit" element={<UserFormPage currentUser={adminUser} mode={mode} />} />
         <Route path="/users" element={<div>Users list page</div>} />
       </Routes>
     </MemoryRouter>

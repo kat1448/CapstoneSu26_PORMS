@@ -4663,6 +4663,7 @@
 .user-stat-grid strong { color: #102f49; font-size: 28px; line-height: 1.1; }
 .user-stat-grid small { color: #7890a2; font-size: 12px; }
 .users-page .user-filter-card { background: #fff; border-radius: 12px; box-shadow: none; grid-template-columns: minmax(280px, 1.6fr) repeat(3, minmax(150px, 1fr)); padding: 18px; }
+.users-page .user-filter-card.is-port-manager { grid-template-columns: minmax(280px, 1.6fr) repeat(2, minmax(150px, 1fr)); }
 .users-page .user-filter-head { align-items: center; padding-bottom: 14px; }
 .users-page .user-filter-head h3 { font-size: 16px; }
 .users-page .user-filter-head .user-reset-button { min-height: 38px; }
