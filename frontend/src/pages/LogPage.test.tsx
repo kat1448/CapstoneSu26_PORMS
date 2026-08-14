@@ -110,6 +110,7 @@ describe("LogPage", () => {
 
     expect(screen.getByRole("heading", { name: /Chi tiết nhật ký vận hành/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Cảng Tiên Sa/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Rất cao")).toBeInTheDocument();
     const eventList = screen.getByRole("list", { name: /Danh sách diễn biến vận hành/i });
     expect(within(eventList).getAllByRole("listitem")).toHaveLength(3);
     expect(within(eventList).getByText("Simulation started")).toBeInTheDocument();
@@ -144,6 +145,7 @@ describe("LogPage", () => {
         portCode: "DNTSA",
         portId: "port-target",
         portName: "Cang Tien Sa",
+        riskLevel: "HIGH",
         summary: "Log dung bo loc",
         tone: "warning",
         zoneId: "zone-target",
@@ -229,6 +231,7 @@ describe("LogPage", () => {
     await user.click(detailButtons[0]);
 
     expect(view.getByText("Log dung bo loc")).toBeInTheDocument();
+    expect(view.getByText("Cao")).toBeInTheDocument();
     expect(view.queryByText("Log sai cang")).not.toBeInTheDocument();
     expect(view.queryByText("Log sai khu vuc")).not.toBeInTheDocument();
     expect(view.queryByText("Log sai muc")).not.toBeInTheDocument();
