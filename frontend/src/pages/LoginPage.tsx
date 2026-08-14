@@ -101,7 +101,7 @@ export function LoginPage({ demoUsers, onLogin }: LoginPageProps) {
                 key={user.role}
                 onClick={() => {
                   setEmail(user.email);
-                  setPassword("Admin@2026!");
+                  setPassword("Admin@123");
                 }}
                 type="button"
               >
