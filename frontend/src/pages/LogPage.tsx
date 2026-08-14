@@ -3,7 +3,7 @@ import { Badge } from "../components/common/Badge";
 import { useDemoRefresh } from "../hooks/useDemoRefresh";
 import { getOperationEvents } from "../services/logService";
 import type { OperationEvent } from "../types/log";
-import { actorDisplayLabel, operationEventLabel, operationEventSummaryLabel, simulationDetailLabel } from "../utils/displayLabels";
+import { actorDisplayLabel, operationEventLabel, operationEventSummaryLabel, riskLabel, simulationDetailLabel } from "../utils/displayLabels";
 
 type LogPageProps = {
   refreshKey: number;
@@ -18,6 +18,7 @@ type OperationLogRun = {
   lastAt: string;
   portCode: string;
   portName: string;
+  riskLevel: string;
   riskTone: OperationEvent["tone"];
   runLabel: string;
   scenarioName?: string | null;
@@ -31,6 +32,12 @@ const tonePriority: Record<OperationEvent["tone"], number> = {
 };
 
 const PAGE_SIZE = 15;
+const riskPriority: Record<string, number> = {
+  CRITICAL: 4,
+  HIGH: 3,
+  MEDIUM: 2,
+  LOW: 1
+};
 const toneOptions: OperationEvent["tone"][] = ["info", "success", "warning", "danger"];
 const toneLabels: Record<OperationEvent["tone"], string> = {
   danger: "Nguy hiểm",
@@ -54,6 +61,33 @@ function badgeTone(tone: OperationEvent["tone"]): "danger" | "info" | "success" 
   if (tone === "warning") return "warning";
   if (tone === "success") return "success";
   return "info";
+}
+
+function riskBadgeTone(riskLevel: string): "danger" | "info" | "success" | "warning" {
+  if (riskLevel === "CRITICAL") return "danger";
+  if (riskLevel === "HIGH") return "warning";
+  if (riskLevel === "LOW") return "success";
+  return "info";
+}
+
+function fallbackRiskFromTone(tone: OperationEvent["tone"]) {
+  if (tone === "danger") return "CRITICAL";
+  if (tone === "warning") return "HIGH";
+  return "LOW";
+}
+
+function eventRiskLevel(event: OperationEvent) {
+  const explicitRisk = event.riskLevel?.trim().toUpperCase();
+  if (explicitRisk && explicitRisk in riskPriority) {
+    return explicitRisk;
+  }
+
+  const summaryRisk = event.summary.match(/\b(LOW|MEDIUM|HIGH|CRITICAL)\b/i)?.[1]?.toUpperCase();
+  if (summaryRisk && summaryRisk in riskPriority) {
+    return summaryRisk;
+  }
+
+  return fallbackRiskFromTone(event.tone);
 }
 
 function eventDateValue(event: OperationEvent) {
@@ -98,6 +132,10 @@ function groupOperationRuns(events: OperationEvent[]): OperationLogRun[] {
     const strongestTone = sortedEvents.reduce<OperationEvent["tone"]>((current, event) => (
       tonePriority[event.tone] > tonePriority[current] ? event.tone : current
     ), "info");
+    const strongestRiskLevel = sortedEvents.reduce((current, event) => {
+      const riskLevel = eventRiskLevel(event);
+      return riskPriority[riskLevel] > riskPriority[current] ? riskLevel : current;
+    }, "LOW");
 
     return {
       events: sortedEvents,
@@ -106,6 +144,7 @@ function groupOperationRuns(events: OperationEvent[]): OperationLogRun[] {
       lastAt: newest?.occurredAt ?? "-",
       portCode: newest?.portCode ?? "N/A",
       portName: newest?.portName ?? newest?.portCode ?? "Không xác định",
+      riskLevel: strongestRiskLevel,
       riskTone: strongestTone,
       runLabel: newest?.simulationDatasetName ?? (newest?.simulationSessionId ? "Kịch bản mô phỏng" : `Lần vận hành ${newest?.portName ?? ""}`),
       scenarioName: newest?.simulationDatasetName ?? null
@@ -391,7 +430,7 @@ export function LogPage({ refreshKey }: LogPageProps) {
             <article className="card card-pad simulation-results-kpi risk">
               <span>Mức cần chú ý</span>
               <strong>{toneLabels[selectedRun.riskTone]}</strong>
-              <Badge tone={badgeTone(selectedRun.riskTone)}>{toneLabels[selectedRun.riskTone]}</Badge>
+              <Badge tone={riskBadgeTone(selectedRun.riskLevel)}>{riskLabel(selectedRun.riskLevel)}</Badge>
             </article>
           </div>
 

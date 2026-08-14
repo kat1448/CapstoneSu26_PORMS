@@ -8,7 +8,7 @@ type LoginPageProps = {
 
 export function LoginPage({ demoUsers, onLogin }: LoginPageProps) {
   const [email, setEmail] = useState("admin@porms.vn");
-  const [password, setPassword] = useState("Admin@2026!");
+  const [password, setPassword] = useState("Admin@123");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
