@@ -14,13 +14,7 @@ public sealed class UserRepository
     }
 
     public async Task<IReadOnlyList<UserSummaryReadModel>> GetUsersAsync(
-        string? search,
-        string? role,
-        string? status,
-        string? portCode,
-        CancellationToken cancellationToken,
-        Guid? scopedPortId = null,
-        bool operatorsOnly = false)
+        string? search, string? role, string? status, string? portCode, CancellationToken cancellationToken)
     {
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
 
@@ -40,21 +34,14 @@ public sealed class UserRepository
               AND (@role IS NULL OR u.role::text = @role)
               AND (@status IS NULL OR u.status::text = @status)
               AND (@portCode IS NULL OR p.code = @portCode)
-              AND (@operatorsOnly = FALSE OR u.role = 'OPERATOR')
-              AND (@scopedPortId IS NULL OR u.assigned_port_id = @scopedPortId OR u.assigned_port_id IS NULL)
             ORDER BY u.full_name;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
-        AddNullableTextParameter(command, "search", search?.Trim());
-        AddNullableTextParameter(command, "role", role?.Trim().ToUpperInvariant());
-        AddNullableTextParameter(command, "status", status?.Trim().ToUpperInvariant());
-        AddNullableTextParameter(command, "portCode", portCode?.Trim().ToUpperInvariant());
-        command.Parameters.AddWithValue("operatorsOnly", operatorsOnly);
-        command.Parameters.Add(new NpgsqlParameter("scopedPortId", NpgsqlDbType.Uuid)
-        {
-            Value = scopedPortId.HasValue ? scopedPortId.Value : DBNull.Value
-        });
+        command.Parameters.AddWithValue("search", string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim());
+        command.Parameters.AddWithValue("role", string.IsNullOrWhiteSpace(role) ? DBNull.Value : role.Trim().ToUpperInvariant());
+        command.Parameters.AddWithValue("status", string.IsNullOrWhiteSpace(status) ? DBNull.Value : status.Trim().ToUpperInvariant());
+        command.Parameters.AddWithValue("portCode", string.IsNullOrWhiteSpace(portCode) ? DBNull.Value : portCode.Trim().ToUpperInvariant());
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var results = new List<UserSummaryReadModel>();
@@ -64,53 +51,6 @@ public sealed class UserRepository
         }
 
         return results;
-    }
-
-    public async Task<UserSummaryReadModel?> GetUserAsync(Guid userId, CancellationToken cancellationToken)
-    {
-        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
-        const string sql = """
-            SELECT u.id,
-                   u.email,
-                   u.full_name,
-                   u.role,
-                   u.status,
-                   u.assigned_port_id,
-                   COALESCE(p.name, 'Tất cả') AS port_name,
-                   u.last_login_at
-            FROM operational.users u
-            LEFT JOIN operational.ports p ON p.id = u.assigned_port_id
-            WHERE u.id = @userId
-              AND u.deleted_at IS NULL
-            LIMIT 1;
-            """;
-
-        await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("userId", userId);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await reader.ReadAsync(cancellationToken) ? ReadUserSummary(reader) : null;
-    }
-
-    public async Task<bool> UnassignOperatorFromPortAsync(
-        Guid userId,
-        Guid portId,
-        CancellationToken cancellationToken)
-    {
-        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
-        const string sql = """
-            UPDATE operational.users
-            SET assigned_port_id = NULL,
-                updated_at = NOW()
-            WHERE id = @userId
-              AND role = 'OPERATOR'
-              AND assigned_port_id = @portId
-              AND deleted_at IS NULL;
-            """;
-
-        await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("userId", userId);
-        command.Parameters.AddWithValue("portId", portId);
-        return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
     }
 
     public async Task<UserSummaryReadModel> CreateUserAsync(
@@ -368,14 +308,6 @@ public sealed class UserRepository
         command.Parameters.Add(new NpgsqlParameter("portId", NpgsqlDbType.Uuid)
         {
             Value = portId.HasValue ? portId.Value : DBNull.Value
-        });
-    }
-
-    private static void AddNullableTextParameter(NpgsqlCommand command, string name, string? value)
-    {
-        command.Parameters.Add(new NpgsqlParameter(name, NpgsqlDbType.Text)
-        {
-            Value = string.IsNullOrWhiteSpace(value) ? DBNull.Value : value
         });
     }
 }

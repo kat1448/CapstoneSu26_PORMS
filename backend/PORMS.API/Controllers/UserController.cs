@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PORMS.API.Contracts;
@@ -8,7 +7,7 @@ using PORMS.Infrastructure.Repositories;
 namespace PORMS.API.Controllers;
 
 [ApiController]
-[Authorize(Policy = "AdminOrPortManager")]
+[Authorize(Policy = "AdminOnly")]
 [Route("api/users")]
 public sealed class UserController : ControllerBase
 {
@@ -24,20 +23,7 @@ public sealed class UserController : ControllerBase
         [FromServices] UserRepository repository,
         CancellationToken cancellationToken)
     {
-        var access = GetAccessScope(User);
-        if (access.Role == "PORT_MANAGER" && access.PortId is null)
-        {
-            return Forbid();
-        }
-
-        var users = await repository.GetUsersAsync(
-            search,
-            access.Role == "PORT_MANAGER" ? "OPERATOR" : role,
-            status,
-            portCode,
-            cancellationToken,
-            access.Role == "PORT_MANAGER" ? access.PortId : null,
-            access.Role == "PORT_MANAGER");
+        var users = await repository.GetUsersAsync(search, role, status, portCode, cancellationToken);
         return Ok(users.Select(ToResponse).ToList());
     }
 
@@ -47,12 +33,6 @@ public sealed class UserController : ControllerBase
         [FromServices] UserRepository repository,
         CancellationToken cancellationToken)
     {
-        var access = GetAccessScope(User);
-        if (!CanManagerWrite(access, request.Role, request.PortId))
-        {
-            return Forbid();
-        }
-
         var validationError = ValidateWriteRequest(request.Email, request.FullName, request.Role, request.Status, request.PortId);
         if (validationError is not null)
         {
@@ -85,22 +65,6 @@ public sealed class UserController : ControllerBase
         [FromServices] UserRepository repository,
         CancellationToken cancellationToken)
     {
-        var access = GetAccessScope(User);
-        var target = await repository.GetUserAsync(userId, cancellationToken);
-        if (target is null)
-        {
-            return NotFound();
-        }
-
-        if (access.Role == "PORT_MANAGER"
-            && (access.PortId is null
-                || target.Role != "OPERATOR"
-                || (target.PortId is not null && target.PortId != access.PortId)
-                || !CanManagerWrite(access, request.Role, request.PortId)))
-        {
-            return Forbid();
-        }
-
         var validationError = ValidateWriteRequest(request.Email, request.FullName, request.Role, request.Status, request.PortId);
         if (validationError is not null)
         {
@@ -121,18 +85,6 @@ public sealed class UserController : ControllerBase
         [FromServices] UserRepository repository,
         CancellationToken cancellationToken)
     {
-        var access = GetAccessScope(User);
-        if (access.Role == "PORT_MANAGER")
-        {
-            if (access.PortId is null)
-            {
-                return Forbid();
-            }
-
-            var unassigned = await repository.UnassignOperatorFromPortAsync(userId, access.PortId.Value, cancellationToken);
-            return unassigned ? NoContent() : Forbid();
-        }
-
         var result = await repository.DeleteUserAsync(userId, cancellationToken);
         return result switch
         {
@@ -186,33 +138,12 @@ public sealed class UserController : ControllerBase
             return "ADMIN không gán cảng phụ trách.";
         }
 
-        if (role == "PORT_MANAGER" && portId is null)
+        if (role != "ADMIN" && portId is null)
         {
-            return "Port Manager phải được gán cảng phụ trách.";
+            return "Người dùng vận hành phải được gán cảng phụ trách.";
         }
 
         return null;
-    }
-
-    private static (string Role, Guid? PortId) GetAccessScope(ClaimsPrincipal user)
-    {
-        var role = user.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
-        var portId = Guid.TryParse(user.FindFirstValue("port_id"), out var parsedPortId)
-            ? parsedPortId
-            : (Guid?)null;
-        return (role, portId);
-    }
-
-    private static bool CanManagerWrite((string Role, Guid? PortId) access, string targetRole, Guid? targetPortId)
-    {
-        if (access.Role != "PORT_MANAGER")
-        {
-            return true;
-        }
-
-        return access.PortId is not null
-            && targetRole == "OPERATOR"
-            && (targetPortId is null || targetPortId == access.PortId);
     }
 
     private static string FormatLastLogin(DateTimeOffset? lastLoginAt)

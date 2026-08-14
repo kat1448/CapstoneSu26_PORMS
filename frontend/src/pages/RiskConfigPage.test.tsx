@@ -205,6 +205,7 @@ describe("RiskConfigPage", () => {
 
     expect(screen.queryByRole("button", { name: "Tải template Excel" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Nhập Excel" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Lưu cấu hình" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Khôi phục" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Lưu cấu hình" })).not.toBeInTheDocument();
   });
 });

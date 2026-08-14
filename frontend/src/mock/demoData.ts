@@ -346,6 +346,16 @@ const baseState: DemoState = {
   },
   users: [
     {
+      email: "admin@porms.vn",
+      fullName: "System Admin",
+      lastLoginLabel: "Vua xong",
+      portId: null,
+      portName: "Tat ca",
+      role: "ADMIN",
+      status: "ACTIVE",
+      userId: "demo-admin"
+    },
+    {
       email: "hung@example.com",
       fullName: "Nguyễn Văn Hùng",
       lastLoginLabel: "Vừa xong",

@@ -9,6 +9,7 @@ export type OperationEvent = {
   portCode: string;
   portId?: string | null;
   portName?: string | null;
+  riskLevel?: string | null;
   simulationDatasetName?: string | null;
   simulationSessionId?: string | null;
   summary: string;

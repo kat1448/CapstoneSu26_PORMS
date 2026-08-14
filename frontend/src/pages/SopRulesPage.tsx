@@ -148,14 +148,17 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
   }, [data?.rules, query, zoneFilter]);
 
   const selectedGroup = groupedRules.find((group) => group.riskLevel === selectedRisk) ?? null;
+  const isAdmin = currentUser.role === "ADMIN";
 
   function openCreateForm() {
+    if (!isAdmin) return;
     setEditingId(null);
     setForm(selectedRisk ? { ...emptyForm, triggerRiskLevel: selectedRisk } : emptyForm);
     setShowForm(true);
   }
 
   function openEditForm(rule: SopRule) {
+    if (!isAdmin) return;
     setEditingId(rule.id);
     setForm(formFromRule(rule));
     setShowForm(true);
@@ -163,6 +166,7 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isAdmin) return;
     setSaving(true);
     setError(null);
     try {
@@ -190,6 +194,7 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
   }
 
   async function handleDelete(rule: SopRule) {
+    if (!isAdmin) return;
     if (!window.confirm(`Xóa quy tắc ${rule.ruleCode}?`)) return;
     setSaving(true);
     setError(null);
@@ -364,7 +369,7 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
         <div className="head-actions">
           <button className="button button-secondary" onClick={reload} type="button">Tải lại</button>
 
-          {currentUser.role === "ADMIN" ? (
+          {isAdmin ? (
             <>
               <button
                 className="button button-secondary"
@@ -392,7 +397,7 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
             </>
           ) : null}
 
-          <button className="button button-primary" onClick={openCreateForm} type="button">Thêm quy tắc</button>
+          {isAdmin ? <button className="button button-primary" onClick={openCreateForm} type="button">Thêm quy tắc</button> : null}
         </div>
       </div>
 
@@ -404,7 +409,7 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
         </div>
       ) : null}
 
-      {currentUser.role === "ADMIN" && showImportPanel ? (
+      {isAdmin && showImportPanel ? (
         <article className="card card-pad sop-rule-form">
           <div className="card-head">
             <div>
@@ -538,7 +543,7 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
         ))}
       </div>
 
-      {showForm ? (
+      {isAdmin && showForm ? (
         <form className="card card-pad sop-rule-form" onSubmit={handleSubmit}>
           <div className="card-head">
             <div>
@@ -627,10 +632,12 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
                   </div>
                   <p>{rule.actionType}</p>
                 </div>
-                <div className="sop-stats">
-                  <button className="button button-secondary button-small" onClick={() => openEditForm(rule)} type="button">Chỉnh sửa</button>
-                  <button className="button button-secondary button-small" onClick={() => handleDelete(rule)} type="button">Xóa</button>
-                </div>
+                {isAdmin ? (
+                  <div className="sop-stats">
+                    <button className="button button-secondary button-small" onClick={() => openEditForm(rule)} type="button">Chỉnh sửa</button>
+                    <button className="button button-secondary button-small" onClick={() => handleDelete(rule)} type="button">Xóa</button>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

@@ -11,6 +11,7 @@ import {
   getSimulationMapPoints,
   getSimulationResult,
   getSimulationSnapshot,
+  runDemoSimulation,
   runSimulationDataset,
   updateSimulationDataset
 } from "../services/simulationService";
@@ -275,6 +276,22 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
     } finally {
       setRunning(false);
       setRunningDatasetIndex(0);
+    }
+  }
+
+  async function handleRunStormDemo() {
+    setRunning(true);
+    setSaveError("");
+    setResult(null);
+    try {
+      const run = await runDemoSimulation();
+      setSnapshot(await getSimulationSnapshot());
+      if (run?.sessionId) setResult(await getSimulationResult(run.sessionId));
+      setSaveMessage("Đã tạo tình huống rủi ro cao cùng cảnh báo và nhiệm vụ ứng phó.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Chưa thể chạy kịch bản mẫu. Vui lòng thử lại.");
+    } finally {
+      setRunning(false);
     }
   }
 
@@ -628,6 +645,24 @@ export function SimulationPage({ refreshKey }: SimulationPageProps) {
               ? `Đã chọn ${selectedDatasetIds.length} bộ dữ liệu${runningDatasetIndex ? ` · Đang chạy ${runningDatasetIndex}/${selectedDatasetIds.length}` : ""}`
               : "Chưa chọn bộ dữ liệu mô phỏng"}
           </p>
+          <label className="field-label" htmlFor="simulation-speed">Tốc độ mô phỏng</label>
+          <select className="input select-input" disabled={isRunning} id="simulation-speed">
+            <option>1x - Thực tế</option>
+            <option>2x - Nhanh</option>
+            <option>5x - Demo</option>
+          </select>
+          <div className="sim-dataset-card sim-demo-callout">
+            <strong>Cần xem đầy đủ cảnh báo và nhiệm vụ?</strong>
+            <span>Chạy kịch bản mẫu để hệ thống tạo tình huống từ Thấp đến Rất cao.</span>
+            <button
+              className="button button-primary button-small"
+              disabled={isRunning}
+              onClick={() => { void handleRunStormDemo(); }}
+              type="button"
+            >
+              Chạy kịch bản bão mẫu
+            </button>
+          </div>
           <button
             className="button button-secondary simulation-action"
             disabled={isRunning || selectedDatasetIds.length === 0}

@@ -27,7 +27,7 @@ public sealed class RiskController : ControllerBase
     }
 
     [HttpGet("thresholds")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOrPortManager")]
     public async Task<ActionResult<RiskConfigResponse>> GetThresholds(
         [FromServices] RiskRepository repository,
         CancellationToken cancellationToken)
