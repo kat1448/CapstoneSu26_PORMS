@@ -37,11 +37,11 @@ describe("LoginPage", () => {
     await user.clear(emailInput!);
     await user.type(emailInput!, "operator@porms.vn");
     await user.clear(passwordInput!);
-    await user.type(passwordInput!, "Standard@2026!");
+    await user.type(passwordInput!, "Standard@123");
     await user.click(screen.getByRole("button", { name: /dang nhap|đăng nhập/i }));
 
     await waitFor(() => {
-      expect(onLogin).toHaveBeenCalledWith("operator@porms.vn", "Standard@2026!");
+      expect(onLogin).toHaveBeenCalledWith("operator@porms.vn", "Standard@123");
     });
   });
 
