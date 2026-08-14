@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import type { DemoUser } from "../App";
 import { getPorts } from "../services/portService";
 import {
   createUser,
@@ -13,6 +14,7 @@ import {
 } from "../services/userService";
 
 type UserFormPageProps = {
+  currentUser?: DemoUser | null;
   mode: "create" | "edit";
 };
 
@@ -70,10 +72,25 @@ function formFromUser(user: UserRecord, fallbackPortId: string): UserFormState {
   };
 }
 
-export function UserFormPage({ mode }: UserFormPageProps) {
+function isEditingSignedInAdmin(
+  currentUser: DemoUser | null | undefined,
+  selectedUser: UserRecord | null,
+  routeUserId: string | undefined
+) {
+  if (currentUser?.role !== "ADMIN" || selectedUser?.role !== "ADMIN") {
+    return false;
+  }
+
+  const sameUserId = Boolean(currentUser.id && routeUserId && currentUser.id === routeUserId);
+  const sameEmail = currentUser.email.trim().toLocaleLowerCase("en-US") === selectedUser.email.trim().toLocaleLowerCase("en-US");
+  return sameUserId || sameEmail;
+}
+
+export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
   const navigate = useNavigate();
   const { userId } = useParams();
   const [form, setForm] = useState<UserFormState>(emptyForm);
+  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(mode === "edit");
   const [notFound, setNotFound] = useState(false);
@@ -123,6 +140,7 @@ export function UserFormPage({ mode }: UserFormPageProps) {
           setNotFound(true);
           return;
         }
+        setSelectedUser(selectedUser);
         setForm((value) => formFromUser(selectedUser, value.portId));
       })
       .catch((caught) => {
@@ -145,12 +163,15 @@ export function UserFormPage({ mode }: UserFormPageProps) {
     setError(null);
     setSubmitting(true);
 
+    const isSelfAdminEdit = mode === "edit" && isEditingSignedInAdmin(currentUser, selectedUser, userId);
+    const submittedRole: UserRole = isSelfAdminEdit ? "ADMIN" : form.role;
+
     try {
       const payload: UpdateUserInput = {
         email: form.email.trim(),
         fullName: form.fullName.trim(),
-        portId: toNullablePortId(form.portId),
-        role: form.role,
+        portId: submittedRole === "ADMIN" ? null : toNullablePortId(form.portId),
+        role: submittedRole,
         status: form.status
       };
 
@@ -174,6 +195,8 @@ export function UserFormPage({ mode }: UserFormPageProps) {
       setSubmitting(false);
     }
   }
+
+  const isSelfAdminEdit = mode === "edit" && isEditingSignedInAdmin(currentUser, selectedUser, userId);
 
   if (loading) {
     return (
@@ -231,6 +254,8 @@ export function UserFormPage({ mode }: UserFormPageProps) {
           <label>
             <span>Vai trò</span>
             <select
+              aria-label="Vai trò"
+              disabled={isSelfAdminEdit}
               onChange={(event) => {
                 const role = event.target.value as UserRole;
                 setForm((value) => ({
@@ -243,6 +268,7 @@ export function UserFormPage({ mode }: UserFormPageProps) {
             >
               {roleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
+            {isSelfAdminEdit ? <small className="field-hint">Admin không thể tự thay đổi vai trò của chính mình.</small> : null}
           </label>
           <label>
             <span>Trạng thái</span>

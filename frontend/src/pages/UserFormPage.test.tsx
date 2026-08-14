@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPorts } from "../services/portService";
 import { createUser, getUsers, updateUser } from "../services/userService";
 import type { UserRecord } from "../services/userService";
+import type { DemoUser } from "../App";
 import { UserFormPage } from "./UserFormPage";
 
 vi.mock("../services/portService", () => ({
@@ -46,12 +47,12 @@ const userRecords: UserRecord[] = [
   }
 ];
 
-function renderRoutes(initialPath: string, mode: "create" | "edit") {
+function renderRoutes(initialPath: string, mode: "create" | "edit", currentUser?: DemoUser) {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
-        <Route path="/users/new" element={<UserFormPage mode={mode} />} />
-        <Route path="/users/:userId/edit" element={<UserFormPage mode={mode} />} />
+        <Route path="/users/new" element={<UserFormPage currentUser={currentUser} mode={mode} />} />
+        <Route path="/users/:userId/edit" element={<UserFormPage currentUser={currentUser} mode={mode} />} />
         <Route path="/users" element={<div>Users list page</div>} />
       </Routes>
     </MemoryRouter>
@@ -135,5 +136,40 @@ describe("UserFormPage", () => {
       status: "ACTIVE"
     });
     await screen.findByText("Users list page");
+  });
+
+  it("prevents the signed-in admin from changing their own role", async () => {
+    const user = userEvent.setup();
+    const adminRecord: UserRecord = {
+      ...userRecords[0],
+      email: "admin@porms.vn",
+      fullName: "System Admin",
+      portId: null,
+      portName: "Tat ca",
+      role: "ADMIN",
+      userId: "demo-admin"
+    };
+    vi.mocked(getPorts).mockResolvedValue(ports);
+    vi.mocked(getUsers).mockResolvedValue([adminRecord]);
+    vi.mocked(updateUser).mockResolvedValue(adminRecord);
+
+    renderRoutes("/users/demo-admin/edit", "edit", {
+      email: "admin@porms.vn",
+      initials: "SA",
+      name: "System Admin",
+      portName: "Tat ca",
+      role: "ADMIN"
+    });
+
+    const roleSelect = await screen.findByRole("combobox", { name: "Vai trò" });
+    expect(roleSelect).toBeDisabled();
+    expect(screen.getByText("Admin không thể tự thay đổi vai trò của chính mình.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
+
+    expect(updateUser).toHaveBeenCalledWith("demo-admin", expect.objectContaining({
+      portId: null,
+      role: "ADMIN"
+    }));
   });
 });

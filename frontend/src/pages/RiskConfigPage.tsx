@@ -135,6 +135,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
 
   const thresholdMap = useMemo(() => new Map(thresholds.map((item) => [thresholdKey(item), item])), [thresholds]);
   const preview = previewRisk(beaufort, rain, visibility, thresholds);
+  const isAdmin = currentUser.role === "ADMIN";
 
   function updateThreshold(factor: WeatherFactor, riskLevel: RiskLevel, patch: Partial<RiskThreshold>) {
     setThresholds((current) => current.map((item) => (
@@ -356,16 +357,16 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
           <p>Thiết lập ngưỡng thời tiết để phân loại rủi ro vận hành cảng</p>
         </div>
         <div className="head-actions">
-          <button
-            className="button button-secondary"
-            onClick={() => setThresholds(cloneThresholds(config))}
-            type="button"
-          >
-            Khôi phục
-          </button>
-
-          {currentUser.role === "ADMIN" ? (
+          {isAdmin ? (
             <>
+              <button
+                className="button button-secondary"
+                onClick={() => setThresholds(cloneThresholds(config))}
+                type="button"
+              >
+                Khôi phục
+              </button>
+
               <button
                 className="button button-secondary"
                 disabled={isDownloading}
@@ -392,14 +393,16 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
             </>
           ) : null}
 
-          <button
-            className="button button-primary"
-            disabled={saving}
-            onClick={handleSaveThresholds}
-            type="button"
-          >
-            Lưu cấu hình
-          </button>
+          {isAdmin ? (
+            <button
+              className="button button-primary"
+              disabled={saving}
+              onClick={handleSaveThresholds}
+              type="button"
+            >
+              Lưu cấu hình
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -411,7 +414,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
         </div>
       ) : null}
 
-      {currentUser.role === "ADMIN" && showImportPanel ? (
+      {isAdmin && showImportPanel ? (
         <article className="card card-pad sop-rule-form">
           <div className="card-head">
             <div>
@@ -597,6 +600,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
                               <div className="threshold-cell">
                                 <select
                                   aria-label={`${factor} ${level} operator`}
+                                  disabled={!isAdmin}
                                   onChange={(event) => updateThreshold(factor, level, { comparisonOperator: event.target.value as ThresholdOperator })}
                                   value={item.comparisonOperator}
                                 >
@@ -604,6 +608,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
                                 </select>
                                 <input
                                   aria-label={`${factor} ${level} value`}
+                                  disabled={!isAdmin}
                                   onChange={(event) => updateThreshold(factor, level, { thresholdValue: Number(event.target.value) })}
                                   type="number"
                                   value={item.thresholdValue}
@@ -649,7 +654,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
             <p>Ưu tiên áp dụng khi khu vực có đặc thù vận hành riêng</p>
           </div>
         </div>
-        <form className="inline-config-form" onSubmit={handleSaveOverride}>
+        {isAdmin ? <form className="inline-config-form" onSubmit={handleSaveOverride}>
           <select aria-label="Khu vực" onChange={(event) => setOverrideForm((value) => ({ ...value, zoneId: event.target.value }))} required value={overrideForm.zoneId}>
             {config?.zones.map((zone) => <option key={zone.zoneId} value={zone.zoneId}>{zone.portName} - {zone.zoneName}</option>)}
           </select>
@@ -665,7 +670,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
           <input aria-label="Giá trị override" onChange={(event) => setOverrideForm((value) => ({ ...value, thresholdValue: event.target.value }))} required type="number" value={overrideForm.thresholdValue} />
           <input aria-label="Đơn vị override" onChange={(event) => setOverrideForm((value) => ({ ...value, unit: event.target.value }))} required value={overrideForm.unit} />
           <button className="button button-secondary" disabled={saving || !overrideForm.zoneId} type="submit">Lưu override</button>
-        </form>
+        </form> : null}
         <div className="override-grid">
           {config?.zoneOverrides.map((zone) => (
             <div className="override-card" key={zone.id}>
@@ -675,7 +680,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
               </div>
               <div className="row-actions">
                 <Badge tone={zone.isEnabled ? "success" : "muted"}>{zone.isEnabled ? "Đang bật" : "Tắt"}</Badge>
-                <button className="button button-secondary button-small" onClick={() => handleDeleteOverride(zone.zoneId, zone.id)} type="button">Xóa</button>
+                {isAdmin ? <button className="button button-secondary button-small" onClick={() => handleDeleteOverride(zone.zoneId, zone.id)} type="button">Xóa</button> : null}
               </div>
             </div>
           ))}

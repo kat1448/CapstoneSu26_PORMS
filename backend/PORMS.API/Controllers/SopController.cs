@@ -109,6 +109,7 @@ public sealed class SopController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<SopRuleResponse>> CreateRule(
         [FromServices] SopRuleRepository repository,
         [FromBody] SaveSopRuleRequest request,
@@ -124,6 +125,7 @@ public sealed class SopController : ControllerBase
     }
 
     [HttpPut("{ruleId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<SopRuleResponse>> UpdateRule(
         [FromServices] SopRuleRepository repository,
         Guid ruleId,

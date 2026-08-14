@@ -4528,7 +4528,7 @@
   }
 }
 .report-page { --report-border: #d9e5f1; }
-.user-filter-card { display:grid; grid-template-columns:minmax(280px,2fr) repeat(3,minmax(160px,1fr)) auto; gap:16px; align-items:end; padding:20px; border:1px solid #d8e5ef; border-radius:16px; background:linear-gradient(135deg,#f9fcff 0%,#f1f7fb 100%); box-shadow:0 8px 24px rgba(20,61,91,.06); }
+.card.user-filter-card { display:grid; grid-template-columns:minmax(280px,2fr) repeat(3,minmax(160px,1fr)) auto; gap:18px; align-items:end; padding:24px; border:1px solid #d8e5ef; border-radius:16px; background:linear-gradient(135deg,#f9fcff 0%,#f1f7fb 100%); box-shadow:0 8px 24px rgba(20,61,91,.06); }
 .user-filter-head { grid-column:1/-1; display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding-bottom:16px; border-bottom:1px solid #dce8f0; }
 .user-filter-head h3 { margin:4px 0 3px; color:#153a59; font-size:18px; letter-spacing:-.01em; }
 .user-filter-head p { margin:0; color:#648097; font-size:13px; }
@@ -4546,8 +4546,8 @@
 .user-empty-state { display:flex; min-height:140px; flex-direction:column; justify-content:center; align-items:center; gap:7px; color:#6b8497; text-align:center; }
 .user-empty-state strong { color:#294e69; font-size:15px; }
 .user-empty-state span { font-size:13px; }
-@media (max-width:1100px) { .user-filter-card { grid-template-columns:repeat(2,minmax(180px,1fr)); } .user-filter-head,.user-search-field { grid-column:1/-1; } }
-@media (max-width:620px) { .user-filter-card { grid-template-columns:1fr; padding:16px; } .user-filter-head { flex-direction:column; } .user-filter-head,.user-search-field { grid-column:auto; } .user-result-count { align-items:flex-start; flex-direction:column; } }
+@media (max-width:1100px) { .card.user-filter-card { grid-template-columns:repeat(2,minmax(180px,1fr)); } .user-filter-head,.user-search-field { grid-column:1/-1; } }
+@media (max-width:620px) { .card.user-filter-card { grid-template-columns:1fr; padding:18px; } .user-filter-head { flex-direction:column; } .user-filter-head,.user-search-field { grid-column:auto; } .user-result-count { align-items:flex-start; flex-direction:column; } }
 .report-heading { align-items: center; }
 .report-scope { background: #e8f5f2; border: 1px solid #b8e5d7; color: #087f5b; border-radius: 999px; padding: 10px 16px; font-weight: 700; }
 .report-filter-card, .report-preview-card { border: 1px solid var(--report-border); }
