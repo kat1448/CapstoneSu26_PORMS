@@ -214,6 +214,121 @@ public sealed class IntegrationTestWebApplicationFactory : WebApplicationFactory
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task<(Guid AlertId, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt)>
+        SeedAlertWithoutExpirationAsync(
+            Guid portId,
+            CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var alertId = Guid.NewGuid();
+
+        const string sql = """
+            INSERT INTO operational.alerts (
+                id,
+                port_id,
+                alert_type,
+                severity,
+                title,
+                message,
+                context
+            )
+            VALUES (
+                @alertId,
+                @portId,
+                'SYSTEM',
+                'HIGH',
+                'Alert expiration trigger test',
+                'Created without expires_at to verify the database default.',
+                '{"source":"integration-test"}'::jsonb
+            )
+            RETURNING created_at, expires_at;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("alertId", alertId);
+        command.Parameters.AddWithValue("portId", portId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        await reader.ReadAsync(cancellationToken);
+
+        return (
+            alertId,
+            reader.GetFieldValue<DateTimeOffset>(0),
+            reader.GetFieldValue<DateTimeOffset>(1));
+    }
+
+    public async Task<(Guid ActiveAlertId, Guid ExpiredAlertId)> SeedAlertCountCasesAsync(
+        Guid portId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var activeAlertId = Guid.NewGuid();
+        var expiredAlertId = Guid.NewGuid();
+
+        const string sql = """
+            INSERT INTO operational.alerts (
+                id,
+                port_id,
+                alert_type,
+                severity,
+                title,
+                message,
+                context,
+                expires_at,
+                created_at,
+                updated_at
+            )
+            VALUES
+                (
+                    @activeAlertId,
+                    @portId,
+                    'SYSTEM',
+                    'HIGH',
+                    'Active alert count test',
+                    'This alert must be included in active counts.',
+                    '{"source":"integration-test"}'::jsonb,
+                    NOW() + INTERVAL '1 hour',
+                    NOW(),
+                    NOW()
+                ),
+                (
+                    @expiredAlertId,
+                    @portId,
+                    'SYSTEM',
+                    'HIGH',
+                    'Expired alert count test',
+                    'This alert must be excluded from active counts.',
+                    '{"source":"integration-test"}'::jsonb,
+                    NOW() - INTERVAL '1 hour',
+                    NOW() - INTERVAL '3 hours',
+                    NOW() - INTERVAL '3 hours'
+                );
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("activeAlertId", activeAlertId);
+        command.Parameters.AddWithValue("expiredAlertId", expiredAlertId);
+        command.Parameters.AddWithValue("portId", portId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        return (activeAlertId, expiredAlertId);
+    }
+
+    public async Task DeleteAlertsAsync(
+        IEnumerable<Guid> alertIds,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+
+        foreach (var alertId in alertIds)
+        {
+            await using var command = new NpgsqlCommand(
+                "DELETE FROM operational.alerts WHERE id = @alertId;",
+                connection);
+            command.Parameters.AddWithValue("alertId", alertId);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
     public async Task SeedOperationEventAsync(Guid operationEventId, CancellationToken cancellationToken = default)
     {
         var port = await GetPrimaryPortAsync(cancellationToken);

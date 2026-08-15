@@ -8,6 +8,8 @@ export type AlertItem = {
   alertId: string;
   alertType: string;
   createdAt: string;
+  createdAtIso?: string;
+  expiresAt?: string | null;
   message: string;
   beaufortNumber?: number | null;
   windSpeedMs?: number | null;

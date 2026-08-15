@@ -25,9 +25,21 @@ type AppShellProps = PropsWithChildren<{
 
 const ALERT_POLL_INTERVAL_MS = 30_000;
 const ALERT_SNOOZE_MS = 5 * 60 * 1000;
+const LEGACY_ALERT_ACTIVE_WINDOW_MS = 2 * 60 * 60 * 1000;
 const POPUP_ALERT_SEVERITIES = new Set(["HIGH", "CRITICAL"]);
 
 type AlertVoiceStatus = "blocked" | "completed" | "idle" | "preparing" | "speaking" | "unsupported";
+
+function isAlertActive(alert: AlertItem, now: number) {
+  const explicitExpiration = Date.parse(alert.expiresAt ?? "");
+  if (Number.isFinite(explicitExpiration)) {
+    return explicitExpiration > now;
+  }
+
+  // Cảnh báo cũ có thể chưa có expiresAt, nên chỉ phát trong 2 giờ kể từ lúc tạo.
+  const createdAt = Date.parse(alert.createdAtIso ?? alert.createdAt);
+  return Number.isFinite(createdAt) && createdAt + LEGACY_ALERT_ACTIVE_WINDOW_MS > now;
+}
 
 let alertAudioContext: AudioContext | null = null;
 let alertAudioContextConstructor: typeof AudioContext | null = null;
@@ -412,15 +424,15 @@ export function AppShell({ children, currentUser, onLogout, onRefresh, refreshKe
     () =>
       alerts.find(
         (alert) =>
-          currentUser.role !== "OPERATOR" &&
           POPUP_ALERT_SEVERITIES.has(alert.severity) &&
+          isAlertActive(alert, now) &&
           notificationPreferences.inAppEnabled &&
           severityMeetsPreference(alert.severity, notificationPreferences.minimumSeverity) &&
           !alert.read &&
           !acknowledgedAlertIds.has(alert.alertId) &&
           (snoozedAlertUntil[alert.alertId] ?? 0) <= now
       ) ?? null,
-    [acknowledgedAlertIds, alerts, currentUser.role, notificationPreferences, now, snoozedAlertUntil]
+    [acknowledgedAlertIds, alerts, notificationPreferences, now, snoozedAlertUntil]
   );
 
   useEffect(() => {
@@ -447,9 +459,14 @@ export function AppShell({ children, currentUser, onLogout, onRefresh, refreshKe
 
   useEffect(() => {
     setUnreadAlertCount(
-      alerts.filter((alert) => !alert.read && !acknowledgedAlertIds.has(alert.alertId)).length
+      alerts.filter(
+        (alert) =>
+          isAlertActive(alert, now) &&
+          !alert.read &&
+          !acknowledgedAlertIds.has(alert.alertId)
+      ).length
     );
-  }, [acknowledgedAlertIds, alerts]);
+  }, [acknowledgedAlertIds, alerts, now]);
 
   useEffect(() => {
     if (!activeAlert || lastSoundAlertId.current === activeAlert.alertId) {

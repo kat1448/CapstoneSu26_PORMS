@@ -2,7 +2,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DemoUser } from "../../App";
 import { acknowledgeAlert, getAlerts, getAlertSpeechAudio } from "../../services/alertService";
+import type { AlertItem } from "../../types/alert";
 import { AppShell } from "./AppShell";
 
 vi.mock("../../services/alertService", () => ({
@@ -12,7 +14,7 @@ vi.mock("../../services/alertService", () => ({
   getAlerts: vi.fn()
 }));
 
-const currentUser = {
+const currentUser: DemoUser = {
   email: "admin@porms.vn",
   initials: "NV",
   name: "Nguyen Van Hung",
@@ -20,10 +22,30 @@ const currentUser = {
   role: "ADMIN" as const
 };
 
-const unreadAlert = {
+const portManagerUser: DemoUser = {
+  email: "manager@porms.vn",
+  initials: "QL",
+  name: "Port Manager",
+  portId: "port-1",
+  portName: "Cang Tien Sa",
+  role: "PORT_MANAGER"
+};
+
+const operatorUser: DemoUser = {
+  email: "operator@porms.vn",
+  initials: "NV",
+  name: "Operator",
+  portId: "port-1",
+  portName: "Cang Tien Sa",
+  role: "OPERATOR"
+};
+
+const unreadAlert: AlertItem = {
   alertId: "alert-1",
   alertType: "WEATHER",
   createdAt: "17/07/2026 09:00",
+  createdAtIso: "2026-07-17T02:00:00Z",
+  expiresAt: "2099-01-01T00:00:00Z",
   message: "Gio manh tai ben so 1.",
   portCode: "DNTSA",
   portId: "port-1",
@@ -34,11 +56,11 @@ const unreadAlert = {
   zoneName: "Ben so 1"
 };
 
-function renderShell() {
+function renderShell(user: DemoUser = currentUser) {
   return render(
     <MemoryRouter initialEntries={["/dashboard"]}>
       <AppShell
-        currentUser={currentUser}
+        currentUser={user}
         onLogout={() => undefined}
         onRefresh={() => undefined}
         refreshKey={0}
@@ -98,6 +120,63 @@ describe("AppShell", () => {
     await user.click(screen.getByRole("button", { name: "Xác nhận" }));
 
     expect(screen.queryByRole("dialog", { name: "Cảnh báo mới" })).not.toBeInTheDocument();
+  });
+
+  it.each(["HIGH", "CRITICAL"] as const)(
+    "shows an active unread %s alert returned for an Operator",
+    async (severity) => {
+      vi.mocked(getAlerts).mockResolvedValue([{ ...unreadAlert, severity }]);
+
+      renderShell(operatorUser);
+
+      expect(await screen.findByRole("dialog", { name: "Cảnh báo mới" })).toBeInTheDocument();
+      expect(screen.getByText("Canh bao gio manh")).toBeInTheDocument();
+    }
+  );
+
+  it.each([
+    ["Port Manager", portManagerUser],
+    ["Operator", operatorUser]
+  ] as const)("does not notify %s about an expired alert", async (_role, user) => {
+    vi.mocked(getAlerts).mockResolvedValue([{
+      ...unreadAlert,
+      expiresAt: "2000-01-01T00:00:00Z"
+    }]);
+
+    renderShell(user);
+
+    await waitFor(() => expect(getAlerts).toHaveBeenCalled());
+    expect(screen.queryByRole("dialog", { name: "Cảnh báo mới" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("0 cảnh báo chưa đọc")).toBeInTheDocument();
+    expect(getAlertSpeechAudio).not.toHaveBeenCalled();
+  });
+
+  it("skips an expired alert and shows the next active alert", async () => {
+    vi.mocked(getAlerts).mockResolvedValue([
+      { ...unreadAlert, expiresAt: "2000-01-01T00:00:00Z", title: "Old alert" },
+      { ...unreadAlert, alertId: "alert-2", title: "Active alert" }
+    ]);
+
+    renderShell(portManagerUser);
+
+    expect(await screen.findByRole("dialog", { name: "Cảnh báo mới" })).toBeInTheDocument();
+    expect(screen.getByText("Active alert")).toBeInTheDocument();
+    expect(screen.queryByText("Old alert")).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText("1 cảnh báo chưa đọc")).toHaveLength(2);
+  });
+
+  it("does not notify about a legacy alert older than two hours", async () => {
+    vi.mocked(getAlerts).mockResolvedValue([{
+      ...unreadAlert,
+      createdAtIso: "2000-01-01T00:00:00Z",
+      expiresAt: null
+    }]);
+
+    renderShell(portManagerUser);
+
+    await waitFor(() => expect(getAlerts).toHaveBeenCalled());
+    expect(screen.queryByRole("dialog", { name: "Cảnh báo mới" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("0 cảnh báo chưa đọc")).toBeInTheDocument();
   });
 
   it.each(["LOW", "MEDIUM"] as const)(

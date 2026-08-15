@@ -1,6 +1,6 @@
 ﻿-- =============================================================================
 -- PORMS - Port Operation Risk Management System
--- PostgreSQL 16 fresh-install schema, version 2.0.0
+-- PostgreSQL 16 fresh-install schema, version 2.0.1
 -- =============================================================================
 -- Usage:
 --   psql -v ON_ERROR_STOP=1 -U postgres -d porms_db -f porms_schema.sql
@@ -548,10 +548,11 @@ CREATE TABLE IF NOT EXISTS operational.alerts (
     title                    VARCHAR(255) NOT NULL,
     message                  TEXT NOT NULL,
     context                  JSONB NOT NULL DEFAULT '{}'::JSONB,
-    expires_at               TIMESTAMPTZ,
+    expires_at               TIMESTAMPTZ NOT NULL,
     simulation_session_id    UUID REFERENCES operational.simulation_sessions(id) ON DELETE CASCADE,
     created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT alerts_expiry_after_creation CHECK (expires_at > created_at)
 );
 
 ALTER TABLE operational.tasks
@@ -662,6 +663,8 @@ CREATE INDEX IF NOT EXISTS idx_tasks_alert
     WHERE alert_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_alerts_port_history
     ON operational.alerts (port_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alerts_port_expiration
+    ON operational.alerts (port_id, expires_at);
 CREATE INDEX IF NOT EXISTS idx_alert_receipts_unread
     ON operational.alert_receipts (user_id, delivered_at DESC)
     WHERE read_at IS NULL;
@@ -722,6 +725,25 @@ BEGIN
     END LOOP;
 END;
 $$;
+
+
+CREATE OR REPLACE FUNCTION operational.set_default_alert_expiration()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Cảnh báo mặc định có hiệu lực 2 giờ nếu nguồn tạo không truyền thời hạn.
+    IF NEW.expires_at IS NULL THEN
+        NEW.expires_at := COALESCE(NEW.created_at, NOW()) + INTERVAL '2 hours';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_set_default_alert_expiration ON operational.alerts;
+CREATE TRIGGER trg_set_default_alert_expiration
+    BEFORE INSERT ON operational.alerts
+    FOR EACH ROW EXECUTE FUNCTION operational.set_default_alert_expiration();
 
 
 CREATE OR REPLACE FUNCTION operational.protect_port_code()
@@ -830,7 +852,7 @@ SELECT
         SELECT COUNT(*)
         FROM operational.alerts a
         WHERE a.port_id = p.id
-          AND (a.expires_at IS NULL OR a.expires_at > NOW())
+          AND a.expires_at > NOW()
     ) AS active_alert_count
 FROM operational.ports p
 LEFT JOIN LATERAL (
@@ -1035,7 +1057,14 @@ VALUES (
 )
 ON CONFLICT (version) DO NOTHING;
 
+INSERT INTO public.schema_migrations (version, description)
+VALUES (
+    '2.0.1',
+    'Backfill and enforce two-hour alert expiration'
+)
+ON CONFLICT (version) DO NOTHING;
+
 
 -- =============================================================================
--- END OF PORMS SCHEMA 2.0.0
+-- END OF PORMS SCHEMA 2.0.1
 -- =============================================================================
