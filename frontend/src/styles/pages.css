@@ -2875,6 +2875,111 @@
   gap: 14px;
 }
 
+.import-workspace {
+  background: linear-gradient(145deg, #fff 0%, #f8fbfe 100%);
+  border: 1px solid #cfe0ec;
+  border-left: 4px solid #2b7fb7;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(31, 79, 111, .08);
+  display: grid;
+  gap: 18px;
+  overflow: hidden;
+  padding: 22px;
+}
+
+.import-workspace-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.import-workspace-head h3 { color: #153a55; font-size: 20px; margin: 5px 0 5px; }
+.import-workspace-head p { color: #667f92; font-size: 13px; margin: 0; }
+
+.import-step-list {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.import-step-list > span {
+  align-items: center;
+  background: #f4f8fb;
+  border: 1px solid #dce7ef;
+  border-radius: 10px;
+  color: #6b8293;
+  display: flex;
+  font-size: 13px;
+  font-weight: 750;
+  gap: 9px;
+  min-height: 44px;
+  padding: 8px 12px;
+}
+
+.import-step-list strong {
+  align-items: center;
+  background: #dfeaf2;
+  border-radius: 50%;
+  display: flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.import-step-list .is-active { background: #edf7ff; border-color: #a9d2ed; color: #176a9f; }
+.import-step-list .is-active strong { background: #2c80b7; color: #fff; }
+.import-step-list .is-complete { background: #effaf5; border-color: #b9e1ce; color: #19714f; }
+.import-step-list .is-complete strong { background: #25a673; color: #fff; }
+
+.import-dropzone {
+  align-items: center;
+  background: #fff;
+  border: 2px dashed #bdd2e0;
+  border-radius: 13px;
+  cursor: pointer;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 100px;
+  padding: 18px;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.import-dropzone:hover { background: #f8fcff; border-color: #438fbe; transform: translateY(-1px); }
+.import-dropzone.has-file { background: #f3fbf7; border-color: #76c4a1; }
+.import-file-input { height: 1px; opacity: 0; overflow: hidden; position: absolute; width: 1px; }
+.import-file-icon { align-items: center; background: #e5f4eb; border: 1px solid #bfdfca; border-radius: 11px; color: #18764d; display: flex; font-size: 11px; font-weight: 900; height: 52px; justify-content: center; letter-spacing: .04em; width: 52px; }
+.import-file-copy { display: grid; gap: 5px; min-width: 0; }
+.import-file-copy strong { color: #173d58; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-file-copy small { color: #718899; font-size: 12px; }
+
+.import-actions {
+  align-items: center;
+  background: #f3f8fb;
+  border: 1px solid #dce8f0;
+  border-radius: 10px;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.import-actions p { color: #61798b; font-size: 12px; margin: 0; }
+.threshold-readonly-value { background: #f3f7fa; border: 1px solid #dce6ed; border-radius: 8px; color: #284c66; display: block; font-weight: 800; padding: 8px 10px; text-align: center; }
+.readonly-notice { align-items: center; background: #f2f8fc; border: 1px solid #d2e5f1; border-radius: 10px; color: #537187; display: flex; gap: 12px; margin-top: 14px; padding: 12px 14px; }
+.readonly-notice strong { color: #216f9f; white-space: nowrap; }
+.readonly-chip { background: #eef5f9; border: 1px solid #d7e4ec; border-radius: 999px; color: #61798a; font-size: 11px; font-weight: 800; padding: 6px 10px; }
+.readonly-field { align-items: center; background: #f2f6f9; color: #465f72; display: flex; min-height: 38px; }
+
+@media (max-width: 760px) {
+  .import-workspace-head, .import-actions { align-items: stretch; flex-direction: column; }
+  .import-step-list { grid-template-columns: 1fr; }
+  .import-dropzone { grid-template-columns: auto minmax(0, 1fr); }
+  .import-dropzone > .button { grid-column: 1 / -1; justify-content: center; }
+  .readonly-notice { align-items: flex-start; flex-direction: column; }
+}
+
 .config-form-grid {
   display: grid;
   gap: 12px;

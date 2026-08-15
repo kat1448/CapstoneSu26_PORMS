@@ -48,8 +48,8 @@ export const navigationGroups: NavigationGroup[] = [
   {
     label: "Cấu hình",
     items: [
-      { icon: "settings", label: "Mức cảnh báo", path: "/risk-config", roles: adminOnly },
-      { icon: "rules", label: "Quy trình ứng phó", path: "/sop-rules", roles: adminOnly }
+      { icon: "settings", label: "Mức cảnh báo", path: "/risk-config", roles: adminAndPortManager },
+      { icon: "rules", label: "Quy trình ứng phó", path: "/sop-rules", roles: adminAndPortManager }
     ]
   },
   {

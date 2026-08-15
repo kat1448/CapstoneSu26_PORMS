@@ -92,6 +92,17 @@ public sealed class UserController : ControllerBase
             return NotFound();
         }
 
+        if (access.Role == "ADMIN"
+            && access.UserId == userId
+            && !string.Equals(target.Role, request.Role, StringComparison.Ordinal))
+        {
+            return Conflict(new
+            {
+                code = "SELF_ROLE_CHANGE_NOT_ALLOWED",
+                message = "Quản trị viên không thể tự thay đổi vai trò của chính mình."
+            });
+        }
+
         if (access.Role == "PORT_MANAGER"
             && (access.PortId is null
                 || target.Role != "OPERATOR"
@@ -194,16 +205,19 @@ public sealed class UserController : ControllerBase
         return null;
     }
 
-    private static (string Role, Guid? PortId) GetAccessScope(ClaimsPrincipal user)
+    private static (Guid? UserId, string Role, Guid? PortId) GetAccessScope(ClaimsPrincipal user)
     {
+        var userId = Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedUserId)
+            ? parsedUserId
+            : (Guid?)null;
         var role = user.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
         var portId = Guid.TryParse(user.FindFirstValue("port_id"), out var parsedPortId)
             ? parsedPortId
             : (Guid?)null;
-        return (role, portId);
+        return (userId, role, portId);
     }
 
-    private static bool CanManagerWrite((string Role, Guid? PortId) access, string targetRole, Guid? targetPortId)
+    private static bool CanManagerWrite((Guid? UserId, string Role, Guid? PortId) access, string targetRole, Guid? targetPortId)
     {
         if (access.Role != "PORT_MANAGER")
         {

@@ -82,6 +82,10 @@ export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
   const [notFound, setNotFound] = useState(false);
   const [portOptions, setPortOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [submitting, setSubmitting] = useState(false);
+  const isEditingOwnAccount = mode === "edit" && (
+    (Boolean(currentUser.id) && currentUser.id === userId)
+    || (Boolean(form.email) && form.email.toLowerCase() === currentUser.email.toLowerCase())
+  );
 
   useEffect(() => {
     let active = true;
@@ -236,19 +240,29 @@ export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
           </label>
           <label>
             <span>Vai trò</span>
-            <select
-              onChange={(event) => {
-                const role = event.target.value as UserRole;
-                setForm((value) => ({
-                  ...value,
-                  portId: nextPortForRole(role, value.portId, portOptions[0]?.value ?? ""),
-                  role
-                }));
-              }}
-              value={form.role}
-            >
-              {(isPortManager ? roleOptions.filter((option) => option.value === "OPERATOR") : roleOptions).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            {isEditingOwnAccount ? (
+              <>
+                <div className="input readonly-field" aria-label="Vai trò hiện tại">
+                  {roleOptions.find((option) => option.value === form.role)?.label ?? form.role}
+                </div>
+                <small className="field-hint">Vai trò của tài khoản đang đăng nhập được khóa để tránh tự mất quyền quản trị.</small>
+              </>
+            ) : (
+              <select
+                aria-label="Vai trò"
+                onChange={(event) => {
+                  const role = event.target.value as UserRole;
+                  setForm((value) => ({
+                    ...value,
+                    portId: nextPortForRole(role, value.portId, portOptions[0]?.value ?? ""),
+                    role
+                  }));
+                }}
+                value={form.role}
+              >
+                {(isPortManager ? roleOptions.filter((option) => option.value === "OPERATOR") : roleOptions).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            )}
           </label>
           <label>
             <span>Trạng thái</span>

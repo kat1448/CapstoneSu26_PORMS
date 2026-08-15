@@ -8,6 +8,7 @@ import type { UserRecord } from "../services/userService";
 import { UserFormPage } from "./UserFormPage";
 
 const adminUser = {
+  id: "admin-1",
   email: "admin@porms.vn",
   initials: "AD",
   name: "System Administrator",
@@ -54,6 +55,17 @@ const userRecords: UserRecord[] = [
   }
 ];
 
+const adminRecord: UserRecord = {
+  email: "admin@porms.vn",
+  fullName: "System Administrator",
+  lastLoginLabel: "Vua xong",
+  portId: null,
+  portName: "Tất cả",
+  role: "ADMIN",
+  status: "ACTIVE",
+  userId: "admin-1"
+};
+
 function renderRoutes(initialPath: string, mode: "create" | "edit") {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
@@ -72,6 +84,17 @@ afterEach(() => {
 });
 
 describe("UserFormPage", () => {
+  it("locks the role when an Admin edits their own account", async () => {
+    vi.mocked(getPorts).mockResolvedValue(ports);
+    vi.mocked(getUsers).mockResolvedValue([adminRecord]);
+
+    renderRoutes("/users/admin-1/edit", "edit");
+
+    expect(await screen.findByLabelText("Vai trò hiện tại")).toHaveTextContent("ADMIN - System Administrator");
+    expect(screen.queryByLabelText("Vai trò")).not.toBeInTheDocument();
+    expect(screen.getByText(/tự mất quyền quản trị/i)).toBeInTheDocument();
+  });
+
   it("creates a user and returns to the user list", async () => {
     const user = userEvent.setup();
     vi.mocked(getPorts).mockResolvedValue(ports);

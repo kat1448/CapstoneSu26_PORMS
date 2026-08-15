@@ -35,6 +35,14 @@ const adminUser: DemoUser = {
   role: "ADMIN"
 };
 
+const portManagerUser: DemoUser = {
+  email: "manager@porms.vn",
+  initials: "PM",
+  name: "Port Manager",
+  portName: "Cảng Tiên Sa",
+  role: "PORT_MANAGER"
+};
+
 function rule(overrides: Partial<SopRule>): SopRule {
   return {
     actionConfig: { task: "inspect" },
@@ -243,5 +251,24 @@ describe("SopRulesPage", () => {
 
     // Cấu hình mới có sẵn trong response import, không cần gọi GET lần hai.
     expect(getSopRules).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows Port Managers to inspect SOP rules without mutation controls", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getSopRules).mockResolvedValue(response);
+
+    render(<SopRulesPage currentUser={portManagerUser} />);
+
+    const riskGrid = await screen.findByLabelText("Nhóm quy tắc SOP theo mức rủi ro");
+    expect(screen.queryByRole("button", { name: "Thêm quy tắc" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Nhập Excel" })).not.toBeInTheDocument();
+
+    const highCard = within(riskGrid).getByRole("heading", { name: "HIGH" }).closest("article");
+    await user.click(within(highCard as HTMLElement).getByRole("button", { name: "Chi tiết" }));
+
+    expect(screen.getByText("SOP-HIGH-YARD-01")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Chỉnh sửa" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Xóa" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Chỉ xem").length).toBeGreaterThan(0);
   });
 });

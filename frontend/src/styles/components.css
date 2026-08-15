@@ -640,6 +640,11 @@
   padding: 10px 12px;
 }
 
+.gis-data-table.is-readonly .gis-data-row {
+  grid-template-columns: minmax(170px, 1.3fr) 90px 110px minmax(120px, 1fr) minmax(190px, 1.2fr);
+  min-width: 760px;
+}
+
 .gis-data-row + .gis-data-row {
   border-top: 1px solid #e8eef4;
 }

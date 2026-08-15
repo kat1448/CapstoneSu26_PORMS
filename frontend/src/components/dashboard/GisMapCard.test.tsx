@@ -127,7 +127,7 @@ afterEach(() => {
 
 describe("GisMapCard", () => {
   it("renders OpenStreetMap markers for ports and the selected port zones", () => {
-    renderMapCard(<GisMapCard onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zones} />);
+    renderMapCard(<GisMapCard canManage onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zones} />);
 
     expect(screen.getByRole("heading", { name: /GIS Cang Tien Sa/ })).toBeInTheDocument();
     expect(screen.getByText("Ben so 1")).toBeInTheDocument();
@@ -142,6 +142,14 @@ describe("GisMapCard", () => {
     expect(leafletState.markers[0].popup).toContain("Cang Tien Sa");
     expect(leafletState.markers[2].coordinates).toEqual([16.123, 108.216]);
     expect(leafletState.markers[2].popup).toContain("Bai container A");
+  });
+
+  it("hides port and zone actions in read-only mode", () => {
+    renderMapCard(<GisMapCard canManage={false} onSelectPort={vi.fn()} onResetSelection={vi.fn()} portName="Cang Tien Sa" ports={ports} selectedPortId="port-1" zones={zones} />);
+
+    expect(screen.queryByText("Thao tác")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Chi tiết cảng" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Chi tiết khu vực" })).not.toBeInTheDocument();
   });
 
   it("selects a port when its map marker is clicked", () => {

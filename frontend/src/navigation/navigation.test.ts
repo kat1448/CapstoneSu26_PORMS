@@ -20,7 +20,7 @@ describe("role navigation", () => {
     expect(paths).toContain("/forecast-evaluation");
   });
 
-  it("lets PORT_MANAGER manage port staff without system configuration", () => {
+  it("lets PORT_MANAGER manage port staff and inspect system configuration", () => {
     const paths = getNavigationForRole("PORT_MANAGER")
       .flatMap((group) => group.items.map((item) => item.path));
 
@@ -28,8 +28,8 @@ describe("role navigation", () => {
     expect(paths).toContain("/alerts");
     expect(paths).toContain("/tasks");
     expect(paths).toContain("/operation-log");
-    expect(paths).not.toContain("/risk-config");
-    expect(paths).not.toContain("/sop-rules");
+    expect(paths).toContain("/risk-config");
+    expect(paths).toContain("/sop-rules");
     expect(paths).toContain("/forecast-planning");
     expect(paths).toContain("/ai-long-range-forecast");
     expect(paths).toContain("/forecast-evaluation");
@@ -54,8 +54,8 @@ describe("role navigation", () => {
     expect(isRouteAllowed("OPERATOR", "/simulation")).toBe(false);
     expect(isRouteAllowed("OPERATOR", "/simulation-results")).toBe(false);
     expect(isRouteAllowed("PORT_MANAGER", "/users")).toBe(true);
-    expect(isRouteAllowed("PORT_MANAGER", "/risk-config")).toBe(false);
-    expect(isRouteAllowed("PORT_MANAGER", "/sop-rules")).toBe(false);
+    expect(isRouteAllowed("PORT_MANAGER", "/risk-config")).toBe(true);
+    expect(isRouteAllowed("PORT_MANAGER", "/sop-rules")).toBe(true);
     expect(isRouteAllowed("PORT_MANAGER", "/ports")).toBe(false);
     expect(isRouteAllowed("PORT_MANAGER", "/forecast-planning")).toBe(true);
     expect(isRouteAllowed("PORT_MANAGER", "/ai-long-range-forecast")).toBe(true);

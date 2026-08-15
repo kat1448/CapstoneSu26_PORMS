@@ -94,6 +94,7 @@ type RiskConfigPageProps = {
 };
 
 export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
+  const isAdmin = currentUser.role === "ADMIN";
   const [config, setConfig] = useState<RiskConfigResponse | null>(null);
   const [thresholds, setThresholds] = useState<RiskThreshold[]>([]);
   const [overrideForm, setOverrideForm] = useState<OverrideForm>(emptyOverride);
@@ -352,20 +353,19 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
     <section className="page-grid risk-config-page">
       <div className="section-heading">
         <div>
-          <h2>Cấu hình ngưỡng rủi ro</h2>
-          <p>Thiết lập ngưỡng thời tiết để phân loại rủi ro vận hành cảng</p>
+          <h2>{isAdmin ? "Cấu hình ngưỡng rủi ro" : "Ngưỡng rủi ro đang áp dụng"}</h2>
+          <p>{isAdmin ? "Thiết lập ngưỡng thời tiết để phân loại rủi ro vận hành cảng" : "Theo dõi cấu hình an toàn hiện hành của hệ thống ở chế độ chỉ xem"}</p>
         </div>
         <div className="head-actions">
-          <button
-            className="button button-secondary"
-            onClick={() => setThresholds(cloneThresholds(config))}
-            type="button"
-          >
-            Khôi phục
-          </button>
-
-          {currentUser.role === "ADMIN" ? (
+          {isAdmin ? (
             <>
+              <button
+                className="button button-secondary"
+                onClick={() => setThresholds(cloneThresholds(config))}
+                type="button"
+              >
+                Khôi phục
+              </button>
               <button
                 className="button button-secondary"
                 disabled={isDownloading}
@@ -392,14 +392,16 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
             </>
           ) : null}
 
-          <button
-            className="button button-primary"
-            disabled={saving}
-            onClick={handleSaveThresholds}
-            type="button"
-          >
-            Lưu cấu hình
-          </button>
+          {isAdmin ? (
+            <button
+              className="button button-primary"
+              disabled={saving}
+              onClick={handleSaveThresholds}
+              type="button"
+            >
+              Lưu cấu hình
+            </button>
+          ) : <Badge tone="info">Chỉ xem</Badge>}
         </div>
       </div>
 
@@ -411,12 +413,13 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
         </div>
       ) : null}
 
-      {currentUser.role === "ADMIN" && showImportPanel ? (
-        <article className="card card-pad sop-rule-form">
-          <div className="card-head">
+      {isAdmin && showImportPanel ? (
+        <article className="card import-workspace">
+          <div className="import-workspace-head">
             <div>
+              <span className="page-eyebrow">NHẬP CẤU HÌNH HÀNG LOẠT</span>
               <h3>Nhập ngưỡng rủi ro từ Excel</h3>
-              <p>Kiểm tra toàn bộ file trước khi xác nhận ghi dữ liệu.</p>
+              <p>File chỉ được ghi sau khi vượt qua bước kiểm tra và được Admin xác nhận.</p>
             </div>
             <button
               className="button button-secondary button-small"
@@ -427,19 +430,30 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
             </button>
           </div>
 
-          <label>
-            <span>File Excel ngưỡng rủi ro (.xlsx, tối đa 1 MB)</span>
+          <div className="import-step-list" aria-label="Quy trình nhập Excel">
+            <span className="is-active"><strong>1</strong> Chọn file</span>
+            <span className={importPreview ? "is-complete" : ""}><strong>2</strong> Kiểm tra</span>
+            <span className={importPreview?.canImport ? "is-active" : ""}><strong>3</strong> Xác nhận</span>
+          </div>
+
+          <label className={`import-dropzone${importFile ? " has-file" : ""}`}>
             <input
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               aria-label="File Excel ngưỡng rủi ro"
+              className="import-file-input"
               onChange={handleImportFileChange}
               type="file"
             />
+            <span className="import-file-icon" aria-hidden="true">XLSX</span>
+            <span className="import-file-copy">
+              <strong>{importFile ? importFile.name : "Chọn file ngưỡng rủi ro"}</strong>
+              <small>{importFile ? `${Math.max(1, Math.ceil(importFile.size / 1024))} KB · Sẵn sàng kiểm tra` : "Định dạng .xlsx · Dung lượng tối đa 1 MB"}</small>
+            </span>
+            <span className="button button-secondary">Duyệt file</span>
           </label>
 
-          {importFile ? <p>Đã chọn: <strong>{importFile.name}</strong></p> : null}
-
-          <div className="form-actions">
+          <div className="import-actions">
+            <p><strong>Kiểm tra trước khi ghi:</strong> cấu trúc cột, đơn vị, toán tử và tính liên tục giữa các mức.</p>
             <button
               className="button button-primary"
               disabled={!importFile || previewingImport || confirmingImport}
@@ -595,19 +609,23 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
                           <td key={level}>
                             {item ? (
                               <div className="threshold-cell">
-                                <select
-                                  aria-label={`${factor} ${level} operator`}
-                                  onChange={(event) => updateThreshold(factor, level, { comparisonOperator: event.target.value as ThresholdOperator })}
-                                  value={item.comparisonOperator}
-                                >
-                                  {operators.map((operator) => <option key={operator} value={operator}>{operator}</option>)}
-                                </select>
-                                <input
-                                  aria-label={`${factor} ${level} value`}
-                                  onChange={(event) => updateThreshold(factor, level, { thresholdValue: Number(event.target.value) })}
-                                  type="number"
-                                  value={item.thresholdValue}
-                                />
+                                {isAdmin ? (
+                                  <>
+                                    <select
+                                      aria-label={`${factor} ${level} operator`}
+                                      onChange={(event) => updateThreshold(factor, level, { comparisonOperator: event.target.value as ThresholdOperator })}
+                                      value={item.comparisonOperator}
+                                    >
+                                      {operators.map((operator) => <option key={operator} value={operator}>{operator}</option>)}
+                                    </select>
+                                    <input
+                                      aria-label={`${factor} ${level} value`}
+                                      onChange={(event) => updateThreshold(factor, level, { thresholdValue: Number(event.target.value) })}
+                                      type="number"
+                                      value={item.thresholdValue}
+                                    />
+                                  </>
+                                ) : <span className="threshold-readonly-value">{formatThreshold(item)}</span>}
                               </div>
                             ) : "-"}
                           </td>
@@ -649,7 +667,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
             <p>Ưu tiên áp dụng khi khu vực có đặc thù vận hành riêng</p>
           </div>
         </div>
-        <form className="inline-config-form" onSubmit={handleSaveOverride}>
+        {isAdmin ? <form className="inline-config-form" onSubmit={handleSaveOverride}>
           <select aria-label="Khu vực" onChange={(event) => setOverrideForm((value) => ({ ...value, zoneId: event.target.value }))} required value={overrideForm.zoneId}>
             {config?.zones.map((zone) => <option key={zone.zoneId} value={zone.zoneId}>{zone.portName} - {zone.zoneName}</option>)}
           </select>
@@ -665,7 +683,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
           <input aria-label="Giá trị override" onChange={(event) => setOverrideForm((value) => ({ ...value, thresholdValue: event.target.value }))} required type="number" value={overrideForm.thresholdValue} />
           <input aria-label="Đơn vị override" onChange={(event) => setOverrideForm((value) => ({ ...value, unit: event.target.value }))} required value={overrideForm.unit} />
           <button className="button button-secondary" disabled={saving || !overrideForm.zoneId} type="submit">Lưu override</button>
-        </form>
+        </form> : <div className="readonly-notice"><strong>Chế độ chỉ xem</strong><span>Chỉ Admin được thêm, sửa hoặc xóa ngưỡng riêng của khu vực.</span></div>}
         <div className="override-grid">
           {config?.zoneOverrides.map((zone) => (
             <div className="override-card" key={zone.id}>
@@ -675,7 +693,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
               </div>
               <div className="row-actions">
                 <Badge tone={zone.isEnabled ? "success" : "muted"}>{zone.isEnabled ? "Đang bật" : "Tắt"}</Badge>
-                <button className="button button-secondary button-small" onClick={() => handleDeleteOverride(zone.zoneId, zone.id)} type="button">Xóa</button>
+                {isAdmin ? <button className="button button-secondary button-small" onClick={() => handleDeleteOverride(zone.zoneId, zone.id)} type="button">Xóa</button> : null}
               </div>
             </div>
           ))}
