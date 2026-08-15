@@ -2966,7 +2966,7 @@
 }
 
 .import-actions p { color: #61798b; font-size: 12px; margin: 0; }
-.threshold-readonly-value { background: #f3f7fa; border: 1px solid #dce6ed; border-radius: 8px; color: #284c66; display: block; font-weight: 800; padding: 8px 10px; text-align: center; }
+.threshold-readonly-value { background: #f3f7fa; border: 1px solid #dce6ed; border-radius: 8px; color: #284c66; display: block; font-weight: 800; grid-column: 1 / -1; padding: 8px 10px; text-align: center; white-space: nowrap; }
 .readonly-notice { align-items: center; background: #f2f8fc; border: 1px solid #d2e5f1; border-radius: 10px; color: #537187; display: flex; gap: 12px; margin-top: 14px; padding: 12px 14px; }
 .readonly-notice strong { color: #216f9f; white-space: nowrap; }
 .readonly-chip { background: #eef5f9; border: 1px solid #d7e4ec; border-radius: 999px; color: #61798a; font-size: 11px; font-weight: 800; padding: 6px 10px; }

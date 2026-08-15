@@ -209,6 +209,7 @@ describe("RiskConfigPage", () => {
     expect(screen.queryByRole("button", { name: "Lưu override" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Xóa" })).not.toBeInTheDocument();
     expect(screen.getAllByText("Chỉ xem").length).toBeGreaterThan(0);
-    expect(screen.getByText(">= 7 cap")).toBeInTheDocument();
+    expect(screen.getByText(">= 7")).toBeInTheDocument();
+    expect(screen.queryByText(">= 7 cap")).not.toBeInTheDocument();
   });
 });

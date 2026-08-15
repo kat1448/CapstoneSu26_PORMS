@@ -69,6 +69,13 @@ function formatThreshold(item: Pick<RiskThreshold, "comparisonOperator" | "thres
   return `${item.comparisonOperator} ${Number(item.thresholdValue).toLocaleString("vi-VN")} ${item.unit}`;
 }
 
+function formatThresholdComparison(item: Pick<RiskThreshold, "comparisonOperator" | "thresholdValue"> | undefined) {
+  if (!item) return "-";
+
+  // Bảng đã có cột đơn vị riêng, chỉ hiển thị phép so sánh để tránh lặp và xuống dòng.
+  return `${item.comparisonOperator} ${Number(item.thresholdValue).toLocaleString("vi-VN")}`;
+}
+
 function previewRisk(beaufort: number, rain: number, visibility: number, thresholds: RiskThreshold[]) {
   const enabled = thresholds.filter((item) => item.isEnabled);
   const values: Record<string, number> = { RAIN: rain, VISIBILITY: visibility, WIND: beaufort };
@@ -625,7 +632,7 @@ export function RiskConfigPage({ currentUser }: RiskConfigPageProps) {
                                       value={item.thresholdValue}
                                     />
                                   </>
-                                ) : <span className="threshold-readonly-value">{formatThreshold(item)}</span>}
+                                ) : <span className="threshold-readonly-value">{formatThresholdComparison(item)}</span>}
                               </div>
                             ) : "-"}
                           </td>
