@@ -1,9 +1,14 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using PORMS.API.Contracts;
 using PORMS.Infrastructure.Repositories;
 using PORMS.Infrastructure.Services;
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using Xunit;
 
@@ -523,7 +528,11 @@ public sealed class SimulationFlowTests
             await _factory.SeedFutureForecastEvaluationDatasetAsync(
                 port.PortCode);
 
-        var client = _factory.CreateClient();
+        using var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                CreateToken("ADMIN"));
 
         try
         {
@@ -588,5 +597,33 @@ public sealed class SimulationFlowTests
             await _factory.DeleteForecastEvaluationDatasetAsync(
                 dataset.DatasetId);
         }
+    }
+
+    private static string CreateToken(string role)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
+            "PORMS-development-signing-key-change-in-production-2026"));
+        var credentials = new SigningCredentials(
+            key,
+            SecurityAlgorithms.HmacSha256);
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString()),
+            new Claim(
+                JwtRegisteredClaimNames.Email,
+                $"{role.ToLowerInvariant()}@porms.vn"),
+            new Claim(ClaimTypes.Name, role),
+            new Claim(ClaimTypes.Role, role),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: "PORMS",
+            audience: "PORMS.Frontend",
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(15),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

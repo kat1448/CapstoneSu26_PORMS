@@ -5,8 +5,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPorts } from "../services/portService";
 import { createUser, getUsers, updateUser } from "../services/userService";
 import type { UserRecord } from "../services/userService";
-import type { DemoUser } from "../App";
 import { UserFormPage } from "./UserFormPage";
+
+const adminUser = {
+  id: "admin-1",
+  email: "admin@porms.vn",
+  initials: "AD",
+  name: "System Administrator",
+  portName: "Tất cả",
+  role: "ADMIN" as const
+};
 
 vi.mock("../services/portService", () => ({
   getPorts: vi.fn()
@@ -47,12 +55,23 @@ const userRecords: UserRecord[] = [
   }
 ];
 
-function renderRoutes(initialPath: string, mode: "create" | "edit", currentUser?: DemoUser) {
+const adminRecord: UserRecord = {
+  email: "admin@porms.vn",
+  fullName: "System Administrator",
+  lastLoginLabel: "Vua xong",
+  portId: null,
+  portName: "Tất cả",
+  role: "ADMIN",
+  status: "ACTIVE",
+  userId: "admin-1"
+};
+
+function renderRoutes(initialPath: string, mode: "create" | "edit") {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
-        <Route path="/users/new" element={<UserFormPage currentUser={currentUser} mode={mode} />} />
-        <Route path="/users/:userId/edit" element={<UserFormPage currentUser={currentUser} mode={mode} />} />
+        <Route path="/users/new" element={<UserFormPage currentUser={adminUser} mode={mode} />} />
+        <Route path="/users/:userId/edit" element={<UserFormPage currentUser={adminUser} mode={mode} />} />
         <Route path="/users" element={<div>Users list page</div>} />
       </Routes>
     </MemoryRouter>
@@ -65,6 +84,17 @@ afterEach(() => {
 });
 
 describe("UserFormPage", () => {
+  it("locks the role when an Admin edits their own account", async () => {
+    vi.mocked(getPorts).mockResolvedValue(ports);
+    vi.mocked(getUsers).mockResolvedValue([adminRecord]);
+
+    renderRoutes("/users/admin-1/edit", "edit");
+
+    expect(await screen.findByLabelText("Vai trò hiện tại")).toHaveTextContent("ADMIN - System Administrator");
+    expect(screen.queryByLabelText("Vai trò")).not.toBeInTheDocument();
+    expect(screen.getByText(/tự mất quyền quản trị/i)).toBeInTheDocument();
+  });
+
   it("creates a user and returns to the user list", async () => {
     const user = userEvent.setup();
     vi.mocked(getPorts).mockResolvedValue(ports);
@@ -136,40 +166,5 @@ describe("UserFormPage", () => {
       status: "ACTIVE"
     });
     await screen.findByText("Users list page");
-  });
-
-  it("prevents the signed-in admin from changing their own role", async () => {
-    const user = userEvent.setup();
-    const adminRecord: UserRecord = {
-      ...userRecords[0],
-      email: "admin@porms.vn",
-      fullName: "System Admin",
-      portId: null,
-      portName: "Tat ca",
-      role: "ADMIN",
-      userId: "demo-admin"
-    };
-    vi.mocked(getPorts).mockResolvedValue(ports);
-    vi.mocked(getUsers).mockResolvedValue([adminRecord]);
-    vi.mocked(updateUser).mockResolvedValue(adminRecord);
-
-    renderRoutes("/users/demo-admin/edit", "edit", {
-      email: "admin@porms.vn",
-      initials: "SA",
-      name: "System Admin",
-      portName: "Tat ca",
-      role: "ADMIN"
-    });
-
-    const roleSelect = await screen.findByRole("combobox", { name: "Vai trò" });
-    expect(roleSelect).toBeDisabled();
-    expect(screen.getByText("Admin không thể tự thay đổi vai trò của chính mình.")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
-
-    expect(updateUser).toHaveBeenCalledWith("demo-admin", expect.objectContaining({
-      portId: null,
-      role: "ADMIN"
-    }));
   });
 });

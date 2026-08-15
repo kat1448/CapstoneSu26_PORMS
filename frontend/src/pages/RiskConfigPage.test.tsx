@@ -196,16 +196,19 @@ describe("RiskConfigPage", () => {
     expect(getRiskConfig).toHaveBeenCalledTimes(1);
   });
 
-  it("hides ADMIN-only Excel controls from Port Managers", async () => {
+  it("renders the complete risk configuration as read-only for Port Managers", async () => {
     vi.mocked(getRiskConfig).mockResolvedValue(config);
 
     render(<RiskConfigPage currentUser={portManagerUser} />);
 
-    await screen.findByRole("heading", { name: "Cấu hình ngưỡng rủi ro" });
+    await screen.findByRole("heading", { name: "Ngưỡng rủi ro đang áp dụng" });
 
     expect(screen.queryByRole("button", { name: "Tải template Excel" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Nhập Excel" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Khôi phục" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Lưu cấu hình" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Lưu override" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Xóa" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Chỉ xem").length).toBeGreaterThan(0);
+    expect(screen.getByText(">= 7 cap")).toBeInTheDocument();
   });
 });

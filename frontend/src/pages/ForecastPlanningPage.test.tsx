@@ -238,7 +238,7 @@ describe("ForecastPlanningPage", () => {
     await user.click(await screen.findByRole("button", { name: "Cập nhật kế hoạch" }));
 
     expect(await screen.findByLabelText("Timeline dự báo vận hành 5 ngày")).toBeInTheDocument();
-    expect(screen.getByText("Độ tin cậy D+1")).toBeInTheDocument();
+    expect(screen.getByText("Độ tin cậy lịch sử D+1")).toBeInTheDocument();
     expect(screen.getAllByText("90.0%").length).toBeGreaterThan(0);
     expect(screen.getByText(/Biên sai số: gió ±1.4 m\/s/)).toBeInTheDocument();
     expect(screen.getByLabelText("Biểu đồ rủi ro dự báo 5 ngày")).toBeInTheDocument();

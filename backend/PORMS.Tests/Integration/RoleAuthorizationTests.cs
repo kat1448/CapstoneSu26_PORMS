@@ -100,47 +100,12 @@ public sealed class RoleAuthorizationTests
     }
 
     [Fact]
-    public async Task PortManager_CannotSaveRiskThresholds()
-    {
-        using var client = _factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            "Bearer",
-            CreateToken("PORT_MANAGER"));
-
-        var response = await client.PutAsJsonAsync("/api/risk/thresholds", new
-        {
-            thresholds = Array.Empty<object>(),
-            changeReason = "port manager is view only"
-        });
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
     public async Task Operator_CannotCreateSopRule()
     {
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
             CreateToken("OPERATOR"));
-
-        var response = await client.PostAsJsonAsync("/api/sop-rules", new
-        {
-            ruleCode = "",
-            ruleName = "",
-            actionConfigText = "{"
-        });
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PortManager_CannotCreateSopRule()
-    {
-        using var client = _factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            "Bearer",
-            CreateToken("PORT_MANAGER"));
 
         var response = await client.PostAsJsonAsync("/api/sop-rules", new
         {

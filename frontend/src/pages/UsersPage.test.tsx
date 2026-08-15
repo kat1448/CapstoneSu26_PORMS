@@ -6,6 +6,14 @@ import { deleteUser, getUsers } from "../services/userService";
 import type { UserRecord } from "../services/userService";
 import { UsersPage } from "./UsersPage";
 
+const adminUser = {
+  email: "admin@porms.vn",
+  initials: "AD",
+  name: "System Administrator",
+  portName: "Tất cả",
+  role: "ADMIN" as const
+};
+
 vi.mock("../services/userService", () => ({
   deleteUser: vi.fn(),
   getUsers: vi.fn()
@@ -55,7 +63,7 @@ describe("UsersPage", () => {
 
     render(
       <MemoryRouter>
-        <UsersPage refreshKey={0} />
+        <UsersPage currentUser={adminUser} refreshKey={0} />
       </MemoryRouter>
     );
 
@@ -75,7 +83,7 @@ describe("UsersPage", () => {
 
     render(
       <MemoryRouter>
-        <UsersPage refreshKey={0} />
+        <UsersPage currentUser={adminUser} refreshKey={0} />
       </MemoryRouter>
     );
 
@@ -89,7 +97,7 @@ describe("UsersPage", () => {
   it("filters users by name, email or assigned port", async () => {
     const user = userEvent.setup();
     vi.mocked(getUsers).mockResolvedValue(userRecords);
-    render(<MemoryRouter><UsersPage refreshKey={0} /></MemoryRouter>);
+    render(<MemoryRouter><UsersPage currentUser={adminUser} refreshKey={0} /></MemoryRouter>);
 
     await screen.findByText("Nguyen Van Hung");
     await user.type(screen.getByRole("textbox", { name: "Tìm người dùng" }), "Cang Tien Sa");

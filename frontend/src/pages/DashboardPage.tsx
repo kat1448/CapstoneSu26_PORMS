@@ -10,8 +10,9 @@ import { getPorts, getPortZones } from "../services/portService";
 import type { AlertItem } from "../types/alert";
 import type { DashboardSummary, WeatherSnapshot } from "../types/dashboard";
 import type { PortSummary, PortZone } from "../types/port";
+import type { DemoUser } from "../App";
 
-export function DashboardPage({ refreshKey }: { refreshKey: number }) {
+export function DashboardPage({ currentUser, refreshKey }: { currentUser: DemoUser; refreshKey: number }) {
   useDemoRefresh();
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -98,6 +99,7 @@ export function DashboardPage({ refreshKey }: { refreshKey: number }) {
             <AlertListCard alerts={alerts} />
           </div>
           <GisMapCard
+            canManage={currentUser.role === "ADMIN"}
             onSelectPort={(portId) => { void handleSelectPort(portId); }}
             onResetSelection={handleResetSelection}
             portName={mapPortName}

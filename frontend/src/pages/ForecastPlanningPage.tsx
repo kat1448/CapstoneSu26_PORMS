@@ -117,8 +117,8 @@ function ForecastDayConfidence({ confidence, day }: { confidence?: ForecastHoriz
   return (
     <div className={`forecast-day-confidence ${confidence?.confidenceLevel === "LOW" ? "is-low" : insufficient ? "is-insufficient" : ""}`}>
       <div>
-        <span>Độ tin cậy D+{day}</span>
-        <strong>{confidence?.confidencePct === null || confidence?.confidencePct === undefined ? "Chưa đủ dữ liệu" : `${confidence.confidencePct.toFixed(1)}%`}</strong>
+        <span>Độ tin cậy lịch sử D+{day}</span>
+        <strong>{insufficient || confidence?.confidencePct === null || confidence?.confidencePct === undefined ? "Chưa đủ dữ liệu" : `${confidence.confidencePct.toFixed(1)}%`}</strong>
         {confidence ? <Badge tone={confidenceTone(confidence.confidenceLevel)}>{confidence.sampleCount} mẫu lịch sử</Badge> : null}
       </div>
       <p>
