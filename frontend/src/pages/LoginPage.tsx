@@ -8,7 +8,7 @@ type LoginPageProps = {
 
 export function LoginPage({ demoUsers, onLogin }: LoginPageProps) {
   const [email, setEmail] = useState("admin@porms.vn");
-  const [password, setPassword] = useState("Admin@123");
+  const [password, setPassword] = useState("Admin@2026!");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -101,7 +101,7 @@ export function LoginPage({ demoUsers, onLogin }: LoginPageProps) {
                 key={user.role}
                 onClick={() => {
                   setEmail(user.email);
-                  setPassword("Admin@123");
+                  setPassword("Admin@2026!");
                 }}
                 type="button"
               >

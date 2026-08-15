@@ -42,7 +42,7 @@ export const navigationGroups: NavigationGroup[] = [
     label: "Quản lý",
     items: [
       { icon: "port", label: "Cảng & khu vực", path: "/ports", roles: adminOnly },
-      { icon: "users", label: "Người dùng", path: "/users", roles: adminOnly }
+      { icon: "users", label: "Nhân sự cảng", path: "/users", roles: adminAndPortManager }
     ]
   },
   {

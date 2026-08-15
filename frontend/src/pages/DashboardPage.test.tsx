@@ -3,6 +3,14 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardPage } from "./DashboardPage";
 
+const adminUser = {
+  email: "admin@porms.vn",
+  initials: "AD",
+  name: "Admin",
+  portName: "Toàn hệ thống",
+  role: "ADMIN" as const
+};
+
 const serviceMocks = vi.hoisted(() => ({
   getAlerts: vi.fn(),
   getDashboardSummary: vi.fn(),
@@ -224,7 +232,7 @@ describe("DashboardPage", () => {
   it("matches the prototype section composition", async () => {
     render(
       <MemoryRouter>
-        <DashboardPage refreshKey={0} />
+        <DashboardPage currentUser={adminUser} refreshKey={0} />
       </MemoryRouter>
     );
 
@@ -260,7 +268,7 @@ describe("DashboardPage", () => {
     vi.useFakeTimers();
     render(
       <MemoryRouter>
-        <DashboardPage refreshKey={0} />
+        <DashboardPage currentUser={adminUser} refreshKey={0} />
       </MemoryRouter>
     );
 

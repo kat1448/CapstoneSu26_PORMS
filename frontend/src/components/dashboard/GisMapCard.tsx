@@ -10,6 +10,7 @@ const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const DEFAULT_CENTER: [number, number] = [16.1228, 108.2144];
 
 type GisMapCardProps = {
+  canManage?: boolean;
   onSelectPort: (portId: string) => void;
   onResetSelection: () => void;
   portName: string;
@@ -153,7 +154,7 @@ function zoneDetailPath(zone: PortZone) {
   return `/ports/${zone.portId}?zoneId=${zone.zoneId}`;
 }
 
-export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, selectedPortId, zones }: GisMapCardProps) {
+export function GisMapCard({ canManage = false, onSelectPort, onResetSelection, portName, ports, selectedPortId, zones }: GisMapCardProps) {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const expandedMapElementRef = useRef<HTMLDivElement>(null);
@@ -292,19 +293,19 @@ export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, se
         ) : null}
       </div>
 
-      <div className="gis-data-table" aria-label="Bảng dữ liệu khu vực theo cảng">
+      <div className={`gis-data-table${canManage ? " has-actions" : " is-readonly"}`} aria-label="Bảng dữ liệu khu vực theo cảng">
         <div className="gis-data-row gis-data-head">
           <span>Khu vực</span>
           <span>Loại</span>
           <span>Rủi ro</span>
           <span>Trạng thái</span>
           <span>Tọa độ</span>
-          <span>Thao tác</span>
+          {canManage ? <span>Thao tác</span> : null}
         </div>
         {zones.length === 0 ? (
           <div className="gis-data-row">
             <strong>Chưa có khu vực</strong>
-            <span>-</span>
+            {canManage ? <span>-</span> : null}
             <span>-</span>
             <span>-</span>
             <span>-</span>
@@ -318,10 +319,12 @@ export function GisMapCard({ onSelectPort, onResetSelection, portName, ports, se
             <span><Badge tone={riskTones[zone.currentRiskLevel]}>{zone.currentRiskLevel}</Badge></span>
             <span>{zone.statusLabel}</span>
             <span>{coordinateLabel(zone)}{typeof zone.latitude !== "number" || typeof zone.longitude !== "number" ? " · Theo toa do cang" : ""}</span>
-            <span className="gis-row-actions">
-              <Link className="button button-secondary button-small" to={`/ports/${zone.portId}`}>Chi tiết cảng</Link>
-              <Link className="button button-secondary button-small" to={zoneDetailPath(zone)}>Chi tiết khu vực</Link>
-            </span>
+            {canManage ? (
+              <span className="gis-row-actions">
+                <Link className="button button-secondary button-small" to={`/ports/${zone.portId}`}>Chi tiết cảng</Link>
+                <Link className="button button-secondary button-small" to={zoneDetailPath(zone)}>Chi tiết khu vực</Link>
+              </span>
+            ) : null}
           </div>
         ))}
       </div>

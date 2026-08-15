@@ -30,7 +30,7 @@ public sealed class DashboardRepository
                        SELECT COUNT(*)
                        FROM operational.alerts a
                        WHERE a.port_id = p.id
-                         AND (a.expires_at IS NULL OR a.expires_at > NOW())
+                         AND a.expires_at > NOW()
                    ) AS active_alert_count
             FROM operational.ports p
             LEFT JOIN LATERAL (

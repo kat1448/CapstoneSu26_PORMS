@@ -18,7 +18,6 @@ export type DemoUser = {
 const DEMO_USERS: DemoUser[] = [
   {
     email: "admin@porms.vn",
-    id: "demo-admin",
     initials: "NV",
     name: "Nguyễn Văn Hùng",
     portName: "Cảng Tiên Sa",
@@ -26,7 +25,6 @@ const DEMO_USERS: DemoUser[] = [
   },
   {
     email: "manager@porms.vn",
-    id: "demo-manager",
     initials: "TL",
     name: "Trần Thị Lan",
     portName: "Cảng Tiên Sa",
@@ -34,7 +32,6 @@ const DEMO_USERS: DemoUser[] = [
   },
   {
     email: "operator@porms.vn",
-    id: "demo-operator",
     initials: "MD",
     name: "Phạm Minh Đức",
     portName: "Cảng Tiên Sa",

@@ -31,6 +31,7 @@ describe("alertService", () => {
     await expect(getAlert("alert-1")).resolves.toEqual({
       ...response,
       createdAt: expect.stringMatching(/\d{2}\/\d{2}\/2026 \d{2}:\d{2}:\d{2}/),
+      createdAtIso: response.createdAt,
       zoneName: "Toàn cảng"
     });
 

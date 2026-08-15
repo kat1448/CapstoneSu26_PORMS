@@ -84,6 +84,7 @@ type SopRulesPageProps = {
 };
 
 export function SopRulesPage({ currentUser }: SopRulesPageProps) {
+  const isAdmin = currentUser.role === "ADMIN";
   const [data, setData] = useState<SopRulesResponse | null>(null);
   const [form, setForm] = useState<SopRuleInput>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -148,17 +149,14 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
   }, [data?.rules, query, zoneFilter]);
 
   const selectedGroup = groupedRules.find((group) => group.riskLevel === selectedRisk) ?? null;
-  const isAdmin = currentUser.role === "ADMIN";
 
   function openCreateForm() {
-    if (!isAdmin) return;
     setEditingId(null);
     setForm(selectedRisk ? { ...emptyForm, triggerRiskLevel: selectedRisk } : emptyForm);
     setShowForm(true);
   }
 
   function openEditForm(rule: SopRule) {
-    if (!isAdmin) return;
     setEditingId(rule.id);
     setForm(formFromRule(rule));
     setShowForm(true);
@@ -166,7 +164,6 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!isAdmin) return;
     setSaving(true);
     setError(null);
     try {
@@ -194,7 +191,6 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
   }
 
   async function handleDelete(rule: SopRule) {
-    if (!isAdmin) return;
     if (!window.confirm(`Xóa quy tắc ${rule.ruleCode}?`)) return;
     setSaving(true);
     setError(null);
@@ -363,8 +359,8 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
     <section className="page-grid sop-page">
       <div className="section-heading">
         <div>
-          <h2>Quy tắc SOP</h2>
-          <p>Quản lý quy tắc tự động kích hoạt hành động vận hành theo mức rủi ro</p>
+          <h2>{isAdmin ? "Quy tắc SOP" : "Quy trình ứng phó đang áp dụng"}</h2>
+          <p>{isAdmin ? "Quản lý quy tắc tự động kích hoạt hành động vận hành theo mức rủi ro" : "Tra cứu hành động vận hành theo mức rủi ro ở chế độ chỉ xem"}</p>
         </div>
         <div className="head-actions">
           <button className="button button-secondary" onClick={reload} type="button">Tải lại</button>
@@ -397,7 +393,7 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
             </>
           ) : null}
 
-          {isAdmin ? <button className="button button-primary" onClick={openCreateForm} type="button">Thêm quy tắc</button> : null}
+          {isAdmin ? <button className="button button-primary" onClick={openCreateForm} type="button">Thêm quy tắc</button> : <Badge tone="info">Chỉ xem</Badge>}
         </div>
       </div>
 
@@ -410,30 +406,42 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
       ) : null}
 
       {isAdmin && showImportPanel ? (
-        <article className="card card-pad sop-rule-form">
-          <div className="card-head">
+        <article className="card import-workspace">
+          <div className="import-workspace-head">
             <div>
+              <span className="page-eyebrow">NHẬP QUY TRÌNH HÀNG LOẠT</span>
               <h3>Nhập quy tắc SOP từ Excel</h3>
-              <p>Kiểm tra file trước khi xác nhận ghi dữ liệu.</p>
+              <p>Xem trước toàn bộ thay đổi trước khi cập nhật quy trình vận hành.</p>
             </div>
             <button className="button button-secondary button-small" onClick={closeImportPanel} type="button">
               Đóng
             </button>
           </div>
 
-          <label>
-            <span>File Excel SOP (.xlsx, tối đa 1 MB)</span>
+          <div className="import-step-list" aria-label="Quy trình nhập Excel">
+            <span className="is-active"><strong>1</strong> Chọn file</span>
+            <span className={importPreview ? "is-complete" : ""}><strong>2</strong> Kiểm tra</span>
+            <span className={importPreview?.canImport ? "is-active" : ""}><strong>3</strong> Xác nhận</span>
+          </div>
+
+          <label className={`import-dropzone${importFile ? " has-file" : ""}`}>
             <input
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               aria-label="File Excel SOP"
+              className="import-file-input"
               onChange={handleImportFileChange}
               type="file"
             />
+            <span className="import-file-icon" aria-hidden="true">XLSX</span>
+            <span className="import-file-copy">
+              <strong>{importFile ? importFile.name : "Chọn file quy tắc SOP"}</strong>
+              <small>{importFile ? `${Math.max(1, Math.ceil(importFile.size / 1024))} KB · Sẵn sàng kiểm tra` : "Định dạng .xlsx · Dung lượng tối đa 1 MB"}</small>
+            </span>
+            <span className="button button-secondary">Duyệt file</span>
           </label>
 
-          {importFile ? <p>Đã chọn: <strong>{importFile.name}</strong></p> : null}
-
-          <div className="form-actions">
+          <div className="import-actions">
+            <p><strong>Kiểm tra trước khi ghi:</strong> mã quy tắc, mức rủi ro, loại khu vực và hành động SOP.</p>
             <button
               className="button button-primary"
               disabled={!importFile || previewingImport || confirmingImport}
@@ -632,12 +640,14 @@ export function SopRulesPage({ currentUser }: SopRulesPageProps) {
                   </div>
                   <p>{rule.actionType}</p>
                 </div>
-                {isAdmin ? (
-                  <div className="sop-stats">
-                    <button className="button button-secondary button-small" onClick={() => openEditForm(rule)} type="button">Chỉnh sửa</button>
-                    <button className="button button-secondary button-small" onClick={() => handleDelete(rule)} type="button">Xóa</button>
-                  </div>
-                ) : null}
+                <div className="sop-stats">
+                  {isAdmin ? (
+                    <>
+                      <button className="button button-secondary button-small" onClick={() => openEditForm(rule)} type="button">Chỉnh sửa</button>
+                      <button className="button button-secondary button-small" onClick={() => handleDelete(rule)} type="button">Xóa</button>
+                    </>
+                  ) : <span className="readonly-chip">Chỉ xem</span>}
+                </div>
               </div>
             ))}
           </div>

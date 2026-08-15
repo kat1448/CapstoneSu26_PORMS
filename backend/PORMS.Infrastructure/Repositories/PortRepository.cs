@@ -255,7 +255,7 @@ public sealed class PortRepository
                 SELECT port_id,
                        COUNT(*) AS active_alert_count
                 FROM operational.alerts
-                WHERE expires_at IS NULL OR expires_at > NOW()
+                WHERE expires_at > NOW()
                 GROUP BY port_id
             ) alerts ON alerts.port_id = port.id
             WHERE port.id = @portId

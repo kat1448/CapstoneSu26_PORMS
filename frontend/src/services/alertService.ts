@@ -4,7 +4,7 @@ import { getStoredSession } from "./authService";
 import type { TaskLogRecord } from "./taskService";
 import type { AlertItem } from "../types/alert";
 
-type AlertApiResponse = Omit<AlertItem, "createdAt" | "zoneName"> & {
+type AlertApiResponse = Omit<AlertItem, "createdAt" | "createdAtIso" | "zoneName"> & {
   createdAt: string;
   zoneName: string | null;
 };
@@ -13,6 +13,7 @@ function normalize(alerts: AlertApiResponse[]): AlertItem[] {
   return alerts.map((alert) => ({
     ...alert,
     createdAt: formatTimeLabel(alert.createdAt),
+    createdAtIso: alert.createdAt,
     zoneName: alert.zoneName ?? "Toàn cảng"
   }));
 }

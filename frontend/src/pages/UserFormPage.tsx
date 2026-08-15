@@ -14,7 +14,7 @@ import {
 } from "../services/userService";
 
 type UserFormPageProps = {
-  currentUser?: DemoUser | null;
+  currentUser: DemoUser;
   mode: "create" | "edit";
 };
 
@@ -72,30 +72,20 @@ function formFromUser(user: UserRecord, fallbackPortId: string): UserFormState {
   };
 }
 
-function isEditingSignedInAdmin(
-  currentUser: DemoUser | null | undefined,
-  selectedUser: UserRecord | null,
-  routeUserId: string | undefined
-) {
-  if (currentUser?.role !== "ADMIN" || selectedUser?.role !== "ADMIN") {
-    return false;
-  }
-
-  const sameUserId = Boolean(currentUser.id && routeUserId && currentUser.id === routeUserId);
-  const sameEmail = currentUser.email.trim().toLocaleLowerCase("en-US") === selectedUser.email.trim().toLocaleLowerCase("en-US");
-  return sameUserId || sameEmail;
-}
-
 export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
+  const isPortManager = currentUser.role === "PORT_MANAGER";
   const navigate = useNavigate();
   const { userId } = useParams();
   const [form, setForm] = useState<UserFormState>(emptyForm);
-  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(mode === "edit");
   const [notFound, setNotFound] = useState(false);
   const [portOptions, setPortOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [submitting, setSubmitting] = useState(false);
+  const isEditingOwnAccount = mode === "edit" && (
+    (Boolean(currentUser.id) && currentUser.id === userId)
+    || (Boolean(form.email) && form.email.toLowerCase() === currentUser.email.toLowerCase())
+  );
 
   useEffect(() => {
     let active = true;
@@ -103,7 +93,10 @@ export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
     getPorts()
       .then((ports) => {
         if (!active) return;
-        const options = ports.map((port) => ({ label: port.portName, value: port.portId }));
+        const visiblePorts = isPortManager && currentUser.portId
+          ? ports.filter((port) => port.portId === currentUser.portId)
+          : ports;
+        const options = visiblePorts.map((port) => ({ label: port.portName, value: port.portId }));
         setPortOptions(options);
         setForm((value) => {
           if (value.role === "ADMIN" || value.portId.trim() || options.length === 0) {
@@ -121,7 +114,7 @@ export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentUser.portId, isPortManager]);
 
   useEffect(() => {
     if (mode !== "edit") {
@@ -140,7 +133,6 @@ export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
           setNotFound(true);
           return;
         }
-        setSelectedUser(selectedUser);
         setForm((value) => formFromUser(selectedUser, value.portId));
       })
       .catch((caught) => {
@@ -163,15 +155,12 @@ export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
     setError(null);
     setSubmitting(true);
 
-    const isSelfAdminEdit = mode === "edit" && isEditingSignedInAdmin(currentUser, selectedUser, userId);
-    const submittedRole: UserRole = isSelfAdminEdit ? "ADMIN" : form.role;
-
     try {
       const payload: UpdateUserInput = {
         email: form.email.trim(),
         fullName: form.fullName.trim(),
-        portId: submittedRole === "ADMIN" ? null : toNullablePortId(form.portId),
-        role: submittedRole,
+        portId: toNullablePortId(form.portId),
+        role: isPortManager ? "OPERATOR" : form.role,
         status: form.status
       };
 
@@ -195,8 +184,6 @@ export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
       setSubmitting(false);
     }
   }
-
-  const isSelfAdminEdit = mode === "edit" && isEditingSignedInAdmin(currentUser, selectedUser, userId);
 
   if (loading) {
     return (
@@ -253,22 +240,29 @@ export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
           </label>
           <label>
             <span>Vai trò</span>
-            <select
-              aria-label="Vai trò"
-              disabled={isSelfAdminEdit}
-              onChange={(event) => {
-                const role = event.target.value as UserRole;
-                setForm((value) => ({
-                  ...value,
-                  portId: nextPortForRole(role, value.portId, portOptions[0]?.value ?? ""),
-                  role
-                }));
-              }}
-              value={form.role}
-            >
-              {roleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-            {isSelfAdminEdit ? <small className="field-hint">Admin không thể tự thay đổi vai trò của chính mình.</small> : null}
+            {isEditingOwnAccount ? (
+              <>
+                <div className="input readonly-field" aria-label="Vai trò hiện tại">
+                  {roleOptions.find((option) => option.value === form.role)?.label ?? form.role}
+                </div>
+                <small className="field-hint">Vai trò của tài khoản đang đăng nhập được khóa để tránh tự mất quyền quản trị.</small>
+              </>
+            ) : (
+              <select
+                aria-label="Vai trò"
+                onChange={(event) => {
+                  const role = event.target.value as UserRole;
+                  setForm((value) => ({
+                    ...value,
+                    portId: nextPortForRole(role, value.portId, portOptions[0]?.value ?? ""),
+                    role
+                  }));
+                }}
+                value={form.role}
+              >
+                {(isPortManager ? roleOptions.filter((option) => option.value === "OPERATOR") : roleOptions).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            )}
           </label>
           <label>
             <span>Trạng thái</span>
@@ -285,7 +279,7 @@ export function UserFormPage({ currentUser, mode }: UserFormPageProps) {
               onChange={(event) => setForm((value) => ({ ...value, portId: event.target.value }))}
               value={form.portId}
             >
-              <option disabled={form.role !== "ADMIN"} value="">Tất cả</option>
+              <option disabled={!isPortManager && form.role !== "ADMIN"} value="">{isPortManager ? "Chưa phân cảng" : "Tất cả"}</option>
               {portOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
