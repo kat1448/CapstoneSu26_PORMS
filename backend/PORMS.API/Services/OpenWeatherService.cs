@@ -68,13 +68,14 @@ public sealed class OpenWeatherService
         response.EnsureSuccessStatusCode();
 
         var rawPayload = await response.Content.ReadAsStringAsync(cancellationToken);
+        var fetchedAt = DateTimeOffset.UtcNow;
         using var document = JsonDocument.Parse(rawPayload);
-        var forecastDays = OpenWeatherForecastParser.ParseDailyForecast(document.RootElement, days);
+        var forecastDays = OpenWeatherForecastParser.ParseDailyForecast(document.RootElement, days, fetchedAt);
 
         return new OpenWeatherForecastReadModel(
             port.PortCode,
             port.PortName,
-            DateTimeOffset.UtcNow,
+            fetchedAt,
             forecastDays);
     }
 
@@ -160,20 +161,40 @@ public sealed record OpenWeatherRefreshResult(int FetchedCount);
 
 public static class OpenWeatherForecastParser
 {
-    public static IReadOnlyList<OpenWeatherForecastDayReadModel> ParseDailyForecast(JsonElement root, int days)
+    public static IReadOnlyList<OpenWeatherForecastDayReadModel> ParseDailyForecast(
+        JsonElement root,
+        int days,
+        DateTimeOffset? fetchedAt = null)
     {
         if (!root.TryGetProperty("list", out var list) || list.ValueKind != JsonValueKind.Array)
         {
             return [];
         }
 
-        return list.EnumerateArray()
+        var timezoneOffset = GetTimezoneOffset(root);
+        var currentLocalDate = fetchedAt?.ToOffset(timezoneOffset).Date;
+        var groups = list.EnumerateArray()
             .Select(ParseForecastItem)
-            .GroupBy(item => item.Date.Date)
+            .GroupBy(item => item.Date.ToOffset(timezoneOffset).Date)
             .OrderBy(group => group.Key)
+            .Where(group => currentLocalDate is null || group.Key > currentLocalDate.Value)
             .Take(days)
             .Select(ToDailyForecast)
             .ToList();
+
+        return groups;
+    }
+
+    private static TimeSpan GetTimezoneOffset(JsonElement root)
+    {
+        if (!root.TryGetProperty("city", out var city)
+            || !city.TryGetProperty("timezone", out var timezone)
+            || !timezone.TryGetInt32(out var offsetSeconds))
+        {
+            return TimeSpan.Zero;
+        }
+
+        return TimeSpan.FromSeconds(offsetSeconds);
     }
 
     private static ForecastItem ParseForecastItem(JsonElement item)

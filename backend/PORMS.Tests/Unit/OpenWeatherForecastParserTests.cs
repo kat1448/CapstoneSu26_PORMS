@@ -57,4 +57,42 @@ public sealed class OpenWeatherForecastParserTests
         Assert.Equal(1005m, days[0].PressureHpa);
         Assert.Equal(6m, days[0].VisibilityKm);
     }
+
+    [Fact]
+    public void ExcludesCurrentLocalDayBeforeTakingFiveFutureDays()
+    {
+        var timezone = TimeSpan.FromHours(7);
+        var fetchedAt = new DateTimeOffset(2026, 8, 16, 3, 0, 0, TimeSpan.Zero);
+        var payload = JsonSerializer.Serialize(new
+        {
+            city = new { timezone = (int)timezone.TotalSeconds },
+            list = Enumerable.Range(0, 6).Select(offset =>
+            {
+                var localDate = new DateTimeOffset(2026, 8, 16 + offset, 12, 0, 0, timezone);
+                return new
+                {
+                    dt = localDate.ToUnixTimeSeconds(),
+                    main = new
+                    {
+                        temp = 28m + offset,
+                        temp_min = 27m + offset,
+                        temp_max = 29m + offset,
+                        humidity = 70,
+                        pressure = 1005
+                    },
+                    visibility = 10000,
+                    weather = new[] { new { id = 800, description = "clear sky" } },
+                    wind = new { speed = 3m, deg = 90 },
+                    pop = 0m
+                };
+            })
+        });
+
+        using var document = JsonDocument.Parse(payload);
+        var days = OpenWeatherForecastParser.ParseDailyForecast(document.RootElement, 5, fetchedAt);
+
+        Assert.Equal(5, days.Count);
+        Assert.Equal(new DateTime(2026, 8, 17), days[0].Date.Date);
+        Assert.Equal(new DateTime(2026, 8, 21), days[^1].Date.Date);
+    }
 }
